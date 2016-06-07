@@ -52,9 +52,7 @@
   </xacro:yumi>
 
   <!-- Define Macros for Workspace Import -->
-  <xacro:workspace stand_parent="yumi_body" table_parent="world">
-    <origin rpy="0 0 0" xyz="-0.07 0.54 -0.013"/>
-  </xacro:workspace>
+  <xacro:workspace stand_parent="yumi_body" table_parent="world"/>
 
   <!-- Define Macros for Right Servo Gripper Import -->
   <xacro:yumi_servo_gripper name="gripper_r" hardware_interface="${hardware_interface}" parent="yumi_link_7_r">
