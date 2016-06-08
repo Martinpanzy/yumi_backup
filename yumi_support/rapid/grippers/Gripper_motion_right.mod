@@ -1,4 +1,4 @@
-MODULE ROS_common(SYSMODULE)
+MODULE GripperMotion_right
 
 ! Software License Agreement (BSD License)
 !
@@ -28,23 +28,42 @@ MODULE ROS_common(SYSMODULE)
 ! CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY
 ! WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-RECORD ROS_joint_trajectory_pt
-	jointtarget joint_pos;
-	num duration;
-ENDRECORD
 
-CONST num MAX_TRAJ_LENGTH := 100;
+PROC main()
+    VAR num grasp_force;
+    
+    Hand_JogOutward;
+    WaitTime 4;
+    Hand_JogInward;
+    WaitTime 4;
+    Hand_DoCalibrate;
+    Hand_Initialize \maxSpd:=20, \holdForce:=5;
+    Hand_MoveTo(10);
+    
+    WHILE true DO
+        ! Check for an updated setpoint. 
+        WaitTestAndSet ROS_gripper_right_lock;
+        IF (ROS_new_gripper_right) THEN          ! a new setpoint is available
+            grasp_force := next_grasp_target.right;    
+        ENDIF
+        current_gripper_right := Hand_GetActualPos();
+        ROS_new_gripper_right := FALSE;
+        ROS_gripper_right_lock := FALSE;        ! release data-lock
+        
+        !gripper target received
+        IF(grasp_force > 0 ) THEN
+            TPWrite "Grasping with right";
+            Hand_GripInward \holdForce:=grasp_force;
+        ELSEIF (grasp_force < 0 ) THEN
+            Hand_GripOutward \holdForce:=-grasp_force;
+        ELSE
+            !do nothing
+        ENDIF
+        WaitTime 0.1;
+    ENDWHILE
+ERROR
+    ErrWrite \W, "Gripper Motion Error", "Error executing motion.  Aborting trajectory.";
+ENDPROC
 
-! These variables should use TestAndSet read/write protection to prevent conflicts
-PERS bool ROS_trajectory_lock := FALSE;
-PERS ROS_joint_trajectory_pt ROS_trajectory{MAX_TRAJ_LENGTH};
-PERS num ROS_trajectory_size := 0;
-PERS bool ROS_new_trajectory := FALSE;       ! can safely READ, but should use lock to WRITE
-
-! These variables should use TestAndSet read/write protection to prevent conflicts
-PERS bool ROS_trajectory_lock_right := FALSE;
-PERS ROS_joint_trajectory_pt ROS_trajectory_right{MAX_TRAJ_LENGTH};
-PERS num ROS_trajectory_size_right := 0;
-PERS bool ROS_new_trajectory_right := FALSE;       ! can safely READ, but should use lock to WRITE
 
 ENDMODULE

@@ -40,13 +40,29 @@
     <rosparam command="load" file="$(find yumi_support)/config/joint_names_right.yaml" />
     
     <node pkg="abb_driver" type="robot_state" name="robot_state">
-	<param name="port" value="12002" />
+      <param name="port" value="12002" />
     </node>
     <node pkg="abb_driver" type="motion_download_interface" name="motion_download_interface">
-	<param name="port" value="12000" />
+      <param name="port" value="12000" />
     </node>
     <node pkg="industrial_robot_client" type="joint_trajectory_action" name="joint_trajectory_action"/>
     <node pkg="topic_tools" type="relay" name="right_joints_relay" args="/right_arm/joint_states /joint_states"/>
+  </group>
+
+  <group ns="right_hand">
+    <param name="robot_ip_address" type="str" value="$(arg robot_ip)"/>
+    <param name="J23_coupled" type="bool" value="$(arg J23_coupled)"/>
+
+    <rosparam command="load" file="$(find yumi_support)/config/joint_names_right_hand.yaml" />
+    
+    <node pkg="abb_driver" type="robot_state" name="robot_state">
+      <param name="port" value="13002" />
+    </node>
+    <node pkg="abb_driver" type="motion_download_interface" name="motion_download_interface">
+      <param name="port" value="13000" />
+    </node>
+    <node pkg="industrial_robot_client" type="joint_trajectory_action" name="joint_trajectory_action"/>
+    <node pkg="topic_tools" type="relay" name="right_hand_joints_relay" args="/right_hand/joint_states /joint_states"/>
   </group>
 
 </launch>

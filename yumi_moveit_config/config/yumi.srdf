@@ -64,7 +64,6 @@
 
     <group name="right_hand">
       <joint name="gripper_r_joint_r" />
-      <joint name="gripper_r_joint_l" />
     </group>
     <end_effector name="right_hand" parent_link="yumi_link_7_r" group="right_hand"/>
 
@@ -99,7 +98,6 @@
       <joint name="yumi_joint_5_r" value="0.6981"/>
       <joint name="yumi_joint_6_l" value="0"/>
       <joint name="yumi_joint_6_r" value="0"/>
-      <joint name="gripper_r_joint_l" value="0"/>
       <joint name="gripper_r_joint_r" value="0"/>
     </group_state>
 
@@ -128,7 +126,6 @@
       <joint name="yumi_joint_4_r" value="0"/>
       <joint name="yumi_joint_5_r" value="0.6981"/>
       <joint name="yumi_joint_6_r" value="0"/>
-      <joint name="gripper_r_joint_l" value="0"/>
       <joint name="gripper_r_joint_r" value="0"/>
     </group_state>
 
@@ -170,7 +167,6 @@
       <joint name="yumi_joint_5_r" value="0.6981"/>
       <joint name="yumi_joint_6_l" value="0"/>
       <joint name="yumi_joint_6_r" value="-3.1416"/>
-      <joint name="gripper_r_joint_l" value="0.025"/>
       <joint name="gripper_r_joint_r" value="0.025"/>
     </group_state>
 
@@ -199,7 +195,6 @@
       <joint name="yumi_joint_4_r" value="-0.5236"/>
       <joint name="yumi_joint_5_r" value="0.6981"/>
       <joint name="yumi_joint_6_r" value="-3.1416"/>
-      <joint name="gripper_r_joint_l" value="0.025"/>
       <joint name="gripper_r_joint_r" value="0.025"/>
     </group_state>
 
@@ -227,7 +222,6 @@
     <!--           -->
 
     <group_state name="open_hand" group="right_hand">
-      <joint name="gripper_r_joint_l" value="0.025"/>
       <joint name="gripper_r_joint_r" value="0.025"/>
     </group_state>
 
@@ -236,7 +230,6 @@
     <!--            -->
 
     <group_state name="close_hand" group="right_hand">
-      <joint name="gripper_r_joint_l" value="0"/>
       <joint name="gripper_r_joint_r" value="0"/>
     </group_state>
 

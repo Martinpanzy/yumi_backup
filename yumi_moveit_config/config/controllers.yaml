@@ -26,4 +26,3 @@ controller_list:
     type: FollowJointTrajectory
     joints:
       - gripper_r_joint_r
-      - gripper_r_joint_l

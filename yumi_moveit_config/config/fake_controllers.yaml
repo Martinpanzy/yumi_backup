@@ -19,5 +19,4 @@ controller_list:
       - yumi_joint_6_r
   - name: fake_right_hand_controller
     joints:
-      - gripper_r_joint_l
       - gripper_r_joint_r
