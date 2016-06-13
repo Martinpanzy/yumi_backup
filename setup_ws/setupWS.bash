@@ -1,7 +1,6 @@
 #!/bin/bash
 # PROGRAMMER: Frederick Wachter
 # DATE CREATED: 2016-05-24
-# LAST MODIFIED: 2016-05-26
 # PURPOSE: Setup workspace to be able to run YuMi files
 
 # How to set up the workspace:
@@ -81,10 +80,11 @@ mkdir yumi_ws/src # create folder to contain all files in workspace
 mv yumi yumi_ws/src # move already cloned YuMi repo into workspace
 git clone https://github.com/ros-industrial/abb.git yumi_ws/src/abb_driver # clone the GitHub repo for the ABB driver
 git clone https://github.com/ros-industrial/industrial_core.git yumi_ws/src/industrial_driver # clone the GitHub repo for the ROS-Industrial driver
+git clone https://github.com/ethz-asl/rotors_simulator # add in robot simulator for access to vi sensor xacro file
 
 #----- Build Workspace -----
 cd ~/yumi_ws # go to the YuMi workspace
-catkin_make # build the workspace
+catkin build # build the workspace
 
 echo "Finished setting up the workspace." # notify user that the workspace has been setup
 
