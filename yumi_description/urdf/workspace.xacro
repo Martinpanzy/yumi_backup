@@ -8,7 +8,7 @@
 
 <robot name="yumi" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="workspace" params="stand_parent table_parent">
+  <xacro:macro name="workspace" params="stand_parent table_parent *origin">
 
     <!--                         -->
     <!--          TABLE          -->
@@ -17,7 +17,7 @@
     <joint name="world_to_table" type="fixed">
       <parent link="${table_parent}"/>
       <child link="table"/>
-      <origin rpy="0 0 0" xyz="0.334 -0.01 -0.013"/>
+      <insert_block name="origin"/>
     </joint>
 
     <link name="table"/>
