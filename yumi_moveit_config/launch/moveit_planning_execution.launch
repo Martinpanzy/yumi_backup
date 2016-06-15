@@ -9,7 +9,6 @@
        - and uncomment the following line: -->
   <rosparam command="load" file="$(find yumi_support)/config/joint_names_left.yaml" />
   <rosparam command="load" file="$(find yumi_support)/config/joint_names_right.yaml" />
-  <rosparam command="load" file="$(find yumi_support)/config/joint_names_right_hand.yaml"/>
  
   <!-- the "sim" argument controls whether we connect to a Simulated or Real robot -->
   <!--  - if sim=false, a robot_ip argument is required -->
@@ -18,7 +17,10 @@
 
   <!-- load the robot_description parameter before launching ROS-I nodes -->
   <include file="$(find yumi_moveit_config)/launch/planning_context.launch" >
-    <arg name="load_robot_description" value="true" />
+    <arg name="load_robot_description" value="true"/>
+    <arg name="enable_cameras" value="true"/>
+    <arg name="enable_depth" value="true"/>
+    <arg name="enable_ground_truth" value="true"/>
   </include>
 
   <!-- run the robot simulator and action interface nodes -->
