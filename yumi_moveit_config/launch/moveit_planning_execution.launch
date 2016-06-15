@@ -18,9 +18,9 @@
   <!-- load the robot_description parameter before launching ROS-I nodes -->
   <include file="$(find yumi_moveit_config)/launch/planning_context.launch" >
     <arg name="load_robot_description" value="true"/>
-    <arg name="enable_cameras" value="true"/>
-    <arg name="enable_depth" value="true"/>
-    <arg name="enable_ground_truth" value="true"/>
+    <arg name="enable_cameras" value="false"/>
+    <arg name="enable_depth" value="false"/>
+    <arg name="enable_ground_truth" value="false"/>
   </include>
 
   <!-- run the robot simulator and action interface nodes -->

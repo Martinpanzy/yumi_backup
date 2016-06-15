@@ -5,10 +5,17 @@
   <!-- The name of the parameter under which the URDF is loaded -->
   <arg name="robot_description" default="robot_description"/>
 
+  <!-- Set default camera settings -->
+  <arg name="enable_cameras" default="false"/>
+  <arg name="enable_depth" default="false"/>
+  <arg name="enable_ground_truth" default="false"/>
+
   <!-- Load universal robot description format (URDF) -->
   <param if="$(arg load_robot_description)" name="$(arg robot_description)" 
     command="$(find xacro)/xacro.py '$(find yumi_description)/urdf/yumi.urdf.xacro'
-    enable_cameras:=$(arg enable_cameras) enable_depth:=$(arg enable_depth) enable_ground_truth:=$(arg enable_ground_truth)"
+    enable_cameras:=$(arg enable_cameras) 
+    enable_depth:=$(arg enable_depth) 
+    enable_ground_truth:=$(arg enable_ground_truth)"
   />
 
   <!-- The semantic description that corresponds to the URDF -->

@@ -6,9 +6,6 @@
   <!-- Load the URDF, SRDF and other .yaml configuration files on the param server -->
   <include file="$(find yumi_moveit_config)/launch/planning_context.launch">
     <arg name="load_robot_description" value="true"/>
-    <arg name="enable_cameras" value="true"/>
-    <arg name="enable_depth" value="true"/>
-    <arg name="enable_ground_truth" value="true"/>
   </include>
 
   <!-- If needed, broadcast static tf for robot root -->
