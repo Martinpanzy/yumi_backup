@@ -64,21 +64,6 @@ Visualization Manager:
           Expand Link Details: false
           Expand Tree: false
           Link Tree Style: Links in Alphabetic Order
-          gripper_l_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          gripper_l_finger_l:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          gripper_l_finger_r:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
           gripper_r_base:
             Alpha: 1
             Show Axes: false
@@ -212,21 +197,6 @@ Visualization Manager:
           Expand Link Details: false
           Expand Tree: false
           Link Tree Style: Links in Alphabetic Order
-          gripper_l_base:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          gripper_l_finger_l:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
-          gripper_l_finger_r:
-            Alpha: 1
-            Show Axes: false
-            Show Trail: false
-            Value: true
           gripper_r_base:
             Alpha: 1
             Show Axes: false

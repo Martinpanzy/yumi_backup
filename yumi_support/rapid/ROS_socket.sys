@@ -29,14 +29,14 @@ MODULE ROS_socket(SYSMODULE)
 
 PROC ROS_init_socket(VAR socketdev server_socket, num port)
     IF (SocketGetStatus(server_socket) = SOCKET_CLOSED) SocketCreate server_socket;
-    IF (SocketGetStatus(server_socket) = SOCKET_CREATED) SocketBind server_socket, "192.168.1.1", port;
+    IF (SocketGetStatus(server_socket) = SOCKET_CREATED) SocketBind server_socket, "192.168.125.1", port;
     IF (SocketGetStatus(server_socket) = SOCKET_BOUND) SocketListen server_socket;
 
 ERROR
     RAISE;  ! raise errors to calling code
 ENDPROC
 
-PROC ROS_wait_for_client(VAR socketdev server_socket, VAR socketdev client_socket, \num wait_time)
+PROC ROS_wait_for_client(VAR socketdev server_socket, VAR socketdev client_socket, VAR string task_name \num wait_time)
     VAR string client_ip;
     VAR num time_val := WAIT_MAX;  ! default to wait-forever
 
@@ -46,7 +46,7 @@ PROC ROS_wait_for_client(VAR socketdev server_socket, VAR socketdev client_socke
     WaitUntil (SocketGetStatus(client_socket) = SOCKET_CLOSED);
 
     SocketAccept server_socket, client_socket, \ClientAddress:=client_ip, \Time:=time_val;
-    TPWrite "Client at "+client_ip+" connected.";
+    TPWrite task_name + ": Client at " + client_ip;
 
 ERROR
     RAISE;  ! raise errors to calling code
@@ -102,3 +102,5 @@ ERROR
 ENDPROC
 
 ENDMODULE
+
+

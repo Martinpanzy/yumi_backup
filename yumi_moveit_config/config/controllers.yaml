@@ -21,9 +21,4 @@ controller_list:
       - yumi_joint_4_r
       - yumi_joint_5_r
       - yumi_joint_6_r
-  - name: "right_hand"
-    action_ns: joint_trajectory_action
-    type: FollowJointTrajectory
-    joints:
       - gripper_r_joint_r
-      - gripper_r_joint_l

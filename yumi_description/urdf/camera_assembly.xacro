@@ -2,13 +2,15 @@
 <!-- 
   PROGRAMMER: Frederick Wachter
   DATE CREATED: 2016-05-30
-  LAST MODIFIED: 2016-05-30
   PURPOSE: Provide colors for the different objects in the YuMi workspace
 -->
 
 <robot name="yumi" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
-  <xacro:macro name="camera_assembly" params="parent">
+  <!-- Include VI Sensor Macro -->
+  <xacro:include filename="$(find rotors_description)/urdf/component_snippets.xacro" />
+
+  <xacro:macro name="camera_assembly" params="parent vi_namespace enable_cameras enable_depth enable_ground_truth PI">
 
     <!--                         -->
     <!--     CAMERA ASSEMBLY     -->
@@ -74,32 +76,19 @@
         <material name="Drexel_Blue"/>
       </collision>
     </link>
-    <link name="vi_sensor">
-      <visual>
-        <origin rpy="0 -1.575 -1.5098" xyz="0 0 0"/>
-        <geometry>
-          <mesh filename="package://yumi_description/meshes/camera/vi_sensor.stl"/>
-        </geometry>
-        <material name="Drexel_Blue"/>
-      </visual>
-      <collision>
-        <origin rpy="0 -1.575 -1.508" xyz="0 0 0"/>
-        <geometry>
-          <mesh filename="package://yumi_description/meshes/camera/vi_sensor.stl"/>
-        </geometry>
-        <material name="Drexel_Blue"/>
-      </collision>
-    </link>
+    <xacro:vi_sensor_macro
+      namespace="${vi_namespace}"
+      parent_link="camera_holder"
+      enable_cameras="${enable_cameras}"
+      enable_depth="${enable_depth}"
+      enable_ground_truth="${enable_ground_truth}">
+      <origin xyz="-0.003 -0.0138 0.02825" rpy="${PI} ${-PI/2 + 0.0063} ${PI/2}" />
+    </xacro:vi_sensor_macro>
 
     <joint name="creative_to_holder" type="fixed">
       <parent link="camera_holder"/>
       <child link="creative_camera"/>
       <origin rpy="0 0 0" xyz="-0.002 0.0765 0.0335"/>
-    </joint>
-    <joint name="vi_to_holder" type="fixed">
-      <parent link="camera_holder"/>
-      <child link="vi_sensor"/>
-      <origin rpy="0 0 0" xyz="0 -0.0138 0.028"/>
     </joint>
 
   </xacro:macro>

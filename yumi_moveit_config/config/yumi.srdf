@@ -26,17 +26,9 @@
     <!---- First Modified: 2016-05-20 ----->
     <!--=================================-->
 
-    <group name="full_arms">
-      <group name="left_arm"/>
-      <group name="full_right_arm"/>
-    </group>
     <group name="both_arms">
       <group name="left_arm"/>
       <group name="right_arm"/>
-    </group>
-    <group name="full_right_arm">
-      <group name="right_arm"/>
-      <group name="right_hand"/>
     </group>
 
     <group name="left_arm">
@@ -59,12 +51,11 @@
       <joint name="yumi_joint_4_r" />
       <joint name="yumi_joint_5_r" />
       <joint name="yumi_joint_6_r" />
-      <joint name="yumi_link_7_r_joint" />
+      <group name="right_hand"/>
     </group>
 
     <group name="right_hand">
       <joint name="gripper_r_joint_r" />
-      <joint name="gripper_r_joint_l" />
     </group>
     <end_effector name="right_hand" parent_link="yumi_link_7_r" group="right_hand"/>
 
@@ -84,25 +75,6 @@
     <!-- CALC POSITION -->
     <!--               -->
 
-    <group_state name="calc" group="full_arms">
-      <joint name="yumi_joint_1_l" value="0"/>
-      <joint name="yumi_joint_1_r" value="0"/>
-      <joint name="yumi_joint_2_l" value="-2.2689"/>
-      <joint name="yumi_joint_2_r" value="-2.2689"/>
-      <joint name="yumi_joint_7_l" value="2.3562"/>
-      <joint name="yumi_joint_7_r" value="-2.3562"/>
-      <joint name="yumi_joint_3_l" value="0.5236"/>
-      <joint name="yumi_joint_3_r" value="0.5236"/>
-      <joint name="yumi_joint_4_l" value="0"/>
-      <joint name="yumi_joint_4_r" value="0"/>
-      <joint name="yumi_joint_5_l" value="0.6981"/>
-      <joint name="yumi_joint_5_r" value="0.6981"/>
-      <joint name="yumi_joint_6_l" value="0"/>
-      <joint name="yumi_joint_6_r" value="0"/>
-      <joint name="gripper_r_joint_l" value="0"/>
-      <joint name="gripper_r_joint_r" value="0"/>
-    </group_state>
-
     <group_state name="calc" group="both_arms">
       <joint name="yumi_joint_1_l" value="0"/>
       <joint name="yumi_joint_1_r" value="0"/>
@@ -118,17 +90,6 @@
       <joint name="yumi_joint_5_r" value="0.6981"/>
       <joint name="yumi_joint_6_l" value="0"/>
       <joint name="yumi_joint_6_r" value="0"/>
-    </group_state>
-
-    <group_state name="calc" group="full_right_arm">
-      <joint name="yumi_joint_1_r" value="0"/>
-      <joint name="yumi_joint_2_r" value="-2.2689"/>
-      <joint name="yumi_joint_7_r" value="-2.3562"/>
-      <joint name="yumi_joint_3_r" value="0.5236"/>
-      <joint name="yumi_joint_4_r" value="0"/>
-      <joint name="yumi_joint_5_r" value="0.6981"/>
-      <joint name="yumi_joint_6_r" value="0"/>
-      <joint name="gripper_r_joint_l" value="0"/>
       <joint name="gripper_r_joint_r" value="0"/>
     </group_state>
 
@@ -149,30 +110,12 @@
       <joint name="yumi_joint_4_r" value="0"/>
       <joint name="yumi_joint_5_r" value="0.6981"/>
       <joint name="yumi_joint_6_r" value="0"/>
+      <joint name="gripper_r_joint_r" value="0"/>
     </group_state>
 
     <!--               -->
     <!-- HOME POSITION -->
     <!--               -->
-
-    <group_state name="home" group="full_arms">
-      <joint name="yumi_joint_1_l" value="-1.2217"/>
-      <joint name="yumi_joint_1_r" value="1.2217"/>
-      <joint name="yumi_joint_2_l" value="-1.3963"/>
-      <joint name="yumi_joint_2_r" value="-1.3963"/>
-      <joint name="yumi_joint_7_l" value="1.7453"/>
-      <joint name="yumi_joint_7_r" value="-1.7453"/>
-      <joint name="yumi_joint_3_l" value="0.4363"/>
-      <joint name="yumi_joint_3_r" value="0.4363"/>
-      <joint name="yumi_joint_4_l" value="0.5236"/>
-      <joint name="yumi_joint_4_r" value="-0.5236"/>
-      <joint name="yumi_joint_5_l" value="0.6981"/>
-      <joint name="yumi_joint_5_r" value="0.6981"/>
-      <joint name="yumi_joint_6_l" value="0"/>
-      <joint name="yumi_joint_6_r" value="-3.1416"/>
-      <joint name="gripper_r_joint_l" value="0.025"/>
-      <joint name="gripper_r_joint_r" value="0.025"/>
-    </group_state>
 
     <group_state name="home" group="both_arms">
       <joint name="yumi_joint_1_l" value="-1.2217"/>
@@ -189,18 +132,7 @@
       <joint name="yumi_joint_5_r" value="0.6981"/>
       <joint name="yumi_joint_6_l" value="0"/>
       <joint name="yumi_joint_6_r" value="-3.1416"/>
-    </group_state>
-
-    <group_state name="home" group="full_right_arm">
-      <joint name="yumi_joint_1_r" value="1.2217"/>
-      <joint name="yumi_joint_2_r" value="-1.3963"/>
-      <joint name="yumi_joint_7_r" value="-1.7453"/>
-      <joint name="yumi_joint_3_r" value="0.4363"/>
-      <joint name="yumi_joint_4_r" value="-0.5236"/>
-      <joint name="yumi_joint_5_r" value="0.6981"/>
-      <joint name="yumi_joint_6_r" value="-3.1416"/>
-      <joint name="gripper_r_joint_l" value="0.025"/>
-      <joint name="gripper_r_joint_r" value="0.025"/>
+      <joint name="gripper_r_joint_r" value="0.024"/>
     </group_state>
 
     <group_state name="home" group="left_arm">
@@ -220,23 +152,18 @@
       <joint name="yumi_joint_4_r" value="-0.5236"/>
       <joint name="yumi_joint_5_r" value="0.6981"/>
       <joint name="yumi_joint_6_r" value="-3.1416"/>
+      <joint name="gripper_r_joint_r" value="0.024"/>
     </group_state>
 
     <!--           -->
-    <!-- Open Hand -->
+    <!--   HANDS   -->
     <!--           -->
 
     <group_state name="open_hand" group="right_hand">
-      <joint name="gripper_r_joint_l" value="0.025"/>
-      <joint name="gripper_r_joint_r" value="0.025"/>
+      <joint name="gripper_r_joint_r" value="0.024"/>
     </group_state>
 
-    <!--            -->
-    <!-- Close Hand -->
-    <!--            -->
-
     <group_state name="close_hand" group="right_hand">
-      <joint name="gripper_r_joint_l" value="0"/>
       <joint name="gripper_r_joint_r" value="0"/>
     </group_state>
 
@@ -291,15 +218,15 @@
     <disable_collisions link1="stand_base" link2="table_two" reason="Never"/> <!-- Second Table and YuMi Stand -->
     <disable_collisions link1="table_main" link2="table_two" reason="Adjacent"/> <!-- Main Table and Second Table -->
     <disable_collisions link1="yumi_body" link2="stand_base" reason="Adjacent"/> <!-- Stand and YuMi Body -->
-    
-    <disable_collisions link1="yumi_link_7_l" link2="camera_assembly" reason="Adjacent"/> <!-- Link 7 Left Hand to Camera Assembly -->
-    <disable_collisions link1="yumi_link_7_l" link2="camera_holder" reason="Adjacent"/> <!-- Link 7 Left Hand and Camera Holder -->
-    <disable_collisions link1="camera_assembly" link2="camera_holder" reason="Adjacent"/> <!-- Camera Assembly and Camera Holder -->
-    <disable_collisions link1="camera_assembly" link2="creative_camera" reason="Never"/> <!-- Camera Assembly and Creative Camera -->
-    <disable_collisions link1="camera_assembly" link2="vi_sensor" reason="Never"/> <!-- Camera Assembly and VI Sensor -->
-    <disable_collisions link1="camera_holder" link2="creative_camera" reason="Adjacent"/> <!-- Camera Holder and Creative Camera -->
-    <disable_collisions link1="camera_holder" link2="vi_sensor" reason="Adjacent"/> <!-- Camera Holder and VI Sensor -->
-    <disable_collisions link1="creative_camera" link2="vi_sensor" reason="Never"/> <!-- Creative Camera and VI Sensor -->
+
+    <disable_collisions link1="yumi_link_7_l" link2="camera_assembly" reason="Adjacent" /> <!-- Link 7 Left Hand to Camera Assembly -->
+    <disable_collisions link1="yumi_link_7_l" link2="camera_holder" reason="Adjacent" /> <!-- Link 7 Left Hand and Camera Holder -->
+    <disable_collisions link1="camera_assembly" link2="camera_holder" reason="Adjacent" /> <!-- Camera Assembly and Camera Holder -->
+    <disable_collisions link1="camera_assembly" link2="creative_camera" reason="Never" /> <!-- Camera Assembly and Creative Camera -->
+    <disable_collisions link1="camera_assembly" link2="vi_sensor/vi_sensor_link" reason="Never" /> <!-- Camera Assembly and VI Sensor -->
+    <disable_collisions link1="camera_holder" link2="creative_camera" reason="Adjacent" /> <!-- Camera Holder and Creative Camera -->
+    <disable_collisions link1="camera_holder" link2="vi_sensor/vi_sensor_link" reason="Adjacent" /> <!-- Camera Holder and VI Sensor -->
+    <disable_collisions link1="creative_camera" link2="vi_sensor/vi_sensor_link" reason="Never" /> <!-- Creative Camera and VI Sensor -->
     <!--==================================-->
     <!---------- End of Additions ---------->
     <!--==================================-->

@@ -26,6 +26,9 @@ MODULE ROS_messages(SYSMODULE)
 ! CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY
 ! WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+! ----------------------------------------------
+! -------------- DATA STRUCTURES ---------------
+! ----------------------------------------------
 RECORD ROS_msg_header
     num msg_type;
     num comm_type;
@@ -40,7 +43,16 @@ ENDRECORD
 RECORD ROS_msg_joint_traj_pt
     ROS_msg_header header;
     num sequence_id;
-    jointtarget joints;  ! in DEGREES
+    jointtarget joints; ! in DEGREES
+    num velocity;
+    num duration;
+ENDRECORD
+
+RECORD ROS_msg_traj_pt
+    ROS_msg_header header;
+    num sequence_id;
+    jointtarget joints; ! in DEGREES
+    num gripperTarget;
     num velocity;
     num duration;
 ENDRECORD
@@ -48,10 +60,19 @@ ENDRECORD
 RECORD ROS_msg_joint_data
     ROS_msg_header header;
     num sequence_id;
-    jointtarget joints;  ! in DEGREES
+    jointtarget joints; ! in DEGREES
 ENDRECORD
 
-! Message Type Codes (from simple_message/simple_message.h)
+RECORD ROS_msg_gripper_data
+    ROS_msg_header header;
+    num sequence_id;
+    num position;
+ENDRECORD
+
+! ----------------------------------------------
+! ----------------- CONSTANTS ------------------
+! ----------------------------------------------
+! jointMessage Type Codes (from simple_message/simple_message.h)
 CONST num ROS_MSG_TYPE_INVALID       := 0;
 CONST num ROS_MSG_TYPE_JOINT         := 10;  ! joint-position feedback
 CONST num ROS_MSG_TYPE_JOINT_TRAJ_PT := 11;  ! joint-trajectory-point (for path downloading)
@@ -67,13 +88,128 @@ CONST num ROS_TRAJECTORY_START_DOWNLOAD := -1;
 CONST num ROS_TRAJECTORY_END := -3;
 CONST num ROS_TRAJECTORY_STOP := -4;
 
-! Other message constants
+
+CONST num ROS_GRIPPER_REQUEST := 8008;
+CONST num ROS_GRIPPER_STATUS := 8009;
+
+CONST num JOINT_POSITION := 10;
+CONST num JOINT_VELOCITY := 15;
+
+! Other jointMessage Constants
 CONST num ROS_MSG_MAX_JOINTS := 10;  ! from joint_data.h
 
-PROC ROS_receive_msg_joint_traj_pt(VAR socketdev client_socket, VAR ROS_msg_joint_traj_pt message, \num wait_time)
+! ----------------------------------------------
+! ----------------- PROCEDURES -----------------
+! ----------------------------------------------
+
+! ============== WITHOUT GRIPPERS ==============
+PROC ROS_receive_msg_joint_traj_pt(VAR socketdev client_socket, VAR ROS_msg_joint_traj_pt jointMessage, \num wait_time)
+! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
+! FIRST MODIFIED: 2016-06-14
+! PURPOSE: Receiving joint states from ROS and storing values
+! NOTES: This is meant to be used for only an arm without a gripper
+! FUTURE WORK: Use the velociy values
+
+    ! Initialize Variables
     VAR ROS_msg raw_message;
     
-    ! Read raw message data
+    ! Read Raw jointMessage Data
+    IF Present(wait_time) THEN
+        ROS_receive_msg client_socket, raw_message, \wait_time:=wait_time;
+    ELSE
+        ROS_receive_msg client_socket, raw_message;
+    ENDIF
+    
+    ! Integrity Check: jointMessage Type
+    IF (raw_message.header.msg_type <> ROS_MSG_TYPE_JOINT_TRAJ_PT) THEN
+        ErrWrite \W, "ROS Socket Type Mismatch", "Unexpected jointMessage type",
+                \RL2:="expected: " + ValToStr(ROS_MSG_TYPE_JOINT_TRAJ_PT),
+                \RL3:="received: " + ValToStr(raw_message.header.msg_type);
+        RAISE ERR_ARGVALERR;  ! TBD: define specific error code
+    ENDIF
+    
+    ! Integrity Check: Data Size
+    IF (RawBytesLen(raw_message.data) < 52) THEN
+        ErrWrite \W, "ROS Socket Missing Data", "Insufficient data for joint_trajectory_pt",
+                \RL2:="expected: 52",
+                \RL3:="received: " + ValToStr(RawBytesLen(raw_message.data));
+        RAISE ERR_OUTOFBND;  ! TBD: define specific error code
+    ENDIF
+    
+    ! Copy Header Data
+    jointMessage.header := raw_message.header;
+    
+    ! Unpack Data Fields
+    ! Skip bytes 33-44, Unused, Reserved for Joints 8-10
+    UnpackRawBytes raw_message.data, 1, jointMessage.sequence_id, \IntX:=DINT;
+    UnpackRawBytes raw_message.data, 5, jointMessage.joints.robax.rax_1, \Float4;
+    UnpackRawBytes raw_message.data, 9, jointMessage.joints.robax.rax_2, \Float4;
+    UnpackRawBytes raw_message.data, 13, jointMessage.joints.robax.rax_3, \Float4;
+    UnpackRawBytes raw_message.data, 17, jointMessage.joints.robax.rax_4, \Float4;
+    UnpackRawBytes raw_message.data, 21, jointMessage.joints.robax.rax_5, \Float4;
+    UnpackRawBytes raw_message.data, 25, jointMessage.joints.robax.rax_6, \Float4;
+    UnpackRawBytes raw_message.data, 29, jointMessage.joints.extax.eax_a, \Float4; ! seventh axis
+    UnpackRawBytes raw_message.data, 45, jointMessage.velocity, \Float4; ! not currently being used
+    UnpackRawBytes raw_message.data, 49, jointMessage.duration, \Float4; ! not currently being used
+    
+    ! Convert Data From ROS Units to ABB Units
+    jointMessage.joints := rad2deg_robjoint(jointMessage.joints);
+    
+ERROR
+    RAISE; ! raise errors to calling code
+ENDPROC
+
+PROC ROS_send_msg_joint_data(VAR socketdev client_socket, ROS_msg_joint_data jointMessage)
+! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
+! FIRST MODIFIED: 2016-06-14
+! PURPOSE: Sending joint states to ROS
+! NOTES: This is meant to be used for only an arm without a gripper
+
+    ! Initialize Variables
+    VAR ROS_msg raw_message;
+    VAR jointtarget ROS_joints;
+    VAR num i;
+    
+    ! Force jointMessage Header to the Correct Values
+    raw_message.header.msg_type := ROS_MSG_TYPE_JOINT;
+    raw_message.header.comm_type := ROS_COM_TYPE_TOPIC;
+    raw_message.header.reply_code := ROS_REPLY_TYPE_INVALID;
+    
+    ! Convert Data From ABB Units to ROS Units
+    ROS_joints := deg2rad_robjoint(jointMessage.joints);
+
+    ! Pack data into jointMessage
+    PackRawBytes jointMessage.sequence_id, raw_message.data,  1, \IntX:=DINT;
+    PackRawBytes ROS_joints.robax.rax_1, raw_message.data,  5, \Float4;
+    PackRawBytes ROS_joints.robax.rax_2, raw_message.data,  9, \Float4;
+    PackRawBytes ROS_joints.robax.rax_3, raw_message.data, 13, \Float4;
+    PackRawBytes ROS_joints.robax.rax_4, raw_message.data, 17, \Float4;
+    PackRawBytes ROS_joints.robax.rax_5, raw_message.data, 21, \Float4;
+    PackRawBytes ROS_joints.robax.rax_6, raw_message.data, 25, \Float4;
+    PackRawBytes ROS_joints.extax.eax_a, raw_message.data, 29, \Float4; ! seventh axis
+    FOR i FROM 1 TO ROS_MSG_MAX_JOINTS-8 DO  ! Insert placeholders for joints 8-10 (jointMessage expects 10 joints)
+        PackRawBytes 0, raw_message.data, 33+i*4, \Float4; ! empty values for unused joints
+    ENDFOR
+
+    ! Send Data to ROS
+    ROS_send_msg client_socket, raw_message;
+
+ERROR
+    RAISE; ! raise errors to calling code
+ENDPROC
+
+! =============== WITH GRIPPERS ================
+PROC ROS_receive_msg_gripper_traj_pt(VAR socketdev client_socket, VAR ROS_msg_traj_pt message, \num wait_time)
+! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
+! FIRST MODIFIED: 2016-06-14
+! PURPOSE: Receiving joint states from ROS and storing values
+! NOTES: This is meant to be used for an arm with a gripper
+! FUTURE WORK: Use the velociy values
+
+    ! Initialize Variables
+    VAR ROS_msg raw_message;
+    
+    ! Read Raw Message Data
     IF Present(wait_time) THEN
         ROS_receive_msg client_socket, raw_message, \wait_time:=wait_time;
     ELSE
@@ -96,10 +232,11 @@ PROC ROS_receive_msg_joint_traj_pt(VAR socketdev client_socket, VAR ROS_msg_join
         RAISE ERR_OUTOFBND;  ! TBD: define specific error code
     ENDIF
     
-    ! Copy Header data
+    ! Copy Header Data
     message.header := raw_message.header;
     
-    ! Unpack data fields
+    ! Unpack Data Fields
+    ! Skip bytes 37-44, Unused, Reserved for Joints 9-10
     UnpackRawBytes raw_message.data, 1, message.sequence_id, \IntX:=DINT;
     UnpackRawBytes raw_message.data, 5, message.joints.robax.rax_1, \Float4;
     UnpackRawBytes raw_message.data, 9, message.joints.robax.rax_2, \Float4;
@@ -107,51 +244,61 @@ PROC ROS_receive_msg_joint_traj_pt(VAR socketdev client_socket, VAR ROS_msg_join
     UnpackRawBytes raw_message.data, 17, message.joints.robax.rax_4, \Float4;
     UnpackRawBytes raw_message.data, 21, message.joints.robax.rax_5, \Float4;
     UnpackRawBytes raw_message.data, 25, message.joints.robax.rax_6, \Float4;
-    UnpackRawBytes raw_message.data, 29, message.joints.extax.eax_a, \Float4;
-    UnpackRawBytes raw_message.data, 33, message.joints.extax.eax_b, \Float4;
-    ! Skip bytes 29-44.  UNUSED.  Reserved for Joints 9-10.  TBD: copy to extAx?
-    UnpackRawBytes raw_message.data, 37+(ROS_MSG_MAX_JOINTS-8)*4, message.velocity, \Float4;
-    UnpackRawBytes raw_message.data, 41+(ROS_MSG_MAX_JOINTS-8)*4, message.duration, \Float4;
+    UnpackRawBytes raw_message.data, 29, message.joints.extax.eax_a, \Float4; ! seventh joint
+    UnpackRawBytes raw_message.data, 33, message.gripperTarget, \Float4;
+    UnpackRawBytes raw_message.data, 45, message.velocity, \Float4; ! not currently being used
+    UnpackRawBytes raw_message.data, 49, message.duration, \Float4; ! not currently being used
     
-    ! Convert data from ROS units to ABB units
+    ! Convert Data From ROS Units to ABB Units
     message.joints := rad2deg_robjoint(message.joints);
-    ! TBD: convert velocity
+    message.gripperTarget := message.gripperTarget * 1000;
+    IF (message.gripperTarget < 1) THEN ! if the gripper is almost closed, close the gripper
+        message.gripperTarget := 0;
+    ENDIF
     
 ERROR
-    RAISE;  ! raise errors to calling code
+    RAISE; ! raise errors to calling code
 ENDPROC
 
-PROC ROS_send_msg_joint_data(VAR socketdev client_socket, ROS_msg_joint_data message)
+PROC ROS_send_msg_gripper_data(VAR socketdev client_socket, ROS_msg_joint_data jointMessage, ROS_msg_gripper_data gripperMessage)
+! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
+! FIRST MODIFIED: 2016-06-14
+! PURPOSE: Sending joint states to ROS
+! NOTES: This is meant to be used for an arm with a gripper
+
+    ! Initialize Variables
     VAR ROS_msg raw_message;
     VAR jointtarget ROS_joints;
     VAR num i;
     
-    ! Force message header to the correct values
+    ! Force jointMessage Header to the Correct Values
     raw_message.header.msg_type := ROS_MSG_TYPE_JOINT;
     raw_message.header.comm_type := ROS_COM_TYPE_TOPIC;
     raw_message.header.reply_code := ROS_REPLY_TYPE_INVALID;
     
-    ! Convert data from ABB units to ROS units
-    ROS_joints := deg2rad_robjoint(message.joints);
+    ! Convert Data From ABB Units to ROS Units
+    ROS_joints := deg2rad_robjoint(jointMessage.joints);
+    gripperMessage.position := gripperMessage.position / 1000;
 
-    ! Pack data into message
-    PackRawBytes message.sequence_id, raw_message.data,  1, \IntX:=DINT;
-    PackRawBytes ROS_joints.robax.rax_1,    raw_message.data,  5, \Float4;
-    PackRawBytes ROS_joints.robax.rax_2,    raw_message.data,  9, \Float4;
-    PackRawBytes ROS_joints.robax.rax_3,    raw_message.data, 13, \Float4;
-    PackRawBytes ROS_joints.robax.rax_4,    raw_message.data, 17, \Float4;
-    PackRawBytes ROS_joints.robax.rax_5,    raw_message.data, 21, \Float4;
-    PackRawBytes ROS_joints.robax.rax_6,    raw_message.data, 25, \Float4;
-    PackRawBytes ROS_joints.extax.eax_a,    raw_message.data, 29, \Float4;
-    PackRawBytes ROS_joints.extax.eax_b,    raw_message.data, 33, \Float4;
-    FOR i FROM 1 TO ROS_MSG_MAX_JOINTS-8 DO   ! Insert placeholders for joints 7-10 (message expects 10 joints)
-        PackRawBytes 0,               raw_message.data, 33+i*4, \Float4;
+    ! Pack Data Into jointMessage
+    PackRawBytes jointMessage.sequence_id, raw_message.data,  1, \IntX:=DINT;
+    PackRawBytes ROS_joints.robax.rax_1, raw_message.data,  5, \Float4;
+    PackRawBytes ROS_joints.robax.rax_2, raw_message.data,  9, \Float4;
+    PackRawBytes ROS_joints.robax.rax_3, raw_message.data, 13, \Float4;
+    PackRawBytes ROS_joints.robax.rax_4, raw_message.data, 17, \Float4;
+    PackRawBytes ROS_joints.robax.rax_5, raw_message.data, 21, \Float4;
+    PackRawBytes ROS_joints.robax.rax_6, raw_message.data, 25, \Float4;
+    PackRawBytes ROS_joints.extax.eax_a, raw_message.data, 29, \Float4;
+    PackRawBytes gripperMessage.position, raw_message.data, 33, \Float4;
+    FOR i FROM 1 TO ROS_MSG_MAX_JOINTS-9 DO  ! Insert placeholders for joints 9-10 (jointMessage expects 10 joints)
+        PackRawBytes 0, raw_message.data, 37+i*4, \Float4; ! empty values for unused joints
     ENDFOR
 
+    ! Send Message to ROS
     ROS_send_msg client_socket, raw_message;
 
 ERROR
-    RAISE;  ! raise errors to calling code
+    RAISE; ! raise errors to calling code
 ENDPROC
 
 LOCAL FUNC num deg2rad(num deg)
@@ -191,3 +338,5 @@ LOCAL FUNC jointtarget rad2deg_robjoint(jointtarget rad)
 ENDFUNC
 
 ENDMODULE
+
+

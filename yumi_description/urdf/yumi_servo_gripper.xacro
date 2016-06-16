@@ -92,8 +92,9 @@
       <child link="${name}_finger_l"/>
       <origin xyz="0 0.0065 0.0837" rpy="0 0 ${PI}"/>
       <axis xyz="-1 0 0"/>
-      <limit lower="0" upper="0.025" effort="${max_effort}" velocity="0.02" />
+      <limit lower="0" upper="0.024" effort="${max_effort}" velocity="0.02" />
       <dynamics damping="${joint_damping}"/>
+      <mimic joint="${name}_joint_r"/>
     </joint>
 
     <link name="${name}_finger_l">

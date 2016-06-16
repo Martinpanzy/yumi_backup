@@ -2,8 +2,12 @@
 <!-- 
   PROGRAMMER: Frederick Wachter
   DATE CREATED: 2016-05-30
-  LAST MODIFIED: 2016-05-30
   PURPOSE: Import necessary files to build YuMi URDF with workspace
+
+  NECESSARY INPUTS:
+    - enable_cameras: true/false
+    - enable_depth: true/false
+    - enable_ground_truth: true/false
 -->
 
 <robot name="yumi" xmlns:xacro="http://www.ros.org/wiki/xacro">
@@ -46,6 +50,8 @@
   <!--    MACRO DEFINITIONS    -->
   <!--                  		   -->
 
+  <!-- Set defaults -->
+
   <!-- Define Macros for YuMi Import -->
   <xacro:yumi name="yumi" hardware_interface="${hardware_interface}" parent="world">
 	  <origin xyz="0 0 0.1" rpy="0 0 0"/> <!-- Bring bottom of YuMi to (x,y) plane -->
@@ -62,7 +68,9 @@
   </xacro:yumi_servo_gripper>
 
   <!-- Define Macros for Camera Assembly Import -->
-  <xacro:camera_assembly parent="yumi_link_7_l"/>
+  <xacro:camera_assembly parent="yumi_link_7_l" vi_namespace="${vi_namespace}" PI="${PI}" 
+    enable_cameras="$(arg enable_cameras)" enable_depth="$(arg enable_depth)" enable_ground_truth="$(arg enable_ground_truth)"
+  />
 
 </robot>
 
