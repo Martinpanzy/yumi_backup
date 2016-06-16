@@ -2,8 +2,9 @@ cmake_minimum_required(VERSION 2.8.3)
 project(yumi_moveit_config)
 
 find_package(catkin REQUIRED COMPONENTS
-	moveit_ros_planning_interface
 	roscpp
+	moveit_ros_planning_interface
+	geometry_msgs
 )
 
 catkin_package()

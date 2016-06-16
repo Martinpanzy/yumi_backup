@@ -20,13 +20,15 @@
   <run_depend>joint_state_publisher</run_depend>
   <run_depend>robot_state_publisher</run_depend>
   <run_depend>xacro</run_depend>
-
   <build_depend>yumi_description</build_depend>
-  <build_depend>moveit_ros_planning_interface</build_depend>
-  <build_depend>roscpp</build_depend>
   <run_depend>yumi_description</run_depend>
-  <run_depend>moveit_ros_planning_interface</run_depend>
+
+  <build_depend>roscpp</build_depend>
+  <build_depend>moveit_ros_planning_interface</build_depend>
+  <build_depend>geometry_msgs</build_depend>
   <run_depend>roscpp</run_depend>
+  <run_depend>moveit_ros_planning_interface</run_depend>
+  <run_depend>geometry_msgs</run_depend>
 
   <buildtool_depend>catkin</buildtool_depend>
   
