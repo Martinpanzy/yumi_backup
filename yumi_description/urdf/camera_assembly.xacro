@@ -60,7 +60,7 @@
       </collision>
     </link>
 
-    <link name="creative_camera">
+    <link name="sr300_sensor">
       <visual>
         <origin rpy="0 0 0" xyz="0 0 0"/>
         <geometry>
@@ -87,7 +87,7 @@
 
     <joint name="creative_to_holder" type="fixed">
       <parent link="camera_holder"/>
-      <child link="creative_camera"/>
+      <child link="sr300_sensor"/>
       <origin rpy="0 0 0" xyz="-0.002 0.0765 0.0335"/>
     </joint>
 
