@@ -66,7 +66,9 @@
       <joint name="gripper_r_joint_r" />
       <joint name="gripper_r_joint_l" />
     </group>
-    <end_effector name="right_hand" parent_link="yumi_link_7_r" group="right_hand"/>
+
+    <end_effector name="right_end_effector" parent_link="gripper_r_base" group="right_arm"/>
+    <end_effector name="left_end_effector" parent_link="camera_assembly" group="left_arm"/>
 
 
     <!--==================================-->
@@ -285,18 +287,21 @@
     <!-------------- Programmer: Frederick Wachter -------------->
     <!--------------- First Modified: 2016-05-20 ---------------->
     <!--=======================================================-->
-    <disable_collisions link1="yumi_body" link2="table_top" reason="Adjacent" /> <!-- Table and YuMi Body -->
-    <disable_collisions link1="stand_base" link2="table_top" reason="Adjacent" /> <!-- Table and YuMi Stand -->
-    <disable_collisions link1="yumi_body" link2="stand_base" reason="Adjacent" /> <!-- Stand and YuMi Body -->
+    <disable_collisions link1="yumi_body" link2="table_main" reason="Adjacent"/> <!-- Main Table and YuMi Body -->
+    <disable_collisions link1="stand_base" link2="table_main" reason="Adjacent"/> <!-- Main Table and YuMi Stand -->
+    <disable_collisions link1="yumi_body" link2="table_two" reason="Never"/> <!-- Second Table and YuMi Body -->
+    <disable_collisions link1="stand_base" link2="table_two" reason="Never"/> <!-- Second Table and YuMi Stand -->
+    <disable_collisions link1="table_main" link2="table_two" reason="Adjacent"/> <!-- Main Table and Second Table -->
+    <disable_collisions link1="yumi_body" link2="stand_base" reason="Adjacent"/> <!-- Stand and YuMi Body -->
     
-    <disable_collisions link1="yumi_link_7_l" link2="camera_assembly" reason="Adjacent" /> <!-- Link 7 Left Hand to Camera Assembly -->
-    <disable_collisions link1="yumi_link_7_l" link2="camera_holder" reason="Adjacent" /> <!-- Link 7 Left Hand and Camera Holder -->
-    <disable_collisions link1="camera_assembly" link2="camera_holder" reason="Adjacent" /> <!-- Camera Assembly and Camera Holder -->
-    <disable_collisions link1="camera_assembly" link2="creative_camera" reason="Never" /> <!-- Camera Assembly and Creative Camera -->
-    <disable_collisions link1="camera_assembly" link2="vi_sensor" reason="Never" /> <!-- Camera Assembly and VI Sensor -->
-    <disable_collisions link1="camera_holder" link2="creative_camera" reason="Adjacent" /> <!-- Camera Holder and Creative Camera -->
-    <disable_collisions link1="camera_holder" link2="vi_sensor" reason="Adjacent" /> <!-- Camera Holder and VI Sensor -->
-    <disable_collisions link1="creative_camera" link2="vi_sensor" reason="Never" /> <!-- Creative Camera and VI Sensor -->
+    <disable_collisions link1="yumi_link_7_l" link2="camera_assembly" reason="Adjacent"/> <!-- Link 7 Left Hand to Camera Assembly -->
+    <disable_collisions link1="yumi_link_7_l" link2="camera_holder" reason="Adjacent"/> <!-- Link 7 Left Hand and Camera Holder -->
+    <disable_collisions link1="camera_assembly" link2="camera_holder" reason="Adjacent"/> <!-- Camera Assembly and Camera Holder -->
+    <disable_collisions link1="camera_assembly" link2="sr300_sensor" reason="Never"/> <!-- Camera Assembly and Creative Camera -->
+    <disable_collisions link1="camera_assembly" link2="vi_sensor" reason="Never"/> <!-- Camera Assembly and VI Sensor -->
+    <disable_collisions link1="camera_holder" link2="sr300_sensor" reason="Adjacent"/> <!-- Camera Holder and Creative Camera -->
+    <disable_collisions link1="camera_holder" link2="vi_sensor" reason="Adjacent"/> <!-- Camera Holder and VI Sensor -->
+    <disable_collisions link1="sr300_sensor" link2="vi_sensor" reason="Never"/> <!-- Creative Camera and VI Sensor -->
     <!--==================================-->
     <!---------- End of Additions ---------->
     <!--==================================-->

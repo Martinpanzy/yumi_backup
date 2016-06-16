@@ -22,23 +22,46 @@
 
     <link name="table"/>
 
-    <joint name="table_top_to_table" type="fixed">
+    <joint name="table_main_to_table" type="fixed">
       <parent link="table"/>
-      <child link="table_top"/>
+      <child link="table_main"/>
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </joint>
 
-    <link name="table_top">
+    <link name="table_main">
       <visual>
         <geometry>
-          <box size="0.8 1.6 0.026"/>
+          <box size="1.6 0.8 0.026"/>
         </geometry>
         <origin rpy="0 0 0" xyz="0 0 0"/>
         <material name="Ivory"/>
       </visual>
       <collision>
         <geometry>
-          <box size="0.8 1.6 0.026"/>
+          <box size="1.6 0.8 0.026"/>
+        </geometry>
+        <origin rpy="0 0 0" xyz="0 0 0"/>
+        <material name="Ivory"/>
+      </collision>
+    </link>
+
+    <joint name="table_two_to_table" type="fixed">
+      <parent link="table"/>
+      <child link="table_two"/>
+      <origin rpy="0 0 0" xyz="-0.4 1.3 0"/>
+    </joint>
+
+    <link name="table_two">
+      <visual>
+        <geometry>
+          <box size="0.8 1.8 0.026"/>
+        </geometry>
+        <origin rpy="0 0 0" xyz="0 0 0"/>
+        <material name="Ivory"/>
+      </visual>
+      <collision>
+        <geometry>
+          <box size="0.8 1.8 0.026"/>
         </geometry>
         <origin rpy="0 0 0" xyz="0 0 0"/>
         <material name="Ivory"/>
