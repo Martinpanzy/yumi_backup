@@ -19,8 +19,9 @@ include_directories(
 
 add_executable(demo_script src/demo_script.cpp)
 target_link_libraries(demo_script ${catkin_LIBRARIES})
-
 add_executable(lead_through src/lead_through_script_generator.cpp)
 target_link_libraries(lead_through ${catkin_LIBRARIES})
+add_executable(run_lead_through src/run_lead_through_script.cpp)
+target_link_libraries(run_lead_through ${catkin_LIBRARIES})
 
 

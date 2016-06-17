@@ -33,22 +33,20 @@ int main(int argc,char **argv) {
 
 	// Get Desired Output File
 	if (argv[1] == NULL) { // check if an output file name was supplied
-		ROS_INFO("A output file name needs to be executed as an additional argument."); // notify user that no output file name was supplied 
+		ROS_INFO("An output file name needs to be executed as an additional argument."); // notify user that no output file name was supplied 
 		shutdown(); // showdown the node
 		return 1; // exit due to error
 	}
+	std::stringstream fullPath; // initialize variable to concatenate the full path
+	fullPath << outputFilePath << argv[1] << ".txt"; // concatenate full path
+	outputFile = fullPath.str(); // store the full path
+	ROS_INFO("Output file at: yumi_moveit_config/path/%s.txt",argv[1]); // notify the user of the chosen output file name
 
 	init(argc,argv,"lead_through"); // initialize ROS node
 
 	// Define Move Groups
 	planningInterface::MoveGroup right_arm("right_arm"); // initialize structure for right arm move group
 	planningInterface::MoveGroup left_arm("left_arm"); // initialize structure for left arm move group
-
-	// Construct File Location for Output File
-	std::stringstream fullPath; // initialize variable to concatenate the full path
-	fullPath << outputFilePath << argv[1] << ".txt"; // concatenate full path
-	outputFile = fullPath.str(); // store the full path
-	ROS_INFO("Output file at: yumi_moveit_config/path/%s.txt",argv[1]); // notify the user of the chosen output file name
 
 	// Setup Subscriber
 	NodeHandle nh; // initialize a node handle
