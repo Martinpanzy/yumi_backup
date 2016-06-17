@@ -20,19 +20,17 @@
 
     -->
 
+    <!--VIRTUAL JOINT: Purpose: this element defines a virtual joint between a robot link and an external frame of reference (considered fixed with respect to the robot)-->
+    <virtual_joint name="world_joint" type="fixed" parent_frame="world" child_link="workspace" />
+
+
     <!--=================================-->
     <!---------- Movement Groups ---------->
     <!--- Programmer: Frederick Wachter --->
     <!---- First Modified: 2016-05-20 ----->
     <!--=================================-->
 
-    <group name="both_arms">
-      <group name="left_arm"/>
-      <group name="right_arm"/>
-    </group>
-
     <group name="left_arm">
-      <joint name="world_joint" />
       <joint name="yumi_joint_1_l" />
       <joint name="yumi_joint_2_l" />
       <joint name="yumi_joint_7_l" />
@@ -43,7 +41,6 @@
       <joint name="yumi_link_7_l_joint" />
     </group>
     <group name="right_arm">
-      <joint name="world_joint" />
       <joint name="yumi_joint_1_r" />
       <joint name="yumi_joint_2_r" />
       <joint name="yumi_joint_7_r" />
@@ -56,6 +53,12 @@
 
     <group name="right_hand">
       <joint name="gripper_r_joint_r" />
+    </group>
+
+    <group name="both_arms">
+      <!--<joint name="world_joint" />-->
+      <group name="left_arm"/>
+      <group name="right_arm"/>
     </group>
 
     <end_effector name="right_end_effector" parent_link="yumi_link_7_r" group="right_arm"/>
@@ -172,10 +175,6 @@
     <!--==================================-->
     <!---------- End of Additions ---------->
     <!--==================================-->
-
-
-    <!--VIRTUAL JOINT: Purpose: this element defines a virtual joint between a robot link and an external frame of reference (considered fixed with respect to the robot)-->
-    <virtual_joint name="world_joint" type="fixed" parent_frame="world" child_link="yumi_body" />
     
 
     <!--DISABLE COLLISIONS: By default it is assumed that any link of the robot could potentially come into collision with any other link in the robot. This tag disables collision checking between a specified pair of links. -->

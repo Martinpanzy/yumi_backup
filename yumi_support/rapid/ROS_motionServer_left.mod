@@ -52,7 +52,7 @@ LOCAL VAR bool program_started := FALSE;
 LOCAL VAR string task_name := "MS_Left";
 
 ! Syncronize Motion Variables
-PERS tasks task_list{6} := [["T_ROB_R"],["ROS_MotionServer_Right"],["ROS_StateServer_Right"],["T_ROB_L"],["ROS_MotionServer_Left"],["ROS_StateServer_Left"]];
+PERS tasks task_list{4} := [["T_ROB_R"],["ROS_MotionServer_Right"],["T_ROB_L"],["ROS_MotionServer_Left"]];
 VAR syncident ready;
 VAR syncident handCalibrated;
 
@@ -80,7 +80,7 @@ PROC main()
     ENDIF
 
     ! Wait For Connections With ROS Motion Service
-    WaitTime 0.75; ! stagger server connection attempts
+    WaitTime 0.5; ! stagger server connection attempts
     TPWrite task_name + ": Waiting for connection.";
     ROS_init_socket server_socket, server_port;
     ROS_wait_for_client server_socket, client_socket, task_name;

@@ -2,7 +2,7 @@
 #include <moveit/move_group_interface/move_group.h>
 #include <geometry_msgs/Pose.h>
 
-// Define Constants
+// Define Global Constants
 const double gripper_open_position = 0.024; // gripper open position (m)
 const double gripper_closed_position = 0.0; // gripper closed position (m)
 
@@ -64,7 +64,7 @@ bool gotoGroupState(planningInterface::MoveGroup& group, std::string group_state
     PURPOSE: Move given group to specified group state
     FUTURE WORK: Need to add error checking to determine if the give group state is a valid group state
 
-    INPUTS:
+    INPUT(S):
       > group - move group that the user desires to display the joint values of
       > group_state - group state previously defined in the SRDf file that the user would like to move the specified group to
     OUTPUT(S):
@@ -82,7 +82,7 @@ bool gotoPose(planningInterface::MoveGroup& group, geometry_msgs::Pose& pose) {
     DATE CREATED: 2016-06-16
     PURPOSE: Set next target for given group using given pose and execute the path planner
 
-    INPUTS:
+    INPUT(S):
       > group - move group that the user desires to display the joint values of
       > pose - pose the user wants to move the given group to
     OUTPUT(S):
@@ -99,7 +99,7 @@ bool openHand(planningInterface::MoveGroup& group) {
     DATE CREATED: 2016-06-16
     PURPOSE: Open the gripper for given move group
 
-    INPUTS:
+    INPUT(S):
       > group - move group that the user desires to close the gripper of
     OUTPUT(S):
       < success - indicates if the movement execution was successful
@@ -125,7 +125,7 @@ bool closeHand(planningInterface::MoveGroup& group) {
     DATE CREATED: 2016-06-16
     PURPOSE: Close the gripper for given move group
 
-    INPUTS:
+    INPUT(S):
       > group - move group that the user desires to close the gripper of
     OUTPUT(S):
       < success - indicates if the movement execution was successful
@@ -153,7 +153,7 @@ bool executePlanner(planningInterface::MoveGroup& group) {
     NOTE: A new target must be set before running this function. Otherwise the path planner will
           not do anything since it is being asked to move to the position that it is already in.
     
-    INPUTS:
+    INPUT(S):
       > group - move group that the user wants to execute the path planner for
     OUTPUT(S):
       < success - indicates if the movement execution was successful
@@ -179,7 +179,7 @@ void displayJointValues(planningInterface::MoveGroup& group) {
     DATE CREATED: 2016-06-16
     PURPOSE: Display all the joint values of a give move group
 
-    INPUTS:
+    INPUT(S):
       > group - move group that the user desires to display the joint values of
     OUTPUT(S): None
 */
@@ -203,7 +203,7 @@ geometry_msgs::Pose createPoseXYZ(double x, double y, double z) {
     DATE CREATED: 2016-06-16
     PURPOSE: Create a pose, in repesect to the world frame, using given (x,y,z) values
 
-    INPUTS:
+    INPUT(S):
       > x - X-coordinate of the design position for the end effector of a given group
       > y - Y-coordinate of the design position for the end effector of a given group
       > z - Z-coordinate of the design position for the end effector of a given group

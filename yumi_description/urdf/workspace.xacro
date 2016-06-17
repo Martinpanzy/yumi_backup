@@ -14,7 +14,7 @@
     <!--          TABLE          -->
     <!--                         -->
 
-    <joint name="world_to_table" type="fixed">
+    <joint name="${table_parent}_to_table" type="fixed">
       <parent link="${table_parent}"/>
       <child link="table"/>
       <insert_block name="origin"/>

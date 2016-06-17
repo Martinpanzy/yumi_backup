@@ -50,7 +50,7 @@ LOCAL VAR bool program_started := FALSE;
 LOCAL VAR string task_name := "M_Right";
 
 ! Syncronize Motion Variables
-PERS tasks task_list{6} := [["T_ROB_R"],["ROS_MotionServer_Right"],["ROS_StateServer_Right"],["T_ROB_L"],["ROS_MotionServer_Left"],["ROS_StateServer_Left"]];
+PERS tasks task_list{4} := [["T_ROB_R"],["ROS_MotionServer_Right"],["T_ROB_L"],["ROS_MotionServer_Left"]];
 VAR syncident ready;
 VAR syncident handCalibrated;
 

@@ -48,11 +48,6 @@ LOCAL VAR bool program_started := FALSE;
 ! Task Name
 LOCAL VAR string task_name := "SS_Right";
 
-! Syncronize Motion Variables
-PERS tasks task_list{6} := [["T_ROB_R"],["ROS_MotionServer_Right"],["ROS_StateServer_Right"],["T_ROB_L"],["ROS_MotionServer_Left"],["ROS_StateServer_Left"]];
-VAR syncident ready;
-VAR syncident handCalibrated;
-
 PROC main()
 ! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
 ! FIRST MODIFIED: 2016-06-14
@@ -63,14 +58,7 @@ PROC main()
     ! Syncronize Tasks
     IF (program_started = FALSE) THEN
         TPWrite task_name + ": Program ready to start.";
-        WaitSyncTask ready, task_list \TimeOut:=20;
         program_started := TRUE;
-    ENDIF
-    
-    IF (hand_calibrated = FALSE) THEN
-        WaitSyncTask handCalibrated, task_list \TimeOut:=20; ! Wait for hand to calibrate
-        TPWrite task_name + ": Hand calibrated received.";
-        hand_calibrated := TRUE;
     ENDIF
 
     ! Wait For Connections With ROS State Service
