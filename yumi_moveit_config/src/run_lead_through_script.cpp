@@ -1,5 +1,6 @@
 #include <ros/ros.h>
 #include <moveit/move_group_interface/move_group.h>
+#include <moveit/robot_state/conversions.h>
 #include <geometry_msgs/Pose.h>
 #include <sstream>
 #include <fstream>
@@ -8,15 +9,17 @@
 // Define Global Constants
 const double gripper_open_position = 0.024; // gripper open position (m)
 const double gripper_closed_position = 0.0; // gripper closed position (m)
+const std::string pathsDirectory = "/home/yumi/yumi_ws/src/yumi/yumi_moveit_config/paths/";
 
 // Namespace Commands and Variables
 using namespace ros; // use namespace of ros
-namespace planningInterface = moveit::planning_interface; // define commonly used namespace
+namespace planningInterface = moveit::planning_interface; // define commonly used namespace for planning interface
+namespace moveitCore = moveit::core; // define commonly used namespace for planning interface
 
 // Function Prototypes
 bool gotoGroupState(planningInterface::MoveGroup&, std::string);
 bool gotoPose(planningInterface::MoveGroup&, geometry_msgs::Pose&);
-bool gotoJoints(planningInterface::MoveGroup&, std::vector<double>& );
+bool gotoJoints(planningInterface::MoveGroup&, std::vector<double>&);
 bool closeHand(planningInterface::MoveGroup&);
 bool openHand(planningInterface::MoveGroup&);
 bool executePlanner(planningInterface::MoveGroup&);
@@ -35,7 +38,9 @@ int main(int argc,char **argv) {
 		shutdown(); // showdown the node
 		return 1; // exit due to error
 	}
-	std::string inputFile = argv[1];
+	std::stringstream fullPath; // initialize variable to concatenate the full path
+	fullPath << pathsDirectory << argv[1] << ".txt"; // concatenate full path
+	std::string inputFile = fullPath.str(); // store the full path
 
 	init(argc,argv,"run_lead_through"); // initialize ROS node
 
@@ -47,34 +52,165 @@ int main(int argc,char **argv) {
 	planningInterface::MoveGroup right_arm("right_arm");
 	planningInterface::MoveGroup left_arm("left_arm");
 
-	gotoGroupState(right_arm,"home"); // go to home position
+	right_arm.setNumPlanningAttempts(3);
 
+	gotoGroupState(left_arm,"calc"); // go to calc position with the left arm
+	gotoGroupState(right_arm,"home"); // go to home position with the right arm
+
+	std::vector<planningInterface::MoveGroup::Plan> plan = generatePaths(inputFile); // generate paths from input file
+
+	displayJointValues(right_arm); // display joint positions
+
+	return 0;
+}
+/* -----------------------------------------------
+   ---------- PATH GENERATOR FUNCTIONS -----------
+   ----------------------------------------------- */
+std::vector<planningInterface::MoveGroup::Plan> generatePaths(std:string inputFile) {
+/*
+*/	
 	// Initialize Variables for Pulling From Input File
 	std::string line;
 	std::string command;
 	std::string groupName_1;
 	std::string groupName_2;
 	std::vector<double> jointValues_right(8);
-	std::vector<double> jointValues_left(1);
+	std::vector<double> jointValues_left(7);
 	std::vector<double>::size_type totalJoints_right;
 	std::vector<double>::size_type totalJoints_left;
+
+	std::vector<planningInterface::MoveGroup::Plan> plan;
+	int planIndex = 0;
 
 	// Get Joint Values and Execute Trajectories
 	ROS_INFO("Opening file and starting execution.");
 	std::ifstream leadThrough(inputFile.c_str());
-	while  (std::getline(leadThrough,line)) {
-		std::istringstream currentLine(line);
-		if (!(currentLine >> command >> groupName_1 >> totalJoints_right >> jointValues_right[0] >> jointValues_right[1] >> jointValues_right[2] >> jointValues_right[3] >> jointValues_right[4] >> jointValues_right[5] >> jointValues_right[6] >> jointValues_right[7] >> groupName_2 >> totalJoints_left >> jointValues_left[0] >> jointValues_left[1] >> jointValues_left[2] >> jointValues_left[3] >> jointValues_left[4] >> jointValues_left[5] >> jointValues_left[6])) {
-			break;
-		} else {
-			gotoJoints(right_arm,jointValues_right);
+	if (leadThrough.is_open()) {
+		while(std::getline(leadThrough,line)) {
+			std::istringstream currentLine(line);
+			currentLine >> command >> groupName_1 >> totalJoints_right >> jointValues_right[0] >> jointValues_right[1] >> jointValues_right[2] >> jointValues_right[3] >> jointValues_right[4] >> jointValues_right[5] >> jointValues_right[6] >> jointValues_right[7] >> groupName_2 >> totalJoints_left >> jointValues_left[0] >> jointValues_left[1] >> jointValues_left[2] >> jointValues_left[3] >> jointValues_left[4] >> jointValues_left[5] >> jointValues_left[6];
+		
+			if (planIndex == 0) {
+				right_arm.setStartStateToCurrentState();
+			} else {
+				moveitCore::RobotState state(right_arm.getRobotModel());
+				moveitCore::jointTrajPointToRobotState(plan[planIndex-1].trajectory_.joint_trajectory, (plan[planIndex-1].trajectory_.joint_trajectory.points.size()-1), state);
+				right_arm.setStartState(state);
+			}
+
+			right_arm.setJointValueTarget(jointValues_right);
+			planningInterface::MoveGroup::Plan currentPlan;
+			bool success = right_arm.plan(currentPlan);
+			planIndex++;
+
+			if ((success == 1) && (planIndex > 1)) {
+				plan.push_back(currentPlan);
+			} else if ((success == 1) && (planIndex == 1)) {
+				plan.push_back(currentPlan);
+			} else {
+				ROS_WARN("Plan failed for trajectory point: %d",planIndex);
+				return 1;
+			}
+
 		}
+
+		leadThrough.close();
 	}
-	ROS_INFO("Finished execution.");
+	ROS_INFO("Finished planning.");
 
-	displayJointValues(right_arm); // display joint positions
+	// Execute Planned Movements
+	ROS_INFO("Executing trajectories.");
+	for (int i = 0; i < plan.size(); i++) {
+		right_arm.execute(plan[i]);
+		ROS_INFO("Trajectory %d executed",i);
+	}
+	ROS_INFO("Finished executing trajectories.");
 
-	return 0;
+	return plan;
+}
+
+std::vector<planningInterface::MoveGroup::Plan> generatePaths(std:string inputFile) {
+/* 
+   NOTE: Currently broken, need to be update later on
+*/
+	// Initialize Variables for Pulling From Input File
+	std::string line;
+	std::string command;
+	std::string groupName_1;
+	std::string groupName_2;
+	std::vector<double> jointValues_right(8);
+	std::vector<double> jointValues_left(7);
+	std::vector<double>::size_type totalJoints_right;
+	std::vector<double>::size_type totalJoints_left;
+
+	planningInterface::MoveGroup::Plan plan;
+	int planIndex = 0;
+
+	// Get Joint Values and Execute Planner
+	ROS_INFO("Opening file and starting execution.");
+	std::ifstream textFile(inputFile.c_str());
+	if (textFile.is_open()) {
+		while(std::getline(textFile,line)) {
+			std::istringstream currentLine(line);
+			currentLine >> command >> groupName_1 >> totalJoints_right >> jointValues_right[0] >> jointValues_right[1] >> jointValues_right[2] >> jointValues_right[3] >> jointValues_right[4] >> jointValues_right[5] >> jointValues_right[6] >> jointValues_right[7] >> groupName_2 >> totalJoints_left >> jointValues_left[0] >> jointValues_left[1] >> jointValues_left[2] >> jointValues_left[3] >> jointValues_left[4] >> jointValues_left[5] >> jointValues_left[6];
+		
+			if (planIndex == 0) {
+				right_arm.setStartStateToCurrentState();
+			} else {
+				moveitCore::RobotState state(right_arm.getRobotModel());
+				moveitCore::jointTrajPointToRobotState(plan.trajectory_.joint_trajectory, (plan.trajectory_.joint_trajectory.points.size()-1), state);
+				right_arm.setStartState(state);
+			}
+
+			right_arm.setJointValueTarget(jointValues_right);
+			planningInterface::MoveGroup::Plan currentPlan;
+			bool success = right_arm.plan(currentPlan);
+			planIndex++;
+
+			if ((success == 1) && (planIndex > 1)) {
+				std::size_t trajectorySize = currentPlan.trajectory_.joint_trajectory.points.size();
+				trajectory_msgs::JointTrajectoryPoint point;
+				for (int i = 0; i < trajectorySize; i++) {
+					point = currentPlan.trajectory_.joint_trajectory.points[i];
+					plan.trajectory_.joint_trajectory.points.push_back(point);
+				}
+				ROS_INFO("Plan created for trajectory point: %d",planIndex);
+			} else if ((success == 1) && (planIndex == 1)) {
+				plan = currentPlan;
+			} else {
+				ROS_WARN("Plan failed for trajectory point: %d",planIndex);
+				return 1;
+			}
+
+		}
+
+		textFile.close();
+	}
+	ROS_INFO("Finished planning.");
+
+	int totalTrajectoryPoints = plan.trajectory_.joint_trajectory.points.size();
+	ROS_INFO("Total trajectory points: %lu",totalTrajectoryPoints);
+
+	// Executed Planned Movements
+	ROS_INFO("Executing trajectories.");
+	planningInterface::MoveGroup::Plan newPlan;
+	newPlan = plan;
+
+	int trajSize = 20;
+	int sendTrajSize = ceil(plan.trajectory_.joint_trajectory.points.size() / trajSize);
+	ROS_INFO("Total trajectories to send: %d",sendTrajSize);
+	for (int i = 0; i < sendTrajSize; i++) {
+		newPlan.trajectory_.joint_trajectory.points = {}; // NOTE: Generates a warning DATE: 2016-06-20
+		ROS_INFO("Creating trajectory.");
+		for (int j = 0; j < trajSize; j++) {
+			newPlan.trajectory_.joint_trajectory.points[j] = plan.trajectory_.joint_trajectory.points[j+(i*trajSize)];
+		}
+		right_arm.execute(newPlan);
+		ROS_INFO("Trajectory %d executed",i);
+	}
+	ROS_INFO("Finished executing trajectories.");
+
+	return plan;
 }
 
 /* -----------------------------------------------
