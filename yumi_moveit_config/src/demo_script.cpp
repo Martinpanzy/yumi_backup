@@ -62,7 +62,6 @@ bool gotoGroupState(planningInterface::MoveGroup& group, std::string group_state
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-06-16
     PURPOSE: Move given group to specified group state
-    FUTURE WORK: Need to add error checking to determine if the give group state is a valid group state
 
     INPUT(S):
       > group - move group that the user desires to display the joint values of
@@ -71,10 +70,9 @@ bool gotoGroupState(planningInterface::MoveGroup& group, std::string group_state
       < success - indicates if the movement execution was successful
 */
 	group.setNamedTarget(group_state); // set next target as given group state
-	group.move(); // move to the group state
+	bool success = executePlanner(group); // execute planner and movement
 
-	// NOTE: Need to add error checking to make sure the given group_state exists DATE: 2016-06-16
-	return 1;
+	return success; // return whether the path planner was able to create a path or not
 }
 
 bool gotoPose(planningInterface::MoveGroup& group, geometry_msgs::Pose& pose) {
@@ -165,7 +163,7 @@ bool executePlanner(planningInterface::MoveGroup& group) {
 	ROS_INFO("Attempting Path Planning. Status: %s",success?"Success":"Failed"); // display result to user
 
 	if (success == 1) { // if the path planning was successful
-		group.move(); // move to the next target
+		group.execute(plan); // move to the next target
 	}
 
 	return success; // return whether the path planner was able to create a path or not
