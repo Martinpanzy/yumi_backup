@@ -1,4 +1,4 @@
-MODULE ROS_motionServer_left
+MODULE ROS_motionServer_left_gripper
 
 ! Software License Agreement (BSD License)
 !
@@ -42,6 +42,7 @@ LOCAL VAR socketdev client_socket;
 
 ! Trajectory Variables
 LOCAL VAR ROS_joint_trajectory_pt jointTrajectory{MAX_TRAJ_LENGTH};
+LOCAL VAR ROS_gripper_trajectory_pt gripperTrajectory{MAX_TRAJ_LENGTH};
 LOCAL VAR num trajectory_size;
 
 ! Flag Variables
@@ -60,11 +61,11 @@ PROC main()
 ! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
 ! FIRST MODIFIED: 2016-06-14
 ! PURPOSE: Connecting with motion server from ROS and storing joint values
-! NOTES: A gripper is not attached to this arm (left arm)
+! NOTES: A gripper is attached to this arm (left arm)
 ! FUTURE WORK: Use the velociy values
 
     ! Initialize Variables
-    VAR ROS_msg_joint_traj_pt jointMessage;
+    VAR ROS_msg_traj_pt message;
 
     ! Syncronize Tasks
     IF (program_started = FALSE) THEN
@@ -86,10 +87,10 @@ PROC main()
     ROS_wait_for_client server_socket, client_socket, task_name;
 
 
-    ! Recieve Joint Trajectory Point
+    ! Recieve Joint Trajectory Point and Gripper Position
     WHILE ( true ) DO
-        ROS_receive_msg_joint_traj_pt client_socket, jointMessage;
-        trajectory_pt_callback jointMessage;
+        ROS_receive_msg_gripper_traj_pt client_socket, message;
+        trajectory_pt_callback message;
     ENDWHILE
 
 ERROR (ERR_SOCK_TIMEOUT, ERR_SOCK_CLOSED, ERR_WAITSYNCTASK)
@@ -108,41 +109,43 @@ UNDO
     IF (SocketGetStatus(server_socket) <> SOCKET_CLOSED) SocketClose server_socket;
 ENDPROC
 
-LOCAL PROC trajectory_pt_callback(ROS_msg_joint_traj_pt jointMessage)
+LOCAL PROC trajectory_pt_callback(ROS_msg_traj_pt message)
 ! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
 ! FIRST MODIFIED: 2016-06-14
 ! PURPOSE: Creating trajectory from data received from ROS
-! NOTES: A gripper is not attached to this arm (left arm)
+! NOTES: A gripper is attached to this arm (left arm)
 ! FUTURE WORK: Use the velociy values
 
     ! Initialize Variables
     VAR ROS_joint_trajectory_pt joints;
+    VAR ROS_gripper_trajectory_pt gripper;
     VAR ROS_msg reply_msg;
 
-    ! Store Joint Values Locally
-    joints := [jointMessage.joints, jointMessage.duration];
+    ! Store Joint and Gripper Values Locally
+    joints := [message.joints, message.duration];
+    gripper.gripper_pos := message.gripperTarget;
     
     ! Use sequence_id To Signal Start/End of Trajectory Download
-    TEST jointMessage.sequence_id
+    TEST message.sequence_id
         CASE ROS_TRAJECTORY_START_DOWNLOAD:
             TPWrite task_name + ": Traj START received";
             trajectory_size := 0;  ! Reset trajectory size
-            add_traj_pt joints; ! Add this point to the trajectory
+            add_traj_pt joints, gripper; ! Add this point to the trajectory
         CASE ROS_TRAJECTORY_END:
             TPWrite task_name + ": Traj END received";
-            add_traj_pt joints; ! Add this point to the trajectory
+            add_traj_pt joints, gripper; ! Add this point to the trajectory
             activate_trajectory;
         CASE ROS_TRAJECTORY_STOP:
             TPWrite task_name + ": Traj STOP received";
-            ! trajectory_size := 0;  ! empty trajectory
-            ! activate_trajectory;
-            ! StopMove; ClearPath; StartMove;  ! redundant, but re-issue stop command just to be safe
+            trajectory_size := 0;  ! empty trajectory
+            activate_trajectory;
+            StopMove; ClearPath; StartMove;  ! redundant, but re-issue stop command just to be safe
         DEFAULT:
-            add_traj_pt joints; ! Add this point to the trajectory
+            add_traj_pt joints, gripper; ! Add this point to the trajectory
     ENDTEST
 
     ! Send Reply, If Requested
-    IF (jointMessage.header.comm_type = ROS_COM_TYPE_SRV_REQ) THEN
+    IF (message.header.comm_type = ROS_COM_TYPE_SRV_REQ) THEN
         reply_msg.header := [ROS_MSG_TYPE_JOINT_TRAJ_PT, ROS_COM_TYPE_SRV_REPLY, ROS_REPLY_TYPE_SUCCESS];
         ROS_send_msg client_socket, reply_msg;
     ENDIF
@@ -151,11 +154,11 @@ ERROR
     RAISE;  ! raise errors to calling code
 ENDPROC
 
-LOCAL PROC add_traj_pt(ROS_joint_trajectory_pt joints)
+LOCAL PROC add_traj_pt(ROS_joint_trajectory_pt joints, ROS_gripper_trajectory_pt gripper)
 ! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
 ! FIRST MODIFIED: 2016-06-14
-! PURPOSE: Add joint values to trajectory arrays
-! NOTES: A gripper is not attached to this arm (left arm)
+! PURPOSE: Add joint and gripper values to trajectory arrays
+! NOTES: A gripper is attached to this arm (left arm)
 ! FUTURE WORK: Use the velociy values
 
     IF (trajectory_size = MAX_TRAJ_LENGTH) THEN
@@ -163,7 +166,8 @@ LOCAL PROC add_traj_pt(ROS_joint_trajectory_pt joints)
             \RL2:="max_size = " + ValToStr(MAX_TRAJ_LENGTH);
     ELSE
         Incr trajectory_size; ! increment trajectory size
-        jointTrajectory{trajectory_size} := joints; ! add this point to the joint trajectory
+        jointTrajectory{trajectory_size}   := joints; ! add this point to the joint trajectory
+        gripperTrajectory{trajectory_size} := gripper; ! add this point to the gripper trajectory
     ENDIF
 ENDPROC
 
@@ -171,18 +175,23 @@ LOCAL PROC activate_trajectory()
 ! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
 ! FIRST MODIFIED: 2016-06-14
 ! PURPOSE: Set flags to indicate that a trajectory has been received and fully built
-! NOTES: A gripper is attached to this arm (right arm)
-! FUTURE WORK: Use the velociy values
+! NOTES: A gripper is attached to this arm (left arm)
 
     ! Aquire Data Lock
-    WaitTestAndSet ROS_trajectory_lock_left; ! acquire data-lock
-    TPWrite "Sending " + ValToStr(trajectory_size) + " points to left MOTION task";
+    WaitTestAndSet ROS_trajectory_lock_right; ! acquire data-lock
+    TPWrite "Sending " + ValToStr(trajectory_size) + " points to right MOTION task";
 
     ! Store Joint Trajectory and Joint Trajectory Variables Into System Variables
-    ROS_trajectory_left := jointTrajectory;
+    ROS_trajectory_left      := jointTrajectory;
     ROS_trajectory_size_left := trajectory_size;
-    ROS_new_trajectory_left := TRUE;
+    ROS_new_trajectory_left  := TRUE;
     ROS_trajectory_lock_left := FALSE; ! release data-lock
+
+    ! Store Gripper Trajectory and Gripper Trajectory Variables Into System Variables
+    ROS_trajectory_gripper_left      := gripperTrajectory;
+    ROS_trajectory_size_gripper_left := trajectory_size;
+    ROS_new_trajectory_gripper_left  := TRUE;
+    ROS_trajectory_lock_gripper_left := FALSE; ! release data-lock
 ENDPROC
     
 ENDMODULE

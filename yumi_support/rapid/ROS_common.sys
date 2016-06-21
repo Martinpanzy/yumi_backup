@@ -45,25 +45,35 @@ ENDRECORD
 ! ----------------------------------------------
 ! "..._lock" variables should use TestAndSet read/write protection to prevent conflicts
 
+PERS num ROS_trajectory_size_left  := 0; ! size of trajectory point array
+PERS bool ROS_new_trajectory_left  := FALSE; ! flag used to indicate when a new trajectory is available for reading
 PERS bool ROS_trajectory_lock_left := FALSE; ! flag used to prevent conflicts when reading
 PERS ROS_joint_trajectory_pt ROS_trajectory_left{MAX_TRAJ_LENGTH}; ! trajectory point array
-PERS num ROS_trajectory_size_left := 0; ! size of trajectory point array
-PERS bool ROS_new_trajectory_left := FALSE; ! flag used to indicate when a new trajectory is available for reading
 
+PERS num ROS_trajectory_size_right  := 0; ! size of trajectory point array
+PERS bool ROS_new_trajectory_right  := FALSE; ! flag used to indicate when a new trajectory is available for reading
 PERS bool ROS_trajectory_lock_right := FALSE; ! flag used to prevent conflicts when reading
 PERS ROS_joint_trajectory_pt ROS_trajectory_right{MAX_TRAJ_LENGTH}; ! trajectory point array
-PERS num ROS_trajectory_size_right := 0; ! size of trajectory point array
-PERS bool ROS_new_trajectory_right := FALSE; ! flag used to indicate when a new trajectory is available for reading
 
-PERS bool ROS_trajectory_lock_gripper := FALSE; ! flag used to prevent conflicts when reading
-PERS ROS_gripper_trajectory_pt ROS_trajectory_gripper{MAX_TRAJ_LENGTH}; ! trajectory point array
-PERS num ROS_trajectory_size_gripper := 0; ! size of trajectory point array
-PERS bool ROS_new_trajectory_gripper := FALSE; ! flag used to indicate when a new trajectory is available for reading
+PERS num ROS_trajectory_size_gripper_left  := 0; ! size of trajectory point array
+PERS bool ROS_new_trajectory_gripper_left  := FALSE; ! flag used to indicate when a new trajectory is available for reading
+PERS bool ROS_trajectory_lock_gripper_left := FALSE; ! flag used to prevent conflicts when reading
+PERS ROS_gripper_trajectory_pt ROS_trajectory_gripper_left{MAX_TRAJ_LENGTH}; ! trajectory point array
+
+PERS num ROS_trajectory_size_gripper_right  := 0; ! size of trajectory point array
+PERS bool ROS_new_trajectory_gripper_right  := FALSE; ! flag used to indicate when a new trajectory is available for reading
+PERS bool ROS_trajectory_lock_gripper_right := FALSE; ! flag used to prevent conflicts when reading
+PERS ROS_gripper_trajectory_pt ROS_trajectory_gripper_right{MAX_TRAJ_LENGTH}; ! trajectory point array
 
 ! ----------------------------------------------
 ! ----------------- CONSTANTS ------------------
 ! ----------------------------------------------
-CONST num MAX_TRAJ_LENGTH := 100;
+CONST num MAX_TRAJ_LENGTH   := 100;
+CONST num GRIPPER_CLOSE_TOL := 1; ! ! gripper tolerance for assuming closing hand
+CONST speeddata SLOW_SPEED  := v100; ! slow speed for arm
+CONST speeddata NORM_SPEED  := v500; ! normal speed for arm
+CONST speeddata MED_SPEED   := v1000; ! medium speed for arm
+CONST speeddata FAST_SPEED  := v1500; ! fast speed for arm
 
 ! ----------------------------------------------
 ! ------------- PERSISTANT VALUES --------------

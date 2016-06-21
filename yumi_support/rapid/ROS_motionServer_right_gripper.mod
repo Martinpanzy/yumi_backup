@@ -137,9 +137,9 @@ LOCAL PROC trajectory_pt_callback(ROS_msg_traj_pt message)
             activate_trajectory;
         CASE ROS_TRAJECTORY_STOP:
             TPWrite task_name + ": Traj STOP received";
-            ! trajectory_size := 0;  ! empty trajectory
-            ! activate_trajectory;
-            ! StopMove; ClearPath; StartMove;  ! redundant, but re-issue stop command just to be safe
+            trajectory_size := 0;  ! empty trajectory
+            activate_trajectory;
+            StopMove; ClearPath; StartMove;  ! redundant, but re-issue stop command just to be safe
         DEFAULT:
             add_traj_pt joints, gripper; ! Add this point to the trajectory
     ENDTEST
@@ -166,7 +166,7 @@ LOCAL PROC add_traj_pt(ROS_joint_trajectory_pt joints, ROS_gripper_trajectory_pt
             \RL2:="max_size = " + ValToStr(MAX_TRAJ_LENGTH);
     ELSE
         Incr trajectory_size; ! increment trajectory size
-        jointTrajectory{trajectory_size} := joints; ! add this point to the joint trajectory
+        jointTrajectory{trajectory_size}   := joints; ! add this point to the joint trajectory
         gripperTrajectory{trajectory_size} := gripper; ! add this point to the gripper trajectory
     ENDIF
 ENDPROC
@@ -182,16 +182,16 @@ LOCAL PROC activate_trajectory()
     TPWrite "Sending " + ValToStr(trajectory_size) + " points to right MOTION task";
 
     ! Store Joint Trajectory and Joint Trajectory Variables Into System Variables
-    ROS_trajectory_right := jointTrajectory;
+    ROS_trajectory_right      := jointTrajectory;
     ROS_trajectory_size_right := trajectory_size;
-    ROS_new_trajectory_right := TRUE;
+    ROS_new_trajectory_right  := TRUE;
     ROS_trajectory_lock_right := FALSE; ! release data-lock
 
     ! Store Gripper Trajectory and Gripper Trajectory Variables Into System Variables
-    ROS_trajectory_gripper := gripperTrajectory;
-    ROS_trajectory_size_gripper := trajectory_size;
-    ROS_new_trajectory_gripper := TRUE;
-    ROS_trajectory_lock_gripper := FALSE; ! release data-lock
+    ROS_trajectory_gripper_right      := gripperTrajectory;
+    ROS_trajectory_size_gripper_right := trajectory_size;
+    ROS_new_trajectory_gripper_right  := TRUE;
+    ROS_trajectory_lock_gripper_right := FALSE; ! release data-lock
 ENDPROC
     
 ENDMODULE
