@@ -1,6 +1,10 @@
 <launch>
 
-  <include file="$(find yumi_moveit_config)/launch/planning_context.launch" />
+  <arg name="two_grippers" default="false"/>
+
+  <include file="$(find yumi_moveit_config)/launch/planning_context.launch">
+    <arg name="two_grippers" value="$(arg two_grippers)"/>
+  </include>
 
   <!-- GDB Debug Option -->
   <arg name="debug" default="false" />
@@ -29,6 +33,7 @@
     <arg name="moveit_manage_controllers" value="true" />
     <arg name="moveit_controller_manager" value="yumi" unless="$(arg fake_execution)"/>
     <arg name="moveit_controller_manager" value="fake" if="$(arg fake_execution)"/>
+    <arg name="two_grippers" value="$(arg two_grippers)"/>
   </include>
 
   <!-- Sensors Functionality -->
