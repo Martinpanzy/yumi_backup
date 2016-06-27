@@ -1,23 +1,55 @@
 #!/bin/bash
 # PROGRAMMER: Frederick Wachter
 # DATE CREATED: 2016-05-20
-# PURPOSE: Make it easier to run YuMi scripts - Run server to send trajectories to YuMi
+# PURPOSE: Make it easier to run YuMi scripts - Run robot interface nodes to send trajectories to YuMi and receive joint states
+# REFERENCES: http://stackoverflow.com/questions/13777387/check-for-ip-validity | REASON: regexp for IP address
 
-if [ -z "$1" ]; then
-	source ~/yumi_ws/devel/setup.bash # source the catkin workspace
-	roslaunch yumi_support robot_interface.launch # run YuMi server to send files to real YuMi robot using the default IP address
-else
-	if [ "$1" == "lead_through" ]; then
-		source ~/yumi_ws/devel/setup.bash # source the catkin workspace
-		roslaunch yumi_support robot_interface.launch lead_through:=true # run YuMi server to send files to real YuMi robot at the specified IP address
-	elif [ "$1" == "two_grippers"]; then
-		source ~/yumi_ws/devel/setup.bash # source the catkin workspace
-		roslaunch yumi_support robot_interface.launch two_grippers:=true # run YuMi server to send files to real YuMi robot at the specified IP address
-	else
-		# NOTE: Need to check if IP was entered or provide error that input is not acceptable | DATE: 2016-06-23
-		source ~/yumi_ws/devel/setup.bash # source the catkin workspace
-		roslaunch yumi_support robot_interface.launch robot_ip:=$1 # run YuMi server to send files to real YuMi robot at the specified IP address
+# Initialize Variables
+runCommand="roslaunch yumi_support robot_interface.launch"; # set initial command for starting robot interface
+flag_argError=false; # create flag to indicate if input arguments were valid
+flag_twoGrippers=false; # flag to indicate if two grippers argument has already been set
+flag_stateServersOnly=false; # flag to indicate if state servers only argument has already been set
+flag_ipAddress=false; # flag to inficate if the ip address argument has already been set
+
+# Iterate Through Provided Arguments
+for argument in "$@"; do # for all provided arguments
+	if [ "$argument" == "state_servers_only" ]; then # if the user would like to only run the state servers
+		if [ $flag_stateServersOnly = false ]; then # if this argument has not been set yet
+			echo "Running only the state servers." # notify the user that the argument has been received
+			runCommand="$runCommand state_servers_only:=true"; # add argument to the run command
+			flag_stateServersOnly=true; # indicate that the argument has been set
+		else # if the argument has already been set
+			echo "Already set the argument for state_servers_only." # notify the user that this argument has already been set
+		fi
+	elif [ "$argument" == "two_grippers" ]; then # if the user is using two gripperson YuMi
+		if [ $flag_twoGrippers = false ]; then # if this argument has not been set yet
+			echo "Assuming using two grippers." # notify the user that the argument has been received
+			runCommand="$runCommand two_grippers:=true"; # add argument to the run command
+			flag_twoGrippers=true; # indicate that the argument has been set
+		else # if the argument has already been set
+			echo "Already set the argument for two_grippers." # notify the user that this argument has already been set
+		fi
+	elif [[ "$argument" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then # if the user would like to specify the IP of YuMi
+		if [ $flag_ipAddress = false ]; then  # if this argument has not been set yet
+			echo "Setting robot interface node IP address to $argument." # notify the user that the argument has been received
+			runCommand="$runCommand robot_ip:=$argument"; # add argument to the run command
+			flag_ipAddress=true; # indicate that the argument has been set
+		else # if the argument has already been set
+			echo "Already set the argument for robot_ip." # notify the user that this argument has already been set
+		fi
+	else # if the argument is not recognized
+		echo "Argument $currentArgument is not recognized." # notify the user that the current argument is not recognized
+		flag_argError=true; # indicate that an argument error has occurred
+		break; # break from the loop
 	fi
+done
+
+# Check if All Arguments Were Valid
+if [ $flag_argError = false ]; then # if all arguments were valid
+	sleep 2; # sleep to allow the user to see the terminal echo's
+	$runCommand # run the robot interface node initializer command with user desired arguments
+else # if one or more arguments were not valid
+	echo "Error occurred. Not loading robot interface due to error." # notify user that the robot interface will not be executed
 fi
 
 

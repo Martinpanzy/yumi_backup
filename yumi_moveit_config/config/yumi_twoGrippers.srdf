@@ -231,117 +231,6 @@
     <disable_collisions link1="yumi_link_6_l" link2="yumi_link_7_l" reason="Adjacent" />
     <disable_collisions link1="yumi_link_6_r" link2="yumi_link_7_r" reason="Adjacent" />
 
-
-    <disable_collisions link1="yumi_link_1_l" link2="yumi_link_1_r" reason="Never" />
-    <disable_collisions link1="yumi_link_1_l" link2="yumi_link_2_r" reason="Never" />
-    <disable_collisions link1="yumi_link_1_l" link2="yumi_link_3_r" reason="Never" />
-    <disable_collisions link1="yumi_link_1_l" link2="yumi_link_4_r" reason="Never" />
-    <disable_collisions link1="yumi_link_1_l" link2="yumi_link_5_r" reason="Never" />
-    <disable_collisions link1="yumi_link_1_l" link2="yumi_link_6_r" reason="Never" />
-    <disable_collisions link1="yumi_link_1_l" link2="yumi_link_7_r" reason="Never" />
-    <disable_collisions link1="yumi_link_1_l" link2="gripper_r_base" reason="Never" />
-    <disable_collisions link1="yumi_link_1_l" link2="gripper_r_finger_l" reason="Never" />
-    <disable_collisions link1="yumi_link_1_l" link2="gripper_r_finger_r" reason="Never" />
-
-    <disable_collisions link1="yumi_link_2_l" link2="yumi_link_1_r" reason="Never" />
-    <disable_collisions link1="yumi_link_2_l" link2="yumi_link_2_r" reason="Never" />
-    <disable_collisions link1="yumi_link_2_l" link2="yumi_link_3_r" reason="Never" />
-    <disable_collisions link1="yumi_link_2_l" link2="yumi_link_4_r" reason="Never" />
-    <disable_collisions link1="yumi_link_2_l" link2="yumi_link_5_r" reason="Never" />
-    <disable_collisions link1="yumi_link_2_l" link2="yumi_link_6_r" reason="Never" />
-    <disable_collisions link1="yumi_link_2_l" link2="yumi_link_7_r" reason="Never" />
-    <disable_collisions link1="yumi_link_2_l" link2="gripper_r_base" reason="Never" />
-    <disable_collisions link1="yumi_link_2_l" link2="gripper_r_finger_l" reason="Never" />
-    <disable_collisions link1="yumi_link_2_l" link2="gripper_r_finger_r" reason="Never" />
-
-    <disable_collisions link1="yumi_link_3_l" link2="yumi_link_1_r" reason="Never" />
-    <disable_collisions link1="yumi_link_3_l" link2="yumi_link_2_r" reason="Never" />
-    <disable_collisions link1="yumi_link_3_l" link2="yumi_link_3_r" reason="Never" />
-    <disable_collisions link1="yumi_link_3_l" link2="yumi_link_4_r" reason="Never" />
-    <disable_collisions link1="yumi_link_3_l" link2="yumi_link_5_r" reason="Never" />
-    <disable_collisions link1="yumi_link_3_l" link2="yumi_link_6_r" reason="Never" />
-    <disable_collisions link1="yumi_link_3_l" link2="yumi_link_7_r" reason="Never" />
-    <disable_collisions link1="yumi_link_3_l" link2="gripper_r_base" reason="Never" />
-    <disable_collisions link1="yumi_link_3_l" link2="gripper_r_finger_l" reason="Never" />
-    <disable_collisions link1="yumi_link_3_l" link2="gripper_r_finger_r" reason="Never" />
-
-    <disable_collisions link1="yumi_link_4_l" link2="yumi_link_1_r" reason="Never" />
-    <disable_collisions link1="yumi_link_4_l" link2="yumi_link_2_r" reason="Never" />
-    <disable_collisions link1="yumi_link_4_l" link2="yumi_link_3_r" reason="Never" />
-    <disable_collisions link1="yumi_link_4_l" link2="yumi_link_4_r" reason="Never" />
-    <disable_collisions link1="yumi_link_4_l" link2="yumi_link_5_r" reason="Never" />
-    <disable_collisions link1="yumi_link_4_l" link2="yumi_link_6_r" reason="Never" />
-    <disable_collisions link1="yumi_link_4_l" link2="yumi_link_7_r" reason="Never" />
-    <disable_collisions link1="yumi_link_4_l" link2="gripper_r_base" reason="Never" />
-    <disable_collisions link1="yumi_link_4_l" link2="gripper_r_finger_l" reason="Never" />
-    <disable_collisions link1="yumi_link_4_l" link2="gripper_r_finger_r" reason="Never" />
-
-    <disable_collisions link1="yumi_link_5_l" link2="yumi_link_1_r" reason="Never" />
-    <disable_collisions link1="yumi_link_5_l" link2="yumi_link_2_r" reason="Never" />
-    <disable_collisions link1="yumi_link_5_l" link2="yumi_link_3_r" reason="Never" />
-    <disable_collisions link1="yumi_link_5_l" link2="yumi_link_4_r" reason="Never" />
-    <disable_collisions link1="yumi_link_5_l" link2="yumi_link_5_r" reason="Never" />
-    <disable_collisions link1="yumi_link_5_l" link2="yumi_link_6_r" reason="Never" />
-    <disable_collisions link1="yumi_link_5_l" link2="yumi_link_7_r" reason="Never" />
-    <disable_collisions link1="yumi_link_5_l" link2="gripper_r_base" reason="Never" />
-    <disable_collisions link1="yumi_link_5_l" link2="gripper_r_finger_l" reason="Never" />
-    <disable_collisions link1="yumi_link_5_l" link2="gripper_r_finger_r" reason="Never" />
-
-    <disable_collisions link1="yumi_link_6_l" link2="yumi_link_1_r" reason="Never" />
-    <disable_collisions link1="yumi_link_6_l" link2="yumi_link_2_r" reason="Never" />
-    <disable_collisions link1="yumi_link_6_l" link2="yumi_link_3_r" reason="Never" />
-    <disable_collisions link1="yumi_link_6_l" link2="yumi_link_4_r" reason="Never" />
-    <disable_collisions link1="yumi_link_6_l" link2="yumi_link_5_r" reason="Never" />
-    <disable_collisions link1="yumi_link_6_l" link2="yumi_link_6_r" reason="Never" />
-    <disable_collisions link1="yumi_link_6_l" link2="yumi_link_7_r" reason="Never" />
-    <disable_collisions link1="yumi_link_6_l" link2="gripper_r_base" reason="Never" />
-    <disable_collisions link1="yumi_link_6_l" link2="gripper_r_finger_l" reason="Never" />
-    <disable_collisions link1="yumi_link_6_l" link2="gripper_r_finger_r" reason="Never" />
-
-    <disable_collisions link1="yumi_link_7_l" link2="yumi_link_1_r" reason="Never" />
-    <disable_collisions link1="yumi_link_7_l" link2="yumi_link_2_r" reason="Never" />
-    <disable_collisions link1="yumi_link_7_l" link2="yumi_link_3_r" reason="Never" />
-    <disable_collisions link1="yumi_link_7_l" link2="yumi_link_4_r" reason="Never" />
-    <disable_collisions link1="yumi_link_7_l" link2="yumi_link_5_r" reason="Never" />
-    <disable_collisions link1="yumi_link_7_l" link2="yumi_link_6_r" reason="Never" />
-    <disable_collisions link1="yumi_link_7_l" link2="yumi_link_7_r" reason="Never" />
-    <disable_collisions link1="yumi_link_7_l" link2="gripper_r_base" reason="Never" />
-    <disable_collisions link1="yumi_link_7_l" link2="gripper_r_finger_l" reason="Never" />
-    <disable_collisions link1="yumi_link_7_l" link2="gripper_r_finger_r" reason="Never" />
-
-    <disable_collisions link1="gripper_l_base" link2="yumi_link_1_r" reason="Never" />
-    <disable_collisions link1="gripper_l_base" link2="yumi_link_2_r" reason="Never" />
-    <disable_collisions link1="gripper_l_base" link2="yumi_link_3_r" reason="Never" />
-    <disable_collisions link1="gripper_l_base" link2="yumi_link_4_r" reason="Never" />
-    <disable_collisions link1="gripper_l_base" link2="yumi_link_5_r" reason="Never" />
-    <disable_collisions link1="gripper_l_base" link2="yumi_link_6_r" reason="Never" />
-    <disable_collisions link1="gripper_l_base" link2="yumi_link_7_r" reason="Never" />
-    <disable_collisions link1="gripper_l_base" link2="gripper_r_base" reason="Never" />
-    <disable_collisions link1="gripper_l_base" link2="gripper_r_finger_l" reason="Never" />
-    <disable_collisions link1="gripper_l_base" link2="gripper_r_finger_r" reason="Never" />
-
-    <disable_collisions link1="gripper_l_finger_l" link2="yumi_link_1_r" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_l" link2="yumi_link_2_r" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_l" link2="yumi_link_3_r" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_l" link2="yumi_link_4_r" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_l" link2="yumi_link_5_r" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_l" link2="yumi_link_6_r" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_l" link2="yumi_link_7_r" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_l" link2="gripper_r_base" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_l" link2="gripper_r_finger_l" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_l" link2="gripper_r_finger_r" reason="Never" />
-
-    <disable_collisions link1="gripper_l_finger_r" link2="yumi_link_1_r" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_r" link2="yumi_link_2_r" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_r" link2="yumi_link_3_r" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_r" link2="yumi_link_4_r" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_r" link2="yumi_link_5_r" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_r" link2="yumi_link_6_r" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_r" link2="yumi_link_7_r" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_r" link2="gripper_r_base" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_r" link2="gripper_r_finger_l" reason="Never" />
-    <disable_collisions link1="gripper_l_finger_r" link2="gripper_r_finger_r" reason="Never" />
-
     <!--=======================================================-->
     <!---------- Disable Collisions for Added Sections ---------->
     <!-------------- Programmer: Frederick Wachter -------------->
@@ -353,8 +242,6 @@
     <disable_collisions link1="stand_base" link2="table_two" reason="Never"/> <!-- Second Table and YuMi Stand -->
     <disable_collisions link1="table_main" link2="table_two" reason="Adjacent"/> <!-- Main Table and Second Table -->
     <disable_collisions link1="yumi_body" link2="stand_base" reason="Adjacent"/> <!-- Stand and YuMi Body -->
-
-    <disable_collisions link1="gripper_l_base" link2="yumi_link_5_l" reason="Never"/>
     <!--==================================-->
     <!---------- End of Additions ---------->
     <!--==================================-->

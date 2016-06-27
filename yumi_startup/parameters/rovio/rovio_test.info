@@ -2,32 +2,36 @@
 ; #include "/home/user/workspace/rovio/cfg/rovio_custom.info"
 Common
 {
-	doVECalibration true;		Should the camera-IMU extrinsics be calibrated online
-	depthType 1;				Type of depth parametrization (0: normal, 1: inverse depth, 2: log, 3: hyperbolic)
-	verbose false;				Is the verbose active
+    doVECalibration true;                                       Should the camera-IMU extrinsics be calibrated online
+    depthType 1;                                                Type of depth parametrization (0: normal, 1: inverse depth, 2: log, 3: hyperbolic)
+    verbose false;                                              Is the verbose active
 }
+
+
 Camera0
 {
   CalibrationFile  ;            Camera-Calibration file for intrinsics
-  qCM_x  0.00707019298704;                               X-entry of IMU to Camera quaterion (JPL)
-  qCM_y  0.00275121113737;                               Y-entry of IMU to Camera quaterion (JPL)
-  qCM_z  0.709792254803;                               Z-entry of IMU to Camera quaterion (JPL)
-  qCM_w  0.704370213901;                               W-entry of IMU to Camera quaterion (JPL)
-  MrMC_x -0.0120143670589;                              X-entry of IMU to Camera vector (expressed in IMU CF) [m]
-  MrMC_y -0.0683495718334;                               Y-entry of IMU to Camera vector (expressed in IMU CF) [m]
-  MrMC_z -0.00116628020497;                               Z-entry of IMU to Camera vector (expressed in IMU CF) [m]
+  qCM_x  -0.00361945365899                               X-entry of IMU to Camera quaterion (JPL)
+  qCM_y  0.00213237518535                               Y-entry of IMU to Camera quaterion (JPL)
+  qCM_z  -0.701012132284                               Z-entry of IMU to Camera quaterion (JPL)
+  qCM_w  0.713136973465                               W-entry of IMU to Camera quaterion (JPL)
+  MrMC_x -0.0112393164297                               X-entry of IMU to Camera vector (expressed in IMU CF) [m]
+  MrMC_y -0.0743095889785                               Y-entry of IMU to Camera vector (expressed in IMU CF) [m]
+  MrMC_z 0.0437949735509                               Z-entry of IMU to Camera vector (expressed in IMU CF) [m]
 }
+
 Camera1
 {
   CalibrationFile  ;            Camera-Calibration file for intrinsics
-  qCM_x  0.00613802329084;                               X-entry of IMU to Camera quaterion (JPL)
-  qCM_y  0.00201678859978;                               Y-entry of IMU to Camera quaterion (JPL)
-  qCM_z  0.709217315031;                               Z-entry of IMU to Camera quaterion (JPL)
-  qCM_w  0.704960323205;                               W-entry of IMU to Camera quaterion (JPL)
-  MrMC_x -0.0125939517756;                               X-entry of IMU to Camera vector (expressed in IMU CF) [m]
-  MrMC_y 0.0421984333558;                               Y-entry of IMU to Camera vector (expressed in IMU CF) [m]
-  MrMC_z -0.000242575202467;                               Z-entry of IMU to Camera vector (expressed in IMU CF) [m]
+  qCM_x  -0.00360252409515                               X-entry of IMU to Camera quaterion (JPL)
+  qCM_y  -0.00321264389609                               Y-entry of IMU to Camera quaterion (JPL)
+  qCM_z  -0.701267286856                               Z-entry of IMU to Camera quaterion (JPL)
+  qCM_w  0.712882103243                               W-entry of IMU to Camera quaterion (JPL)
+  MrMC_x -0.0132658873554                               X-entry of IMU to Camera vector (expressed in IMU CF) [m]
+  MrMC_y 0.0374002386457                               Y-entry of IMU to Camera vector (expressed in IMU CF) [m]
+  MrMC_z 0.0418268246298                               Z-entry of IMU to Camera vector (expressed in IMU CF) [m]
 }
+
 Init
 {
     State
@@ -139,30 +143,30 @@ ImgUpdate
         }
         MahalanobisTh0 7.689997599999999;						Mahalanobid distance for zero velocity updates
         minNoMotionTime 1.0;									Min duration of no-motion
-        isEnabled 0;											Should zero velocity update be applied, only works if MotionDetection.isEnabled is true
+        isEnabled 1;											Should zero velocity update be applied, only works if MotionDetection.isEnabled is true
     }
 }
 Prediction
 {
     PredictionNoise
     {
-        pos_0 1e-4;								X-covariance parameter of position prediction [m^2/s]
-        pos_1 1e-4;								Y-covariance parameter of position prediction [m^2/s]
-        pos_2 1e-4;								Z-covariance parameter of position prediction [m^2/s]
-        vel_0 4e-5; 4e-6						X-covariance parameter of velocity prediction [m^2/s^3]
-        vel_1 4e-5;								Y-covariance parameter of velocity prediction [m^2/s^3]
-        vel_2 4e-5;								Z-covariance parameter of velocity prediction [m^2/s^3]
-        acb_0 1e-8;								X-covariance parameter of accelerometer bias prediction [m^2/s^5]
-        acb_1 1e-8;								Y-covariance parameter of accelerometer bias prediction [m^2/s^5]
-        acb_2 1e-8;								Z-covariance parameter of accelerometer bias prediction [m^2/s^5]
-        gyb_0 3.8e-7;							X-covariance parameter of gyroscope bias prediction [rad^2/s^3]
-        gyb_1 3.8e-7;							Y-covariance parameter of gyroscope bias prediction [rad^2/s^3]
-        gyb_2 3.8e-7;							Z-covariance parameter of gyroscope bias prediction [rad^2/s^3]
-        vep 1e-8;								Covariance parameter of linear extrinsics prediction [m^2/s]
+        pos_0 1e-3;								X-covariance parameter of position prediction [m^2/s]
+        pos_1 1e-3;								Y-covariance parameter of position prediction [m^2/s]
+        pos_2 1e-3;								Z-covariance parameter of position prediction [m^2/s]
+        vel_0 4e-4; 4e-6						X-covariance parameter of velocity prediction [m^2/s^3]
+        vel_1 4e-4;								Y-covariance parameter of velocity prediction [m^2/s^3]
+        vel_2 4e-4;								Z-covariance parameter of velocity prediction [m^2/s^3]
+        acb_0 1e-7;								X-covariance parameter of accelerometer bias prediction [m^2/s^5]
+        acb_1 1e-7;								Y-covariance parameter of accelerometer bias prediction [m^2/s^5]
+        acb_2 1e-7;								Z-covariance parameter of accelerometer bias prediction [m^2/s^5]
+        gyb_0 3.8e-6;							X-covariance parameter of gyroscope bias prediction [rad^2/s^3]
+        gyb_1 3.8e-6;							Y-covariance parameter of gyroscope bias prediction [rad^2/s^3]
+        gyb_2 3.8e-6;							Z-covariance parameter of gyroscope bias prediction [rad^2/s^3]
+        vep 1e-6;								Covariance parameter of linear extrinsics prediction [m^2/s]
         att_0 7.6e-7; 7.6e-7					X-Covariance parameter of attitude prediction [rad^2/s]
         att_1 7.6e-7;							Y-Covariance parameter of attitude prediction [rad^2/s]
         att_2 7.6e-7;							Z-Covariance parameter of attitude prediction [rad^2/s]
-        vea 1e-8;								Covariance parameter of rotational extrinsics prediction [rad^2/s]
+        vea 1e-6;								Covariance parameter of rotational extrinsics prediction [rad^2/s]
         dep 0.0001;							Covariance parameter of distance prediction [m^2/s]
         nor 0.00001;								Covariance parameter of bearing vector prediction [rad^2/s]
     }

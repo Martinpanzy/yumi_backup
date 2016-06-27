@@ -12,6 +12,8 @@
 
 <robot name="yumi" xmlns:xacro="http://www.ros.org/wiki/xacro">
 
+  <xacro:arg name="two_grippers" default="false"/> <!-- initialize argument for determining if using two grippers or not -->
+
   <!--                  		   -->
   <!--         IMPORTS         -->
   <!--                  		   -->
@@ -67,9 +69,17 @@
   	<origin xyz="0 0 0.007" rpy="0 0 ${PI}"/>
   </xacro:yumi_servo_gripper>
   
-  <xacro:yumi_servo_gripper name="gripper_l" hardware_interface="${hardware_interface}" parent="yumi_link_7_l">
-    <origin xyz="0 0 0.007" rpy="0 0 ${PI}"/>
-  </xacro:yumi_servo_gripper>
+  <xacro:unless value="$(arg two_grippers)">
+    <!-- Define Macros for Camera Assembly Import -->
+    <xacro:camera_assembly parent="yumi_link_7_l" vi_namespace="${vi_namespace}" PI="${PI}" 
+      enable_cameras="$(arg enable_cameras)" enable_depth="$(arg enable_depth)" enable_ground_truth="$(arg enable_ground_truth)"
+    />
+  </xacro:unless>
+  <xacro:if value="$(arg two_grippers)">
+    <xacro:yumi_servo_gripper name="gripper_l" hardware_interface="${hardware_interface}" parent="yumi_link_7_l">
+      <origin xyz="0 0 0.007" rpy="0 0 ${PI}"/>
+    </xacro:yumi_servo_gripper>
+  </xacro:if>
 
 
 </robot>

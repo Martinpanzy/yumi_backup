@@ -8,7 +8,7 @@ Panels:
         - /MotionPlanning1/Scene Robot1
         - /MotionPlanning1/Planning Request1
       Splitter Ratio: 0.74256
-    Tree Height: 380
+    Tree Height: 627
   - Class: rviz/Help
     Name: Help
   - Class: rviz/Views
@@ -64,6 +64,16 @@ Visualization Manager:
           Expand Link Details: false
           Expand Tree: false
           Link Tree Style: Links in Alphabetic Order
+          camera_assembly:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          camera_holder:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           gripper_r_base:
             Alpha: 1
             Show Axes: false
@@ -79,6 +89,47 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
+          sr300_sensor:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          stand:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          stand_base:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          table:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          table_main:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          table_two:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          vi_sensor/imu_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          vi_sensor/vi_sensor_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          workspace:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
           yumi_body:
             Alpha: 1
             Show Axes: false
@@ -175,7 +226,7 @@ Visualization Manager:
         Interactive Marker Size: 0
         Joint Violation Color: 255; 0; 255
         Planning Group: both_arms
-        Query Goal State: true
+        Query Goal State: false
         Query Start State: false
         Show Workspace: false
         Start State Alpha: 1
@@ -197,6 +248,16 @@ Visualization Manager:
           Expand Link Details: false
           Expand Tree: false
           Link Tree Style: Links in Alphabetic Order
+          camera_assembly:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          camera_holder:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           gripper_r_base:
             Alpha: 1
             Show Axes: false
@@ -212,6 +273,47 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
+          sr300_sensor:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          stand:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          stand_base:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          table:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          table_main:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          table_two:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          vi_sensor/imu_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+          vi_sensor/vi_sensor_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          workspace:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
           yumi_body:
             Alpha: 1
             Show Axes: false
@@ -287,7 +389,7 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
-        Robot Alpha: 0.5
+        Robot Alpha: 1
         Show Robot Collision: false
         Show Robot Visual: true
       Value: true
@@ -318,24 +420,24 @@ Visualization Manager:
         Z: 2.23518e-07
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.264797
+      Pitch: 0.219797
       Target Frame: yumi_body
       Value: XYOrbit (rviz)
-      Yaw: 5.98995
+      Yaw: 0.141765
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 1056
+  Height: 876
   Help:
     collapsed: false
   Hide Left Dock: false
   Hide Right Dock: false
   Motion Planning:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000002b1000003dafc0200000005fb000000100044006900730070006c006100790073010000002800000211000000dd00fffffffb0000000800480065006c00700000000342000000bb0000007600fffffffb0000000a0056006900650077007300000003b0000000b0000000b000fffffffb0000000c00430061006d00650072006100000002ff000001610000000000000000fb0000001e004d006f00740069006f006e00200050006c0061006e006e0069006e0067010000023f000001c3000001ab00ffffff00000488000003da00000001000000020000000100000002fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000100000000000002b100000326fc0200000004fb0000000800480065006c00700000000342000000bb0000007600fffffffb0000000a0056006900650077007300000003b0000000b0000000b000fffffffb0000000c00430061006d00650072006100000002ff000001610000000000000000fc0000002800000326000001ea0100001dfa000000000100000002fb000000100044006900730070006c0061007900730100000000ffffffff0000016a00fffffffb0000001e004d006f00740069006f006e00200050006c0061006e006e0069006e00670100000000000002b1000002a200ffffff000003480000032600000001000000020000000100000002fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Views:
     collapsed: false
-  Width: 1855
+  Width: 1535
   X: 65
   Y: 24

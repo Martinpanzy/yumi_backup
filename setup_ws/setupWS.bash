@@ -78,9 +78,13 @@ mkdir yumi_ws/src # create folder to contain all files in workspace
 
 #----- Add GitHub repo's neccessary to run YuMi files -----
 mv yumi yumi_ws/src # move already cloned YuMi repo into workspace
-git clone https://github.com/ros-industrial/abb.git yumi_ws/src/abb_driver # clone the GitHub repo for the ABB driver
-git clone https://github.com/ros-industrial/industrial_core.git yumi_ws/src/industrial_driver # clone the GitHub repo for the ROS-Industrial driver
-git clone https://github.com/ethz-asl/rotors_simulator # add in robot simulator for access to vi sensor xacro file
+git clone -b indigo-devel https://github.com/ros-industrial/abb.git yumi_ws/src/abb_driver # clone the GitHub repo for the ABB driver using the indigo-devel branch
+git clone -b indigo-devel  https://github.com/ros-industrial/industrial_core.git yumi_ws/src/industrial_driver # clone the GitHub repo for the ROS-Industrial driver using the indigo-devel branch
+git clone https://github.com/ethz-asl/rotors_simulator yumi_ws/src/rotors_simulator # add in robot simulator for access to vi sensor xacro file
+
+cd ~/yumi_ws/src/abb_driver && rm -R !(abb|abb_driver|README.md)
+cd ~/yumi_ws/src/rotors_simulator && rm -R !(rotors_description|README.md)
+cd ~ # go back to the home directory
 
 #----- Build Workspace -----
 cd ~/yumi_ws # go to the YuMi workspace

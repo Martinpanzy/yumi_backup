@@ -6,6 +6,6 @@ find_package(catkin REQUIRED)
 catkin_package()
 
 install(
-	DIRECTORY gazebo launch meshes urdf
+	DIRECTORY meshes urdf
 	DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
 )

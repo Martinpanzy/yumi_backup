@@ -73,16 +73,21 @@ int main(int argc,char **argv) {
 	displayJointValues(both_arms); // display joint positions
 
 	// Move Groups to Calc Position
-	gotoGroupState(left_arm,"calc"); // go to calc position with the left arm
-	gotoGroupState(right_arm,"calc"); // go to calc position with the right arm
+	//gotoGroupState(left_arm,"calc"); // go to calc position with the left arm
+	//gotoGroupState(right_arm,"calc"); // go to calc position with the right arm
 	//gotoGroupState(both_arms,"calc");
 	//gotoGroupState(both_arms,"home");
 
 	// Generate and Execute Paths
-	planner plan_left_arm  = generatePaths(inputFile,left_arm);
-	planner plan_right_arm = generatePaths(inputFile,right_arm);
-	if ((plan_left_arm.success == true) && (plan_right_arm.success == true)) {
-		executePaths_TwoArm(left_arm, plan_left_arm, right_arm, plan_right_arm);
+	// planner plan_left_arm  = generatePaths(inputFile,left_arm);
+	// planner plan_right_arm = generatePaths(inputFile,right_arm);
+	// if ((plan_left_arm.success == true) && (plan_right_arm.success == true)) {
+	// 	executePaths_TwoArm(left_arm, plan_left_arm, right_arm, plan_right_arm);
+	// }
+
+	planner plan_left_arm  = generatePaths(inputFile,both_arms);
+	if (plan_left_arm.success == true) {
+		executePaths(both_arms, plan_left_arm);
 	}
 
 	// Display Joint Values
