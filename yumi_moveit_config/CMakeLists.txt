@@ -24,4 +24,15 @@ target_link_libraries(lead_through ${catkin_LIBRARIES})
 add_executable(run_lead_through src/run_lead_through_script.cpp)
 target_link_libraries(run_lead_through ${catkin_LIBRARIES})
 
-
+# Check c++11 / c++0x
+# REFERENCE: http://answers.ros.org/question/152276/is-there-a-way-to-enable-c11-support-for-catkin-packages/
+include(CheckCXXCompilerFlag)
+CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
+CHECK_CXX_COMPILER_FLAG("-std=c++0x" COMPILER_SUPPORTS_CXX0X)
+if(COMPILER_SUPPORTS_CXX11)
+    set(CMAKE_CXX_FLAGS "-std=c++11")
+elseif(COMPILER_SUPPORTS_CXX0X)
+    set(CMAKE_CXX_FLAGS "-std=c++0x")
+else()
+    message(FATAL_ERROR "The compiler ${CMAKE_CXX_COMPILER} has no C++11 support. Please use a different C++ compiler.")
+endif()
