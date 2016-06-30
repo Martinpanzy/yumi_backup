@@ -52,6 +52,8 @@ esac
 
 #----- If ROS Indigo has not been setup yet -----
 if [ $existROS -eq 0 ]; then
+	sudo sh -c 'echo "deb http://packages.ros.org/ros/ubuntu $(lsb_release -sc) main" > /etc/apt/sources.list.d/ros-latest.list' # update sources list for ROS files
+	sudo apt-key adv --keyserver hkp://ha.pool.sks-keyservers.net --recv-key 0xB01FA116 # setup keys
 	sudo apt-get update # update potential install list
 
 	sudo apt-get install ros-indigo-desktop-full -y # install indigo desktop
