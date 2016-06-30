@@ -38,6 +38,7 @@ esac
 #======================================
 #---------- VERIFY INSTALLS -----------
 #======================================
+clear # clear the terminal window
 echo "[Part 1/3] Verifying installs... " # notify the user that installs will potentially be made
 
 #----- Ask user if ROS Ingigo is installed -----
@@ -82,8 +83,9 @@ git clone -b indigo-devel https://github.com/ros-industrial/abb.git yumi_ws/src/
 git clone -b indigo-devel  https://github.com/ros-industrial/industrial_core.git yumi_ws/src/industrial_driver # clone the GitHub repo for the ROS-Industrial driver using the indigo-devel branch
 git clone https://github.com/ethz-asl/rotors_simulator yumi_ws/src/rotors_simulator # add in robot simulator for access to vi sensor xacro file
 
-cd ~/yumi_ws/src/abb_driver && rm -R !(abb|abb_driver|README.md)
-cd ~/yumi_ws/src/rotors_simulator && rm -R !(rotors_description|README.md)
+shopt -s extglob # allow for !() command
+cd ~/yumi_ws/src/abb_driver && rm -R !(abb|abb_driver|README.md) # remove unneccessary files from the ABB driver to allow for faster catkin builds
+cd ~/yumi_ws/src/rotors_simulator && rm -R !(rotors_description|README.md) # remove unneccessary files from rotor simulator repository to allow for faster catkin builds
 cd ~ # go back to the home directory
 
 #----- Build Workspace -----
