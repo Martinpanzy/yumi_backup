@@ -1,5 +1,8 @@
 #include <ros/ros.h> // include node functionality
 #include <moveit/move_group_interface/move_group.h> // include move group functionality
+#include <moveit/robot_model_loader/robot_model_loader.h> // include robot model loader functionality for IK
+#include <moveit/robot_model/robot_model.h> // include robot model capabilities for IK
+#include <moveit/robot_state/robot_state.h> // include robot state capabiliteis for IK
 #include <moveit/robot_state/conversions.h> // include robot state conversion functionality
 #include <moveit_msgs/RobotTrajectory.h> // include robot trajectory
 #include <geometry_msgs/Pose.h> // include pose for move group functionality
@@ -44,10 +47,13 @@ struct trajectoryPoses {
 // Function Prototypes
 trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup&, std::string);
 trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup&, std::string);
-bool getTrajectory(planningInterface::MoveGroup&, std::string, std::string);
+bool getTrajectory(planningInterface::MoveGroup&, std::string);
+
 planner generatePlans(planningInterface::MoveGroup&, trajectoryJoints&);
 planner generatePlans(planningInterface::MoveGroup&, trajectoryPoses&); // need to still make this one
 bool executePlans(planningInterface::MoveGroup&, planner&);
+
+trajectoryJoints convertPoseToJoints(planningInterface::MoveGroup&, trajectoryPoses&);
 
 bool gotoGroupState(planningInterface::MoveGroup&, std::string);
 bool gotoPose(planningInterface::MoveGroup&, geometry_msgs::Pose&);
@@ -90,14 +96,27 @@ int main(int argc,char **argv) {
 	right_arm.setNumPlanningAttempts(5); // set number of planning attempts for right arm
 	both_arms.setNumPlanningAttempts(5); // set number of planning attempts for both arms
 
-	left_arm.setPlannerId("RRTstarkConfigDefault"); // set planner for left arm
-	right_arm.setPlannerId("RRTstarkConfigDefault"); // set planner for right arm
-	both_arms.setPlannerId("RRTstarkConfigDefault"); // set planner for both arms
+	//left_arm.setPlannerId("RRTstarkConfigDefault"); // set planner for left arm
+	//right_arm.setPlannerId("RRTstarkConfigDefault"); // set planner for right arm
+	//both_arms.setPlannerId("RRTstarkConfigDefault"); // set planner for both arms
 
-	// Get Trajectory and Exectute
-	trajectoryJoints jointTrajectory = getTrajectoryJoints(both_arms,inputFile);
-	planner plans = generatePlans(both_arms,jointTrajectory);
-	bool success = executePlans(both_arms,plans);
+	// Get Trajectory From File
+	trajectoryJoints jointTrajectory;
+	std::string dataType = getFileDataType(inputFile);
+	if (dataType.compare("joints") == 0) {
+		jointTrajectory = getTrajectoryJoints(both_arms,inputFile);
+	} else if (dataType.compare("poses") == 0) {
+		trajectoryPoses poseTrajectory = getTrajectoryPoses(both_arms,inputFile);
+		if (poseTrajectory.groupName.compare("") != 0) {
+			jointTrajectory = convertPoseToJoints(both_arms,poseTrajectory);
+		}
+	}
+
+	// Plan and Execute Trajectory
+	if (jointTrajectory.groupName.compare("") != 0) {
+		planner plans = generatePlans(both_arms,jointTrajectory);
+		bool success = executePlans(both_arms,plans);
+	}
 
 	//displayJointValues(both_arms); // display joint positions
 
@@ -125,6 +144,49 @@ int main(int argc,char **argv) {
 /* -----------------------------------------------
    ----------- FILE READNG FUNCTIONS -------------
    ----------------------------------------------- */
+std::string getFileDataType(std::string inputFile) {
+
+	// Initialize Variables
+	std::string dataType;
+	bool success = true;
+
+	ROS_INFO("Getting file data type.");
+
+	// Get Provided File Data Type
+	std::ifstream textFile(inputFile.c_str()); // open provided text file
+	if (textFile.is_open()) { // if the file was able to successfully open
+		// Get Intended Arm for Data in Provided File
+		if (std::getline(textFile,line)) { // if the file exists and contains a first line
+			std::istringstream firstLine(line); // create a string steam element for delimiting data by spaces
+			firstLine >> dataType; // get the data type from the provided file
+			if (!((dataType.compare("joints") == 0)  || (intendedGroup.compare("poses") == 0))) { // if the provided indended group name is not recognized
+				ROS_ERROR("Provided file is malformatted or the header contains a non-recognized data type."); // notify the user the indended group name from the input file is not recognized
+				ROS_WARN("The first line needs to indicate what type of data is in the provided file."); // notify the user the purpose of the indended group name
+				ROS_WARN("Recognized data types: joints, poses"); // notify the user of recognized group names
+				ROS_WARN("Provided group: %s",dataType.c_str()); // notify the user of the intended group retrieved from file
+				success = false;
+			}
+		} else { // if the provided file is empty
+			ROS_ERROR("The provided file is empty."); // notify the user that the provided file is empty
+			success = false;
+		}
+		textFile.close(); // close the text file
+	} else { // if the file was not open successfully
+		ROS_ERROR("The provided file name could not be opened or does not exist."); // notify user of failure to open file
+		ROS_WARN("File: %s",inputFile.c_str()); // notify user of the supplied file
+		success = false;
+	}
+
+	// Return Data Type if Retrieved
+	if (success) {
+		ROS_INFO("File contains data of type: %s",dataType.c_str());
+		return dataType;
+	} else {
+		ROS_WARN("File data type was not able to be retrived.");
+		return "";
+	}
+}
+
 trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::string inputFile) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
 	DATE CREATE: 2016-06-28
@@ -146,6 +208,7 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 	// Initialize Variables
 	std::string line; // variable to retrieve each line of text from the input file
 	std::string command; // variable to retrieve the command for each trajectory point from the input file
+	std::string dataType; // variable to retrieve the data type from provided file
 	std::string intendedGroup; // variable to retrieve the intended arm for the data in the provided file
 	int lineIndex = 0; // counter to indicate the current line
 
@@ -169,8 +232,8 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 	} else { // if the provided group is not what was expected
 		groupName_index = -1; // indicate that the provided group is not recognized
 		ROS_ERROR("Provided group name is not recognized."); // notify the user of the issue
-		ROS_INFO("Recognized group names list: left_arm, right_arm, both_arms"); // notify the user of the allowed groups
-		ROS_INFO("Provided group: %s",groupName.c_str()); // notify the user of the provided group name
+		ROS_WARN("Recognized group names list: left_arm, right_arm, both_arms"); // notify the user of the allowed groups
+		ROS_WARN("Provided group: %s",groupName.c_str()); // notify the user of the provided group name
 	}
 
 	// Notfify User that the Planner is About to Start
@@ -183,23 +246,24 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 		// Get Intended Arm for Data in Provided File
 		if (std::getline(textFile,line)) { // if the file exists and contains a first line
 			std::istringstream firstLine(line); // create a string steam element for delimiting data by spaces
-			firstLine >> intendedGroup; // get the intended arm for the data in the provided file
-			if (!((intendedGroup.compare("left_arm") != 0)  && (intendedGroup.compare("right_arm") != 0) && (intendedGroup.compare("both_arms") != 0))) { // if the indended group name from the provided is not recognized
+			firstLine >> dataType >> intendedGroup; // get the intended arm for the data in the provided file
+			if (!((intendedGroup.compare("left_arm") == 0)  || (intendedGroup.compare("right_arm") == 0) || (intendedGroup.compare("both_arms") == 0))) { // if the indended group name from the provided is not recognized
 				ROS_WARN("Provided file is malformatted or the header contains a non-recognized group name."); // notify the user the indended group name from the input file is not recognized
-				ROS_INFO("The first line needs to indicate which group the data in the provided file is inteded for."); // notify the user the purpose of the indended group name
-				ROS_INFO("Recognized groups: left_arm, right_arm, both_arms"); // notify the user of recognized group names
+				ROS_WARN("The first line needs to indicate which group the data in the provided file is inteded for."); // notify the user the purpose of the indended group name
+				ROS_WARN("Recognized groups: left_arm, right_arm, both_arms"); // notify the user of recognized group names
+				ROS_WARN("Provided group: %s",intendedGroup.c_str()); // notify the user of the intended group retrieved from file
 			} else { // if the intended group name from the provided file was recognized
 				trajectory_joints.intendedGroup = intendedGroup; // retrieve the inteded group name
 				if (trajectory_joints.groupName.compare(trajectory_joints.intendedGroup) != 0) { // if the group name and intended group name do not match
 					ROS_WARN("The provided group is not the same as the group that the provided file was inteded for."); // notify the user that the group name and intended group name do not match
 					ROS_WARN("The path planner and execution may not work as intended."); // notify the user that the planner and exeution of the plans may not work as intended
-					ROS_INFO("Provided group: %s",trajectory_joints.groupName.c_str()); // notify the user of the provided group name
-					ROS_INFO("Intended group: %s",trajectory_joints.intendedGroup.c_str()); // notify the user of the indeded group name
+					ROS_WARN("Provided group: %s",trajectory_joints.groupName.c_str()); // notify the user of the provided group name
+					ROS_WARN("Intended group: %s",trajectory_joints.intendedGroup.c_str()); // notify the user of the indeded group name
 				}
 			}
 		} else { // if the provided file is empty
+			ROS_ERROR("The provided file is empty."); // notify the user that the provided file is empty
 			groupName_index = -1; // indicate that an error occurred when opening up the file
-			ROS_WARN("The provided file is empty."); // notify the user that the provided file is empty
 		}
 
 		// Get Remaining Data from Provided File
@@ -230,9 +294,9 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 					if (((groupName_1.compare("right_arm") == 0) || (groupName_2.compare("right_arm") == 0)) && ((groupName_1.compare("left_arm") == 0) || (groupName_2.compare("left_arm") == 0))) { // if both group names from the provided file are what was expected
 						trajectory_joints.totalJoints = totalJoints_1 + totalJoints_2; // store the total joints for both arms
 					} else { // if one or both group names from the provided file were not expected
-						ROS_WARN("One of the group names within the provided input file is not recognized."); // notify the user that one of the group names from the provided file were not expected
-						ROS_INFO("Recognized groups: left_arm, right_arm"); // notify the user of the expected group names
-						ROS_INFO("Group names form file: %s, %s",groupName_1.c_str(),groupName_2.c_str()); // notify the user of the group names from the provided file
+						ROS_ERROR("One of the group names within the provided input file is not recognized."); // notify the user that one of the group names from the provided file were not expected
+						ROS_WARN("Recognized groups: left_arm, right_arm"); // notify the user of the expected group names
+						ROS_WARN("Group names form file: %s, %s",groupName_1.c_str(),groupName_2.c_str()); // notify the user of the group names from the provided file
 						groupName_index = -1; // indicate that an error occurred
 						break; // break from the loop due to error
 					}
@@ -242,9 +306,9 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 					} else if (groupName_2.compare("right_arm") == 0) { // if the second group contains data for the right arm
 						trajectory_joints.totalJoints = totalJoints_2; // store the total joints for the right arm
 					} else { // if none of the groups contained data for the right arm
-						ROS_WARN("One of the group names within the provided input file is not recognized."); // notify the user that one of the group names from the provided file were not expected
-						ROS_INFO("Recognized groups: left_arm, right_arm"); // notify the user of the expected group names
-						ROS_INFO("Group names form file: %s, %s",groupName_1.c_str(),groupName_2.c_str()); // notify the user of the group names from the provided file
+						ROS_ERROR("One of the group names within the provided input file is not recognized."); // notify the user that one of the group names from the provided file were not expected
+						ROS_WARN("Recognized groups: left_arm, right_arm"); // notify the user of the expected group names
+						ROS_WARN("Group names form file: %s, %s",groupName_1.c_str(),groupName_2.c_str()); // notify the user of the group names from the provided file
 						groupName_index = -1; // indicate that an error occurred
 						break; // break from the loop due to error
 					}
@@ -254,9 +318,9 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 					} else if (groupName_2.compare("left_arm") == 0) { // if the second group contains data for the left arm
 						trajectory_joints.totalJoints = totalJoints_2; // store the total joints for the left arm
 					} else { // if none of the groups contained data for the left arm
-						ROS_WARN("One of the group names within the provided input file is not recognized."); // notify the user that one of the group names from the provided file were not expected
-						ROS_INFO("Recognized groups: left_arm, right_arm"); // notify the user of the expected group names
-						ROS_INFO("Group names form file: %s, %s",groupName_1.c_str(),groupName_2.c_str()); // notify the user of the group names from the provided file
+						ROS_ERROR("One of the group names within the provided input file is not recognized."); // notify the user that one of the group names from the provided file were not expected
+						ROS_WARN("Recognized groups: left_arm, right_arm"); // notify the user of the expected group names
+						ROS_WARN("Group names form file: %s, %s",groupName_1.c_str(),groupName_2.c_str()); // notify the user of the group names from the provided file
 						groupName_index = -1; // indicate that an error occurred
 						break; // break from the loop due to error
 					}
@@ -268,8 +332,8 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 			// Make Sure Total Joints From Provided File Matches Total Joints of Provided Group
 			std::vector<std::string> jointNames = group.getActiveJoints(); // get the names of all the active joints in the provided group
 			if (trajectory_joints.totalJoints != jointNames.size()) { // if the total active joints in the provided group does not match the total joints retrieved from the current line of the provided file
-				ROS_WARN("The total joints in the provided group does not match the total joints retrieved from the provided file."); // notfiy the user of the total joint mismatch from the provided group and current line of the provided file
-				ROS_INFO("Check the total joints in the provided group and ensure that each line within the provided file matches the total joints for the same group."); // notify user of a way to check how to fix this issue
+				ROS_ERROR("The total joints in the provided group does not match the total joints retrieved from the provided file."); // notfiy the user of the total joint mismatch from the provided group and current line of the provided file
+				ROS_WARN("Check the total joints in the provided group and ensure that each line within the provided file matches the total joints for the same group."); // notify user of a way to check how to fix this issue
 				groupName_index = -1; // indicate that an error occurred
 				break; // break from the loop due to error
 			}
@@ -303,7 +367,7 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 		textFile.close(); // close the text file
 	} else { // if the file was not open successfully
 		ROS_ERROR("The provided file name could not be opened or does not exist."); // notify user of failure to open file
-		ROS_INFO("File: %s",inputFile.c_str()); // notify user of the supplied file
+		ROS_WARN("File: %s",inputFile.c_str()); // notify user of the supplied file
 	}
 
 	if (groupName_index == -1) { // if an error occured with the group name or retrieving data from the provided file
@@ -339,6 +403,7 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 	// Initialize Variables
 	std::string line; // variable to retrieve each line of text from the input file
 	std::string command; // variable to retrieve the command for each trajectory point from the input file
+	std::string dataType; // variable to retrieve the data type from provided file
 	std::string intendedGroup; // variable to retrieve the intended arm for the data in the provided file
 	int lineIndex = 0; // counter to indicate the current line
 
@@ -362,8 +427,8 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 	} else { // if the provided group is not what was expected
 		groupName_index = -1; // indicate that the provided group is not recognized
 		ROS_ERROR("Provided group name is not recognized."); // notify the user of the issue
-		ROS_INFO("Recognized group names list: left_arm, right_arm, both_arms"); // notify the user of the allowed groups
-		ROS_INFO("Provided group: %s",groupName.c_str()); // notify the user of the provided group name
+		ROS_WARN("Recognized group names list: left_arm, right_arm, both_arms"); // notify the user of the allowed groups
+		ROS_WARN("Provided group: %s",groupName.c_str()); // notify the user of the provided group name
 	}
 
 	// Notfify User that the Planner is About to Start
@@ -376,23 +441,24 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 		// Get Intended Arm for Data in Provided File
 		if (std::getline(textFile,line)) { // if the file exists and contains a first line
 			std::istringstream firstLine(line); // create a string steam element for delimiting data by spaces
-			firstLine >> intendedGroup; // get the intended arm for the data in the provided file
-			if (!((intendedGroup.compare("left_arm") != 0)  && (intendedGroup.compare("right_arm") != 0) && (intendedGroup.compare("both_arms") != 0))) { // if the provided indended group name is not recognized
+			firstLine >> dataType >> intendedGroup; // get the intended arm for the data in the provided file
+			if (!((intendedGroup.compare("left_arm") == 0)  || (intendedGroup.compare("right_arm") == 0) || (intendedGroup.compare("both_arms") == 0))) { // if the provided indended group name is not recognized
 				ROS_WARN("Provided file is malformatted or the header contains a non-recognized group name."); // notify the user the indended group name from the input file is not recognized
-				ROS_INFO("The first line needs to indicate which group the data in the provided file is inteded for."); // notify the user the purpose of the indended group name
-				ROS_INFO("Recognized groups: left_arm, right_arm, both_arms"); // notify the user of recognized group names
+				ROS_WARN("The first line needs to indicate which group the data in the provided file is inteded for."); // notify the user the purpose of the indended group name
+				ROS_WARN("Recognized groups: left_arm, right_arm, both_arms"); // notify the user of recognized group names
+				ROS_WARN("Provided group: %s",intendedGroup.c_str()); // notify the user of the intended group retrieved from file
 			} else { // if the intended group name from the provided file was recognized
 				trajectory_poses.intendedGroup = intendedGroup; // retrieve the inteded group name
 				if (trajectory_poses.groupName.compare(trajectory_poses.intendedGroup) != 0) { // if the group name and intended group name do not match
 					ROS_WARN("The provided group is not the same as the group that the provided file was inteded for."); // notify the user that the group name and intended group name do not match
 					ROS_WARN("The path planner and execution may not work as intended."); // notify the user that the planner and exeution of the plans may not work as intended
-					ROS_INFO("Provided group: %s",trajectory_poses.groupName.c_str()); // notify the user of the provided group name
-					ROS_INFO("Intended group: %s",trajectory_poses.intendedGroup.c_str()); // notify the user of the indeded group name
+					ROS_WARN("Provided group: %s",trajectory_poses.groupName.c_str()); // notify the user of the provided group name
+					ROS_WARN("Intended group: %s",trajectory_poses.intendedGroup.c_str()); // notify the user of the indeded group name
 				}
 			}
 		} else { // if the provided file is empty
+			ROS_ERROR("The provided file is empty."); // notify the user that the provided file is empty
 			groupName_index = -1; // indicate that an error occurred when opening up the file
-			ROS_WARN("The provided file is empty."); // notify the user that the provided file is empty
 		}
 
 		// Get Remaining Data from Provided File
@@ -418,25 +484,25 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 			if (lineIndex == 0) { // if this is the first time running through the while loop
 				if (groupName_index == 3) { // if the user would like to retrieve data for both arms
 					if (!(((groupName_1.compare("right_arm") == 0) || (groupName_2.compare("right_arm") == 0)) && ((groupName_1.compare("left_arm") == 0) || (groupName_2.compare("left_arm") == 0)))) { // if one of the group names from the provided file is not regonized
-						ROS_WARN("One of the group names within the provided input file is not recognized."); // notify the user that one of the group names is not recognized
-						ROS_INFO("Recognized groups: left_arm, right_arm"); // notify the user of the allowed group names
-						ROS_INFO("Group names form file: %s, %s",groupName_1.c_str(),groupName_2.c_str()); // notify the user of the group names retrieved from the provided file
+						ROS_ERROR("One of the group names within the provided input file is not recognized."); // notify the user that one of the group names is not recognized
+						ROS_WARN("Recognized groups: left_arm, right_arm"); // notify the user of the allowed group names
+						ROS_WARN("Group names form file: %s, %s",groupName_1.c_str(),groupName_2.c_str()); // notify the user of the group names retrieved from the provided file
 						groupName_index = -1; // indicate that the provided group is not recognized
 						break; // break from the loop due to error
 					}
 				} else if (groupName_index == 2) { // if the user would like to only retrieve data for the right arm
 					if ((groupName_1.compare("right_arm") != 0) && (groupName_2.compare("right_arm") != 0)) { // if none of the group names from the file indicates joints for the right arm
-						ROS_WARN("One of the group names within the provided input file is not recognized."); // notify the user that one of the group names is not recognized
-						ROS_INFO("Recognized groups: left_arm, right_arm"); // notify the user of the allowed group names
-						ROS_INFO("Group names form file: %s, %s",groupName_1.c_str(),groupName_2.c_str()); // notify the user of the group names retrieved from the provided file
+						ROS_ERROR("One of the group names within the provided input file is not recognized."); // notify the user that one of the group names is not recognized
+						ROS_WARN("Recognized groups: left_arm, right_arm"); // notify the user of the allowed group names
+						ROS_WARN("Group names form file: %s, %s",groupName_1.c_str(),groupName_2.c_str()); // notify the user of the group names retrieved from the provided file
 						groupName_index = -1; // indicate that the provided group is not recognized
 						break; // break from the loop due to error
 					}
 				} else if (groupName_index == 1) { // if the user would like to only retrieve data for the left arm
 					if ((groupName_1.compare("left_arm") != 0) && (groupName_2.compare("left_arm") != 0)) { // if none of the group names from the file indicates joints for the left arm
-						ROS_WARN("One of the group names within the provided input file is not recognized."); // notify the user that one of the group names is not recognized
-						ROS_INFO("Recognized groups: left_arm, right_arm"); // notify the user of the allowed group names
-						ROS_INFO("Group names form file: %s, %s",groupName_1.c_str(),groupName_2.c_str()); // notify the user of the group names retrieved from the provided file
+						ROS_ERROR("One of the group names within the provided input file is not recognized."); // notify the user that one of the group names is not recognized
+						ROS_WARN("Recognized groups: left_arm, right_arm"); // notify the user of the allowed group names
+						ROS_WARN("Group names form file: %s, %s",groupName_1.c_str(),groupName_2.c_str()); // notify the user of the group names retrieved from the provided file
 						groupName_index = -1; // indicate that the provided group is not recognized
 						break; // break from the loop due to error
 					}
@@ -473,7 +539,7 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 		textFile.close(); // close the text file
 	} else { // if the file was not open successfully
 		ROS_ERROR("The provided file name could not be opened or does not exist."); // notify user of failure to open file
-		ROS_INFO("File: %s",inputFile.c_str()); // notify user of the supplied file
+		ROS_WARN("File: %s",inputFile.c_str()); // notify user of the supplied file
 	}
 
 	if (groupName_index == -1) { // if the group was not regonized or there was an issue with the group names in the provided file
@@ -492,14 +558,129 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 }
 
 /* -----------------------------------------------
+   ------------ KINEMATICS FUNCTIONS -------------
+   ----------------------------------------------- */
+trajectoryJoints convertPoseToJoints(planningInterface::MoveGroup& group, trajectoryPoses& trajectory_poses) {
+
+	// Initialize Variables
+	trajectoryJoints trajectory_joints;
+	std::string groupName = group.getName();
+	std::vector<double> jointValues;
+	bool conversionSuccess = true;
+
+	int attempts = 10;
+	double timeout = 0.1;
+
+	// Get Kinematic Model and Kinematic State
+	robot_model_loader::RobotModelLoader modelLoader("robot_description"); // load robot model
+	robot_model::RobotModelPtr kinematicModel = modelLoader.getModel(); // get kinematic model
+	robot_state::RobotStatePtr kinematicState(new robot_state::RobotState(kinematicModel));
+	kinematicState->setToDefaultValues();
+
+	ROS_INFO("Converting poses to joint values for group: %s",groupName.c_str());
+
+	// Get Joint Model(s) for Provided Group
+	if (groupName.compare("both_arms") == 0) {
+		const robot_state::JointModelGroup* jointModel_left = kinematicModel->getJointModelGroup("left_arm"); // get joint model for provided group
+		const robot_state::JointModelGroup* jointModel_right = kinematicModel->getJointModelGroup("right_arm"); // get joint model for provided group
+		std::vector<double> jointValues_left, jointValues_right;
+		geometry_msgs::Pose pose_left, pose_right;
+		bool success_left, success_right;
+
+		// Convert Poses for Both Arm to Joint Values
+		for (int pose = 0; pose < trajectory_poses.totalPoints; pose++) {
+			pose_left  = trajectory_poses.pose_left[pose];
+			pose_right = trajectory_poses.pose_right[pose];
+
+			success_left  = kinematicState->setFromIK(jointModel_left, pose_left, attempts, timeout);
+			if (success_left) {
+				kinematicState->copyJointGroupPositions(jointModel_left, jointValues_right);
+				jointValues = jointValues_left;
+			}
+			else {
+				ROS_ERROR("Left arm pose to joints IK conversion for trajectory point %d failed.",pose);
+				conversionSuccess = false;
+				break;
+			}
+
+			success_right = kinematicState->setFromIK(jointModel_right, pose_right, attempts, timeout)
+			if (success_right) {
+				kinematicState->copyJointGroupPositions(jointModel_right, jointValues_left);
+				jointValues.insert(jointValues.end(),jointValues_right.begin(),jointValues_right.end());
+				trajectory_joints.joints.push_back(jointValues);
+			}
+			else {
+				ROS_ERROR("Right arm pose to joints IK conversion for trajectory point %d failed.",pose);
+				conversionSuccess = false;
+				break;
+			}
+		}
+
+		trajectory_joints.totalJoints = jointValues.size();
+	} else {
+		const robot_state::JointModelGroup* jointModel = kinematicModel->getJointModelGroup(groupName); // get joint model for provided group
+		geometry_msgs::Pose currentPose;
+		bool success;
+
+		// Conver Poses to Joint Values
+		if (groupName.compare("left_arm") == 0) {
+			for (int pose = 0; pose < trajectory_poses.totalPoints; pose++) {
+				currentPose = trajectory_poses.pose_left[pose];
+				success = kinematicState->setFromIK(jointModel[arm], currentPose, attempts, timeout)
+				
+				if (success) {
+					kinematicState->copyJointGroupPositions(jointModel, jointValues);
+					trajectory_joints.joints.push_back(jointValues);
+				}
+				else {
+					ROS_ERROR("Left arm pose to joints IK conversion for trajectory point %d failed.",pose);
+					conversionSuccess = false;
+					break;
+				}
+			}
+		} else {
+			for (int pose = 0; pose < trajectory_poses.totalPoints; pose++) {
+				currentPose = trajectory_poses.pose_right[pose];
+				success = kinematicState->setFromIK(jointModel[arm], currentPose, attempts, timeout)
+				
+				if (success) {
+					kinematicState->copyJointGroupPositions(jointModel, jointValues);
+					trajectory_joints.joints.push_back(jointValues);
+				}
+				else {
+					ROS_ERROR("Right arm pose to joints IK conversion for trajectory point %d failed.",pose);
+					conversionSuccess = false;
+					break;
+				}
+			}
+		}
+
+		trajectory_joints.totalJoints = jointValues.size();
+	}
+
+	if (conversionSucces == false) {
+		ROS_WARN("Failed to convert poses to joint values.");
+		trajectoryJoints emptyTrajectory;
+		return emptyTrajectory;
+	} else {
+		trajectory_joints.groupName     = trajectory_poses.groupName;
+		trajectory_joints.intendedGroup = trajectory_poses.intendedGroup;
+		trajectory_joints.totalPoints   = trajectory_poses.totalPoints;
+		return trajectory_joints;
+	}
+}
+
+/* -----------------------------------------------
    ---------- PATH GENERATOR FUNCTIONS -----------
    ----------------------------------------------- */
-bool getTrajectory(planningInterface::MoveGroup& group, std::string inputFile, std::string pointType) {
+bool getTrajectory(planningInterface::MoveGroup& group, std::string inputFile) {
 /*
 	STILL WORKING ON THIS
 */
 
 	bool success = true;
+
+
 
 	// if (pointType.compare("poses") == 0) { // still working on this
 	// 	trajectoryPoses poseTrajectory = getTrajectoryPoses(group,inputFile);

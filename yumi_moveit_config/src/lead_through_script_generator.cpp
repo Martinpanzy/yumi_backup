@@ -17,7 +17,7 @@ std::string command; // initialize variable for storing the type of point being 
 // Function Prototypes
 void commandCallback(std_msgs::String);
 
-std::vector<std::string> addOutputHeader(int, std::string);
+std::vector<std::string> addOutputHeader(int, int, std::string);
 
 void writeJoints(planningInterface::MoveGroup&, planningInterface::MoveGroup&, std::string, std::string);
 void writePose(planningInterface::MoveGroup&, planningInterface::MoveGroup&, std::string, std::string);
@@ -96,7 +96,7 @@ int main(int argc,char **argv) {
 	Subscriber sub = nh.subscribe("lead_through_commands",1000,commandCallback); // subscribe to "lead_through_comamnds" topic
 
 	// Get Proper File Names and Add Header to File
-	std::vector<std::string> output_fileNames = addOutputHeader(desiredGroup,output_fileName); // add header to the output file
+	std::vector<std::string> output_fileNames = addOutputHeader(outputType, desiredGroup, output_fileName); // add header to the output file
 	if (outputType == 3) { // if the user would like to output both the joint values and poses
 		output_fileName_joints = output_fileNames[0]; // store the file name for outputting joint values
 		output_fileName_poses = output_fileNames[1]; // store the file name for outputting poses
@@ -147,7 +147,7 @@ void commandCallback(std_msgs::String msg) {
 /* -----------------------------------------------
    -------------- GENERAL FUNCTIONS --------------
    ----------------------------------------------- */
-std::vector<std::string> addOutputHeader(int desiredGroup, std::string output_fileName) {
+std::vector<std::string> addOutputHeader(int outputType, int desiredGroup, std::string output_fileName) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-06-28
     PURPOSE: Add header to output file
@@ -168,7 +168,7 @@ std::vector<std::string> addOutputHeader(int desiredGroup, std::string output_fi
 	else if (desiredGroup == 3) { intendedGroup = "both_arms"; } // if the output is intended for both arms
 
 	// Open File and Add Header
-	if (desiredGroup == 3) { // if the output is intended for both arms
+	if (outputType == 3) { // if the output is intended for both arms
 		// Get File Names for Storing Both Joint Values and Poses
 		output_fileNames[0] = output_fileName.substr(0,output_fileName.size()-4) + "_joints.txt"; // set special file name for storing joint values for both arms
 		output_fileNames[1] = output_fileName.substr(0,output_fileName.size()-4) + "_poses.txt"; // set special file name for storing the pose of both arm
@@ -176,18 +176,22 @@ std::vector<std::string> addOutputHeader(int desiredGroup, std::string output_fi
 		// Write to the Joint Values File
 		std::ofstream output_file_joints; // create file stream variable for joint values
 		output_file_joints.open(output_fileNames[0].c_str(), std::ofstream::out | std::ofstream::app); // open file in writing and append mode
-		output_file_joints << intendedGroup << "\r\n"; // write header to file
+		output_file_joints << "joints" << intendedGroup << "\r\n"; // write header to file
 		output_file_joints.close(); // close the file
 
 		// Write to the Pose File
 		std::ofstream output_file_poses; // create file stream variable for poses
 		output_file_poses.open(output_fileNames[1].c_str(), std::ofstream::out | std::ofstream::app); // open file in writing and append mode
-		output_file_poses << intendedGroup << "\r\n"; // write header to file
+		output_file_poses << "poses" << intendedGroup << "\r\n"; // write header to file
 		output_file_poses.close(); // close the file
 	} else { // if the output intended for only one of the arms
+		std::string dataType;
+		if (outputType == 1) { dataType = "joints"; }
+		else if (outputType == 2) { dataType = "poses"; }
+
 		std::ofstream output_file; // create file stream variable
 		output_file.open(output_fileName.c_str(), std::ofstream::out | std::ofstream::app); // open file in writing and append mode
-		output_file << intendedGroup << "\r\n"; // write header to file
+		output_file << dataType << intendedGroup << "\r\n"; // write header to file
 		output_file.close(); // close the file
 	}
 
@@ -197,7 +201,7 @@ std::vector<std::string> addOutputHeader(int desiredGroup, std::string output_fi
 /* -----------------------------------------------
    ------- WRITE POINTS/JOINTS - BOTH ARMS -------
    ----------------------------------------------- */
-void writeJoints(planningInterface::MoveGroup& left_arm, planningInterface::MoveGroup& right_arm, std::string command, std::string output_fileName) {
+void writeJoints(planningInterface::MoveGroup& group1, planningInterface::MoveGroup& group2, std::string command, std::string output_fileName) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-06-17
     PURPOSE: Execute logging for joint locations
@@ -214,17 +218,17 @@ void writeJoints(planningInterface::MoveGroup& left_arm, planningInterface::Move
 	std::ofstream output_file; // create file stream variable
 
 	// Get Joint Values and Total Joints
-	std::vector<double> jointValues_right = right_arm.getCurrentJointValues(); // get joint values for right arm
-	std::vector<double> jointValues_left  = left_arm.getCurrentJointValues(); // get joint values for left arm
-	std::vector<double>::size_type totalJoints_right = jointValues_right.size(); // get total amount of joints in right arm
-	std::vector<double>::size_type totalJoints_left  = jointValues_left.size(); // get total amount of joints in right arm
+	std::vector<double> jointValues_group1 = group1.getCurrentJointValues(); // get joint values for right arm
+	std::vector<double> jointValues_group2 = group2.getCurrentJointValues(); // get joint values for left arm
+	std::vector<double>::size_type totalJoints_group1 = jointValues_group1.size(); // get total amount of joints in right arm
+	std::vector<double>::size_type totalJoints_group2  = jointValues_group2.size(); // get total amount of joints in right arm
 
 	// Build Trajectory Point As String
 	trajectory_point << command << " "; // add command
-	trajectory_point << right_arm.getName() << " " << totalJoints_right << " "; // add header for right arm joints
-	for (int i = 0; i < totalJoints_right; i++) trajectory_point << jointValues_right[i] << " "; // add right joint values
-	trajectory_point << left_arm.getName() << " " <<  totalJoints_left << " "; // add header for left arm joints
-	for (int i = 0; i < totalJoints_left; i++) trajectory_point << jointValues_left[i] << " "; // add left joint values
+	trajectory_point << group1.getName() << " " << totalJoints_group1 << " "; // add header for right arm joints
+	for (int i = 0; i < totalJoints_group1; i++) trajectory_point << jointValues_group1[i] << " "; // add right joint values
+	trajectory_point << group2.getName() << " " <<  totalJoints_group2 << " "; // add header for left arm joints
+	for (int i = 0; i < totalJoints_group2; i++) trajectory_point << jointValues_group2[i] << " "; // add left joint values
 
 	std::string outputLine = trajectory_point.str(); // get stringstream as a string
 
@@ -236,7 +240,7 @@ void writeJoints(planningInterface::MoveGroup& left_arm, planningInterface::Move
 	ROS_INFO("Joints stored with command: %s",command.c_str()); // notify user the command was stored
 }
 
-void writePose(planningInterface::MoveGroup& right_arm, planningInterface::MoveGroup& left_arm, std::string command, std::string output_fileName) {
+void writePose(planningInterface::MoveGroup& group1, planningInterface::MoveGroup& group2, std::string command, std::string output_fileName) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-06-27
     PURPOSE: Execute logging for pose locations
@@ -253,17 +257,17 @@ void writePose(planningInterface::MoveGroup& right_arm, planningInterface::MoveG
 	std::ofstream output_file; // create file stream variable
 
 	// Get Joint Values and Total Joints
-	geometry_msgs::PoseStamped poseMsg_right = right_arm.getCurrentPose(); // get the pose msg for the end effector of the right arm
-	geometry_msgs::PoseStamped poseMsg_left  = left_arm.getCurrentPose(); // get the pose msg for the end effector of the left arm
-	geometry_msgs::Pose pose_right = poseMsg_right.pose; // get the pose from the pose msg for the right arm
-	geometry_msgs::Pose pose_left  = poseMsg_left.pose; // get the pose from the pose msg for the left arm
+	geometry_msgs::PoseStamped poseMsg_group1 = group1.getCurrentPose(); // get the pose msg for the end effector of the right arm
+	geometry_msgs::PoseStamped poseMsg_group2 = group2.getCurrentPose(); // get the pose msg for the end effector of the left arm
+	geometry_msgs::Pose pose_group1 = poseMsg_group1.pose; // get the pose from the pose msg for the right arm
+	geometry_msgs::Pose pose_group2 = poseMsg_group2.pose; // get the pose from the pose msg for the left arm
 
 	// Build Trajectory Point As String
 	trajectory_point << command << " "; // add command
-	trajectory_point << right_arm.getName() << " " << pose_right.position.x << " " << pose_right.position.y << " " << pose_right.position.z << " "; // add header and position for right arm joints
-	trajectory_point << pose_right.orientation.x << " " << pose_right.orientation.y << " " << pose_right.orientation.z << " " << pose_right.orientation.w << " "; // add orientation for right arm
-	trajectory_point << left_arm.getName() << " " << pose_left.position.x << " " << pose_left.position.y << " " << pose_left.position.z << " "; // add header and position for left arm joints
-	trajectory_point << pose_left.orientation.x << " " << pose_left.orientation.y << " " << pose_left.orientation.z << " " << pose_left.orientation.w << " "; // add orientation for left arm
+	trajectory_point << group1.getName() << " " << pose_group1.position.x << " " << pose_group1.position.y << " " << pose_group1.position.z << " "; // add header and position for right arm joints
+	trajectory_point << pose_group1.orientation.x << " " << pose_group1.orientation.y << " " << pose_group1.orientation.z << " " << pose_group1.orientation.w << " "; // add orientation for right arm
+	trajectory_point << group2.getName() << " " << pose_group2.position.x << " " << pose_group2.position.y << " " << pose_group2.position.z << " "; // add header and position for left arm joints
+	trajectory_point << pose_group2.orientation.x << " " << pose_group2.orientation.y << " " << pose_group2.orientation.z << " " << pose_group2.orientation.w << " "; // add orientation for left arm
 
 	std::string outputLine = trajectory_point.str(); // get stringstream as a string
 
@@ -275,7 +279,7 @@ void writePose(planningInterface::MoveGroup& right_arm, planningInterface::MoveG
 	ROS_INFO("Position stored with command: %s",command.c_str()); // notify user the command was stored
 }
 
-void writeBoth(planningInterface::MoveGroup& right_arm, planningInterface::MoveGroup& left_arm, std::string command, std::string fileName_joints, std::string fileName_poses) {
+void writeBoth(planningInterface::MoveGroup& group1, planningInterface::MoveGroup& group2, std::string command, std::string fileName_joints, std::string fileName_poses) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-06-27
     PURPOSE: Execute logging for joint and pose locations
@@ -288,8 +292,8 @@ void writeBoth(planningInterface::MoveGroup& right_arm, planningInterface::MoveG
     OUTPUT(S): None
 */
     // Execute Point and Joint Writer Functions
-    writeJoints(right_arm, left_arm, command, fileName_joints); // store the joints values of both arms
-    writePose(right_arm, left_arm, command, fileName_poses); // store the the pose of both arms
+    writeJoints(group1, group2, command, fileName_joints); // store the joints values of both arms
+    writePose(group1, group2, command, fileName_poses); // store the the pose of both arms
 }
 
 
