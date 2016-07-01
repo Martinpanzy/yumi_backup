@@ -631,4 +631,296 @@ bool executePaths(planningInterface::MoveGroup& group, planner& plan) {
 	return executeSuccess_flag; // return the execution success flag
 }
 
+/* ==================== */
+/* UNFINISHED FUNCTIONS */
+/* ==================== */
 
+/* ---------------------- */
+/* Main function comments */
+/* ---------------------- */
+	//left_arm.setPlannerId("RRTstarkConfigDefault"); // set planner for left arm
+	//right_arm.setPlannerId("RRTstarkConfigDefault"); // set planner for right arm
+	//both_arms.setPlannerId("RRTstarkConfigDefault"); // set planner for both arms
+
+	// ROS_INFO("Total joints: %d",jointTrajectory.totalJoints);
+	// for (int joint = 0; joint < jointTrajectory.totalJoints; joint++) {
+	// 	ROS_INFO("Joint %d: %.4f",joint+1,jointTrajectory.joints[0][joint]);
+	// }		
+
+	// ROS_INFO("Position: %.4f %.4f %.4f Orientation: %.4f %.4f %.4f %.4f",poseTrajectory.pose_left[0].position.x,poseTrajectory.pose_left[0].position.y,poseTrajectory.pose_left[0].position.z,poseTrajectory.pose_left[0].orientation.x,poseTrajectory.pose_left[0].orientation.y,poseTrajectory.pose_left[0].orientation.z,poseTrajectory.pose_left[0].orientation.w);
+
+	// if (poseTrajectory.groupName.compare("") != 0) {
+	// 	jointTrajectory = convertPoseToJoints(left_arm,poseTrajectory);
+	// }
+	// for (int point = 0; point < poseTrajectory.totalPoints; point++) {
+	//	std::vector<double> jointValues = computeIK(serviceIK,poseTrajectory.pose_left[0]);
+	// 	sleep(2);
+	// }
+
+	// ROS_INFO("");
+
+	// for (int joint = 0; joint < jointTrajectory.totalJoints; joint++) {
+	// 	ROS_INFO("Joint %d: %.4f",joint+1,jointTrajectory.joints[1][joint]);
+	// }
+
+	// ROS_INFO("");
+
+	// for (int joint = 0; joint < jointTrajectory.totalJoints; joint++) {
+	// 	ROS_INFO("Joint %d: %.4f",joint+1,jointTrajectory.joints[2][joint]);
+	// }
+
+	// Plan and Execute Trajectory
+	// if (jointTrajectory.groupName.compare("") != 0) {
+	// 	planner plans = generatePlans(both_arms,jointTrajectory);
+	// 	bool success = executePlans(both_arms,plans);
+	// }
+
+	//displayJointValues(both_arms); // display joint positions
+
+	// Move Groups to Calc Position
+	//gotoGroupState(left_arm,"calc"); // go to calc position with the left arm
+	//gotoGroupState(right_arm,"calc"); // go to calc position with the right arm
+	//gotoGroupState(both_arms,"calc");
+	//gotoGroupState(both_arms,"home");
+
+	// Generate and Execute Paths
+	// planner plan_left_arm  = generatePaths(inputFile,left_arm);
+	// planner plan_right_arm = generatePaths(inputFile,right_arm);
+	// if ((plan_left_arm.success == true) && (plan_right_arm.success == true)) {
+	// 	executePaths_TwoArm(left_arm, plan_left_arm, right_arm, plan_right_arm);
+	// }
+
+	// planner plan_left_arm  = generatePaths(inputFile,both_arms);
+	// if (plan_left_arm.success == true) {
+	// 	executePaths(both_arms, plan_left_arm);
+	// }
+
+
+bool getTrajectory(planningInterface::MoveGroup& group, std::string inputFile) {
+/*
+	STILL WORKING ON THIS
+*/
+
+	bool success = true;
+
+
+
+	// if (pointType.compare("poses") == 0) { // still working on this
+	// 	trajectoryPoses poseTrajectory = getTrajectoryPoses(group,inputFile);
+	// 	for (int poses = 0; poses < poseTrajectory.totalPoints; poses++) {
+	// 		group.setPoseTarget(poseTrajectory.pose_right[poses]); // set next target for given group using given pose
+	// 		success = executePlanner(group); // execute planner and movement
+	// 	}
+	// }
+
+	// if (pointType.compare("joints") == 0) { // still working on this
+	// 	trajectoryJoints jointTrajectory = getTrajectoryJoints(group,inputFile);
+	// 	for (int joints = 0; joints < jointTrajectory.totalPoints; joints++) {
+	// 		std::vector<double> jointValues = jointTrajectory.joints[joints];
+	// 		group.setJointValueTarget(jointValues); // set next target for given group using given pose
+	// 		success = executePlanner(group); // execute planner and movement
+	// 	}
+	// }
+
+	// if (pointType.compare("cartesian") == 0) { // still working on this
+	// 	planningInterface::MoveGroup::Plan plan;
+	// 	moveit_msgs::RobotTrajectory trajectory;
+
+	// 	for (int pose = 0; pose < poseTrajectory.pose_right.size(); pose++) {
+	// 		ROS_INFO("Target %d: x: %.4f y: %.4f z: %.4f",pose+1,poseTrajectory.pose_right[pose].position.x,poseTrajectory.pose_right[pose].position.y,poseTrajectory.pose_right[pose].position.z);
+	// 	}
+
+	// 	ROS_INFO("Computing cartesian path.");
+	// 	double fraction = group.computeCartesianPath(poseTrajectory.pose_right,0.01,0.0,trajectory,true);
+	// 	ROS_INFO("Successful computation of cartesian path. Fraction: %.4f",fraction);
+
+	// 	ROS_INFO("Creating plan.");
+	// 	plan.trajectory_ = trajectory;
+	// 	ROS_INFO("Plan successfully created. Total points: %lu",plan.trajectory_.joint_trajectory.points.size());
+
+	// 	ROS_INFO("Executing Plan");
+	// 	bool success = group.execute(plan);
+	// }
+
+	return success;
+}
+
+/* -----------------------------------------------
+   ------------ KINEMATICS FUNCTIONS -------------
+   ----------------------------------------------- */
+trajectoryJoints convertPoseToJoints(planningInterface::MoveGroup& group, trajectoryPoses& trajectory_poses) {
+
+	// Initialize Variables
+	trajectoryJoints trajectory_joints;
+	std::string groupName = group.getName();
+	bool conversionSuccess = true;
+	int totalJointss;
+
+	int attempts = 10;
+	double timeout = 0.1;
+
+	ROS_INFO("Converting poses to joint values for group: %s",groupName.c_str());
+
+	// Get Kinematic Model and Kinematic State
+	robot_model_loader::RobotModelLoader modelLoader("robot_description"); // load robot model
+	robot_model::RobotModelPtr kinematicModel = modelLoader.getModel(); // get kinematic model
+	robot_state::RobotStatePtr kinematicState(new robot_state::RobotState(kinematicModel));
+	kinematicState->setToDefaultValues();
+
+	// Get Joint Model(s) for Provided Group
+	if (groupName.compare("both_arms") == 0) {
+		const robot_state::JointModelGroup* jointModel_left = kinematicModel->getJointModelGroup("left_joints"); // get joint model for provided group
+		const robot_state::JointModelGroup* jointModel_right = kinematicModel->getJointModelGroup("right_joints"); // get joint model for provided group
+		std::vector<double> jointValues_left, jointValues_right;
+		geometry_msgs::Pose pose_left, pose_right;
+		bool success_left, success_right;
+
+		// Convert Poses for Both Arm to Joint Values
+		for (int pose = 0; pose < trajectory_poses.totalPoints; pose++) {
+			std::vector<double> jointValues;
+			pose_left  = trajectory_poses.pose_left[pose];
+			pose_right = trajectory_poses.pose_right[pose];
+
+			success_left  = kinematicState->setFromIK(jointModel_left, pose_left, attempts, timeout);
+			if (success_left) {
+				kinematicState->copyJointGroupPositions(jointModel_left, jointValues_right);
+				jointValues = jointValues_left;
+			}
+			else {
+				ROS_ERROR("Left arm pose to joints IK conversion for trajectory point %d failed.",pose);
+				conversionSuccess = false;
+				break;
+			}
+
+			success_right = kinematicState->setFromIK(jointModel_right, pose_right, attempts, timeout);
+			if (success_right) {
+				kinematicState->copyJointGroupPositions(jointModel_right, jointValues_left);
+				jointValues.insert(jointValues.end(),jointValues_right.begin(),jointValues_right.end());
+				trajectory_joints.joints.push_back(jointValues);
+			}
+			else {
+				ROS_ERROR("Right arm pose to joints IK conversion for trajectory point %d failed.",pose);
+				conversionSuccess = false;
+				break;
+			}
+			totalJointss = jointValues.size();
+		}
+	} else if (groupName.compare("left_arm") == 0) {
+		const robot_state::JointModelGroup* jointModel = kinematicModel->getJointModelGroup("left_joints"); // get joint model for provided group
+		geometry_msgs::Pose currentPose;
+		bool success;
+
+		for (int pose = 0; pose < trajectory_poses.totalPoints; pose++) {
+			std::vector<double> jointValues;
+			currentPose = trajectory_poses.pose_left[pose];
+			success = kinematicState->setFromIK(jointModel, currentPose, attempts, timeout);
+			
+			if (success) {
+				kinematicState->copyJointGroupPositions(jointModel, jointValues);
+				trajectory_joints.joints.push_back(jointValues);
+			}
+			else {
+				ROS_ERROR("Left arm pose to joints IK conversion for trajectory point %d failed.",pose);
+				conversionSuccess = false;
+				break;
+			}
+			totalJointss = jointValues.size();
+		}
+	} else if (groupName.compare("right_arm") == 0) {
+		const robot_state::JointModelGroup* jointModel = kinematicModel->getJointModelGroup("right_joints"); // get joint model for provided group
+		geometry_msgs::Pose currentPose;
+		bool success;
+
+		for (int pose = 0; pose < trajectory_poses.totalPoints; pose++) {
+			std::vector<double> jointValues;
+			currentPose = trajectory_poses.pose_right[pose];
+			success = kinematicState->setFromIK(jointModel, currentPose, attempts, timeout);
+			
+			if (success) {
+				kinematicState->copyJointGroupPositions(jointModel, jointValues);
+				trajectory_joints.joints.push_back(jointValues);
+			}
+			else {
+				ROS_ERROR("Right arm pose to joints IK conversion for trajectory point %d failed.",pose);
+				conversionSuccess = false;
+				break;
+			}
+			totalJointss = jointValues.size();
+		}
+	}
+
+	if (conversionSuccess == false) {
+		ROS_WARN("Failed to convert poses to joint values.");
+		trajectoryJoints emptyTrajectory;
+		return emptyTrajectory;
+	} else {
+		ROS_INFO("Successfully converted poses to joints.");
+		trajectory_joints.groupName     = trajectory_poses.groupName;
+		trajectory_joints.intendedGroup = trajectory_poses.intendedGroup;
+		trajectory_joints.totalJoints   = totalJointss;
+		trajectory_joints.totalPoints   = trajectory_poses.totalPoints;
+		return trajectory_joints;
+	}
+}
+
+std::vector<double> computeIK(ServiceClient serviceIK, geometry_msgs::Pose pose) {
+	moveit_msgs::GetPositionIK::Request serviceRequest;
+	moveit_msgs::GetPositionIK::Response serviceResponse;
+
+	geometry_msgs::PoseStamped poseStamped;
+	poseStamped.pose = pose;
+	//poseStamped.header.frame_id = "yumi_link_7_l";
+
+	std::vector<std::string> link_names;
+	link_names.push_back("yumi_body");
+	link_names.push_back("yumi_link_1_l");
+	link_names.push_back("yumi_link_2_l");
+	link_names.push_back("yumi_link_3_l");
+	link_names.push_back("yumi_link_4_l");
+	link_names.push_back("yumi_link_5_l");
+	link_names.push_back("yumi_link_6_l");
+	link_names.push_back("yumi_link_7_l");
+
+	std::vector<std::string> joint_names;
+	joint_names.push_back("yumi_joint_1_l");
+	joint_names.push_back("yumi_joint_2_l");
+	joint_names.push_back("yumi_joint_7_l");
+	joint_names.push_back("yumi_joint_3_l");
+	joint_names.push_back("yumi_joint_4_l");
+	joint_names.push_back("yumi_joint_5_l");
+	joint_names.push_back("yumi_joint_6_l");
+
+	std::vector<double> currentJointValues = {0,0,0,0,0,0,0};
+
+	//robot_model_loader::RobotModelLoader robot_model_loader("robot_description"); 
+	//robot_model::RobotModelPtr kinematic_model = robot_model_loader.getModel();
+	//robot_state::JointModelGroup* jointModel_left = kinematic_model->getJointModelGroup("left_arm");
+
+	ROS_INFO("Working 1");
+	
+	serviceRequest.ik_request.group_name       = "left_joints";
+	//serviceRequest.ik_request.avoid_collisions = true;
+	serviceRequest.ik_request.ik_link_name     = "yumi_link_7_l" ; // user get end effector call for this
+	serviceRequest.ik_request.pose_stamped     = poseStamped;
+	serviceRequest.ik_request.ik_link_names    = link_names;
+	serviceRequest.ik_request.attempts         = 10;
+	serviceRequest.ik_request.robot_state.joint_state.name = joint_names;
+	serviceRequest.ik_request.robot_state.joint_state.position = currentJointValues;
+
+	ROS_INFO("Working 2");
+
+	serviceIK.call(serviceRequest,serviceResponse);
+
+	ROS_INFO("Working 3");
+
+	std::vector<double> jointValues = serviceResponse.solution.joint_state.position;
+	std::vector<std::string> jointNames = serviceResponse.solution.joint_state.name;
+	for (int joint = 0; joint < jointValues.size(); joint++) {
+		ROS_INFO("Joint %s: %.4f",jointNames[joint].c_str(),jointValues[joint]);
+	}
+
+	ROS_INFO("Joint value size %lu",jointValues.size());
+	ROS_INFO("Error code: %d",serviceResponse.error_code);
+
+	return jointValues;
+}
