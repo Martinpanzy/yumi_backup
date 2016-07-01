@@ -71,7 +71,7 @@ if [ $flag_argError = false ]; then # if all arguments were valid
 	sleep 2; # sleep to allow the user to see the terminal echo's
 	$runCommand # run the robot interface node initializer command with user desired arguments
 else # if one or more arguments were not valid
-	echo "Error occurred. Not loading robot interface due to error." # notify user that the robot interface will not be executed
+	echo "Error occurred. Not loading YuMi due to error." # notify user that the robot interface will not be executed
 fi
 
 

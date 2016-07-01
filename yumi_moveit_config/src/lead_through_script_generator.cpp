@@ -81,7 +81,6 @@ int main(int argc,char **argv) {
 	std::stringstream fullPath; // initialize variable to concatenate the full path
 	fullPath << output_filePath << argv[1] << ".txt"; // concatenate full path
 	output_fileName = fullPath.str(); // store the full path
-	ROS_INFO("Output file at: yumi_moveit_config/path/%s.txt",argv[1]); // notify the user of the chosen output file name
 
 	init(argc,argv,"lead_through"); // initialize ROS node
 
@@ -173,25 +172,34 @@ std::vector<std::string> addOutputHeader(int outputType, int desiredGroup, std::
 		output_fileNames[0] = output_fileName.substr(0,output_fileName.size()-4) + "_joints.txt"; // set special file name for storing joint values for both arms
 		output_fileNames[1] = output_fileName.substr(0,output_fileName.size()-4) + "_poses.txt"; // set special file name for storing the pose of both arm
 
-		// Write to the Joint Values File
+		// Notify User of File Locations
+		ROS_INFO("Output file at (joints): %s",output_fileNames[0].c_str()); // notify the user of the full path of the output file for storing joints
+		ROS_INFO("Output file at (poses): %s",output_fileNames[1].c_str()); // notify the user of the full path of the output file for storing poses
+
+		// Write Header to the Joint Values File
 		std::ofstream output_file_joints; // create file stream variable for joint values
 		output_file_joints.open(output_fileNames[0].c_str(), std::ofstream::out | std::ofstream::app); // open file in writing and append mode
-		output_file_joints << "joints" << intendedGroup << "\r\n"; // write header to file
+		output_file_joints << "joints" << " " << intendedGroup << "\r\n"; // write header to file
 		output_file_joints.close(); // close the file
 
-		// Write to the Pose File
+		// Write Header to the Pose File
 		std::ofstream output_file_poses; // create file stream variable for poses
 		output_file_poses.open(output_fileNames[1].c_str(), std::ofstream::out | std::ofstream::app); // open file in writing and append mode
-		output_file_poses << "poses" << intendedGroup << "\r\n"; // write header to file
+		output_file_poses << "poses" << " " << intendedGroup << "\r\n"; // write header to file
 		output_file_poses.close(); // close the file
 	} else { // if the output intended for only one of the arms
+		// Notify User of File Location
+		ROS_INFO("Output file at: %s",output_fileName.c_str()); // notify the user of the full path of the output file
+
+		// Determine What Type of Data the User Woule Like to Output
 		std::string dataType;
 		if (outputType == 1) { dataType = "joints"; }
 		else if (outputType == 2) { dataType = "poses"; }
 
+		// Write Header to Output File
 		std::ofstream output_file; // create file stream variable
 		output_file.open(output_fileName.c_str(), std::ofstream::out | std::ofstream::app); // open file in writing and append mode
-		output_file << dataType << intendedGroup << "\r\n"; // write header to file
+		output_file << dataType << " " << intendedGroup << "\r\n"; // write header to file
 		output_file.close(); // close the file
 	}
 
@@ -217,7 +225,7 @@ void writeJoints(planningInterface::MoveGroup& group1, planningInterface::MoveGr
 	std::stringstream trajectory_point; // create a string stream for concatenation
 	std::ofstream output_file; // create file stream variable
 
-	// Get Joint Values and Total Joints
+	// Get Joint Values and Total Joints for Each Arm
 	std::vector<double> jointValues_group1 = group1.getCurrentJointValues(); // get joint values for right arm
 	std::vector<double> jointValues_group2 = group2.getCurrentJointValues(); // get joint values for left arm
 	std::vector<double>::size_type totalJoints_group1 = jointValues_group1.size(); // get total amount of joints in right arm
@@ -256,17 +264,37 @@ void writePose(planningInterface::MoveGroup& group1, planningInterface::MoveGrou
 	std::stringstream trajectory_point; // create a string stream for concatenation
 	std::ofstream output_file; // create file stream variable
 
-	// Get Joint Values and Total Joints
+	// Get Pose of Each Arm
 	geometry_msgs::PoseStamped poseMsg_group1 = group1.getCurrentPose(); // get the pose msg for the end effector of the right arm
 	geometry_msgs::PoseStamped poseMsg_group2 = group2.getCurrentPose(); // get the pose msg for the end effector of the left arm
 	geometry_msgs::Pose pose_group1 = poseMsg_group1.pose; // get the pose from the pose msg for the right arm
 	geometry_msgs::Pose pose_group2 = poseMsg_group2.pose; // get the pose from the pose msg for the left arm
 
+	// Determine if Using Grippers
+	std::string usingGripper_group1 = "false"; // indicates if a gripper is being used on the first group
+	std::string usingGripper_group2 = "false"; // indicates if a gripper is being used on the second group
+	double gripperPos_group1, gripperPos_group2; // stores the gripper positions for each group if there is a gripper attached to one or both of the groups
+
+	std::string lastJointName_group1 = group1.getActiveJoints().back(); // get the last active joint name (exclude fixed joints) for the first group
+	std::string lastJointName_group2 = group2.getActiveJoints().back(); // get the last active joint name (excludes fixed joints) for the second group
+	if (lastJointName_group1.compare(0,7,"gripper") == 0) { // if the last active joint for the first group is a gripper
+		usingGripper_group1 = "true"; // indicate the first group has a gripper
+		gripperPos_group1 = group1.getCurrentJointValues().back(); // get the gripper position for the first group
+	}
+	if (lastJointName_group2.compare(0,7,"gripper") == 0) { // if the last active joint for the second group is a gripper
+		usingGripper_group2 = "true"; // indicate the second group has a gripper
+		gripperPos_group2 = group2.getCurrentJointValues().back(); // get the gripper position for the second group
+	}
+
 	// Build Trajectory Point As String
 	trajectory_point << command << " "; // add command
-	trajectory_point << group1.getName() << " " << pose_group1.position.x << " " << pose_group1.position.y << " " << pose_group1.position.z << " "; // add header and position for right arm joints
+	trajectory_point << group1.getName() << " " << usingGripper_group1 << " "; // add group name and whether a gripper is on the first group
+	if (usingGripper_group1.compare("true") == 0) { trajectory_point << gripperPos_group1 << " "; } // add gripper position if using a gripper on the first group
+	trajectory_point << pose_group1.position.x << " " << pose_group1.position.y << " " << pose_group1.position.z << " "; // add header and position for right arm joints
 	trajectory_point << pose_group1.orientation.x << " " << pose_group1.orientation.y << " " << pose_group1.orientation.z << " " << pose_group1.orientation.w << " "; // add orientation for right arm
-	trajectory_point << group2.getName() << " " << pose_group2.position.x << " " << pose_group2.position.y << " " << pose_group2.position.z << " "; // add header and position for left arm joints
+	trajectory_point << group2.getName() << " " << usingGripper_group2 << " "; // add group name and whether a gripper is on the second group
+	if (usingGripper_group2.compare("true") == 0) { trajectory_point << gripperPos_group2 << " "; } // add gripper position if using a gripper on the second group
+	trajectory_point << pose_group2.position.x << " " << pose_group2.position.y << " " << pose_group2.position.z << " "; // add header and position for left arm joints
 	trajectory_point << pose_group2.orientation.x << " " << pose_group2.orientation.y << " " << pose_group2.orientation.z << " " << pose_group2.orientation.w << " "; // add orientation for left arm
 
 	std::string outputLine = trajectory_point.str(); // get stringstream as a string
