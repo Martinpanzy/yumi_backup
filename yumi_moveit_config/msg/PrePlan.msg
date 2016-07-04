@@ -1,0 +1,3 @@
+string groupName
+moveit_msgs/RobotTrajectory[] trajectory
+uint32 totalTrajectories

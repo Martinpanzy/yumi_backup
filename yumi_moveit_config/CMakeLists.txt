@@ -6,9 +6,21 @@ find_package(catkin REQUIRED COMPONENTS
 	moveit_ros_planning_interface
 	geometry_msgs
 	std_msgs
+	message_generation
+	rosbag
 )
 
-catkin_package()
+add_message_files(FILES
+	PrePlan.msg
+)
+
+generate_messages(DEPENDENCIES
+   moveit_msgs
+)
+
+catkin_package(CATKIN_DEPENDS 
+	message_runtime
+)
 
 install(DIRECTORY launch DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
 install(DIRECTORY config DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})

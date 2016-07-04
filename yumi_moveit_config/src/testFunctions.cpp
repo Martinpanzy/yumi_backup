@@ -1,3 +1,9 @@
+#include <moveit_msgs/GetPositionIK.h>
+
+#include <moveit/robot_model_loader/robot_model_loader.h> // include robot model loader functionality for IK
+#include <moveit/robot_model/robot_model.h> // include robot model capabilities for IK
+#include <moveit/robot_state/robot_state.h> // include robot state capabiliteis for IK
+
 struct planner {
 	std::vector<planningInterface::MoveGroup::Plan> plans; // include vector to store planned paths for trajectory points
 	std::string groupName; // include group name
@@ -27,6 +33,9 @@ bool executePaths(planningInterface::MoveGroup&, planner&);
 planningInterface::MoveGroup::Plan getTrajectory(planningInterface::MoveGroup&, std::string);
 trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup&, std::string);
 trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup&, std::string);
+
+
+ServiceClient serviceIK = nodeHandle.serviceClient<moveit_msgs::GetPositionIK>("compute_ik"); // create client for IK service
 
 
 planningInterface::MoveGroup::Plan getTrajectory(planningInterface::MoveGroup& group, std::string inputFile) {
@@ -635,6 +644,11 @@ bool executePaths(planningInterface::MoveGroup& group, planner& plan) {
 /* UNFINISHED FUNCTIONS */
 /* ==================== */
 
+bool getTrajectory(planningInterface::MoveGroup&, std::string);
+
+trajectoryJoints convertPoseToJoints(planningInterface::MoveGroup&, trajectoryPoses&);
+std::vector<double> computeIK(ServiceClient, geometry_msgs::Pose);
+
 /* ---------------------- */
 /* Main function comments */
 /* ---------------------- */
@@ -923,4 +937,181 @@ std::vector<double> computeIK(ServiceClient serviceIK, geometry_msgs::Pose pose)
 	ROS_INFO("Error code: %d",serviceResponse.error_code);
 
 	return jointValues;
+}
+
+planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface::MoveGroup& right_arm, planningInterface::MoveGroup& both_arms, trajectoryPoses& pose_trajectory) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+	DATE CREATE: 2016-06-22
+	PURPOSE: Generate plans from input file for provided group
+
+	INPUT(S):
+		> left_arm - left arm move group
+		> right_arm - right arm move group
+		> joint_trajectory - structure containing the joint values for a trajectory
+	OUTPUT(S):
+		< planner - planner structure, created to ensure proper execution is performed
+
+	DEPENDENCIES: None
+
+	NOTE: Should the function be stopped if the planner fails for a given trajectory point? | DATE: 2016-06-28
+*/
+	// Ensure Projectory is Meant For Provided Group
+	if (pose_trajectory.groupName.compare("both_arms") != 0) { // if the given group does not have the same name as the name within the planner object
+		ROS_ERROR("Provided joint trajectory is not meant for the provided group."); // notify the user that the provided planner structure is not for the provided group
+		ROS_WARN("Intended pose trajectory group: %s",pose_trajectory.groupName.c_str()); // notify user of the group the planner is intended to be used for
+		ROS_WARN("This function will use poses for group: both_arms"); // notify user of the name of the group that the trajectory will be used for in this function
+		planner plan;
+		return plan;
+	}
+
+	// Ensure Groups Are Correctly Provided
+	if ((left_arm.getName().compare("left_arm") != 0) || (right_arm.getName().compare("right_arm") != 0)) {
+		ROS_ERROR("Provided group are either provided in the wrong order or are not expected.");
+		ROS_WARN("Expected groups (in order): left_arm, right_arm");
+		ROS_WARN("Provided groups (in order): %s, %s",left_arm.getName().c_str(),right_arm.getName().c_str());
+	}
+
+	// Initialize Variables
+	planner plan; // structure of type planner
+	plan.groupName = "both_arms"; // get the group name of the provided group
+	plan.success = false; // flag to indicate the success of the planner for provided trajectories
+	int planIndex = 0; // counter to indicate the current plan
+
+	planningInterface::MoveGroup::Plan currentPlan;
+	planningInterface::MoveGroup::Plan currentPlan_left; // initialize the current plan variable for left arm
+	planningInterface::MoveGroup::Plan currentPlan_right; // initialize the current plan variable for right arm
+	std::vector<planningInterface::MoveGroup::Plan> previousPlans(3);
+	planningInterface::MoveGroup::Plan emptyPlan; // initialize an empty plan
+	bool success_left  = false;
+	bool success_right = false;
+
+	// Notfify User that the Planner is About to Start
+	ROS_INFO("Starting planner."); // notify user that the planner is about to start
+
+	for (int plans = 0; plans < pose_trajectory.totalPoints; plans++) {
+		// Set Start State Planner Parameter for Provided Group
+		if (planIndex == 0) { // if first time running through the while loop
+			left_arm.setStartStateToCurrentState(); // set the start location to the current location of the robot for the left arm
+			right_arm.setStartStateToCurrentState(); // set the start location to the current location of the robot for the right arm
+			both_arms.setStartStateToCurrentState(); // set the start location to the current location of the robot for both arms
+		} else { // if it is not the first time running through the while loop
+			if (!(success_left)) { currentPlan_left = previousPlans[0]; }
+			if (!(success_right)) { currentPlan_right = previousPlans[1]; }
+			if (!(plan.success)) { currentPlan = previousPlans[2]; }
+
+			moveitCore::RobotState state_left(left_arm.getRobotModel()); // create state structure using the robots current state for the left arm
+			moveitCore::jointTrajPointToRobotState(currentPlan_left.trajectory_.joint_trajectory, (currentPlan_left.trajectory_.joint_trajectory.points.size()-1), state_left); // update the state structure to the given trajectory point for the left arm
+			left_arm.setStartState(state_left); // set the start state as the newly generated state for the left arm
+
+			moveitCore::RobotState state_right(right_arm.getRobotModel()); // create state structure using the robots current state for the left arm
+			moveitCore::jointTrajPointToRobotState(currentPlan_right.trajectory_.joint_trajectory, (currentPlan_right.trajectory_.joint_trajectory.points.size()-1), state_right); // update the state structure to the given trajectory point for the left arm
+			right_arm.setStartState(state_right); // set the start state as the newly generated state for the left arm
+
+			moveitCore::RobotState state_both(both_arms.getRobotModel()); // create state structure using the robots current state for the left arm
+			moveitCore::jointTrajPointToRobotState(currentPlan.trajectory_.joint_trajectory, (currentPlan.trajectory_.joint_trajectory.points.size()-1), state_both); // update the state structure to the given trajectory point for the left arm
+			both_arms.setStartState(state_both); // set the start state as the newly generated state for the left arm
+		}
+
+		// Plan Trajectories for Both Arms
+		left_arm.setPoseTarget(pose_trajectory.pose_left[planIndex]); // set the next target for the left arm
+		previousPlans[0] = currentPlan_left;
+		currentPlan_left = emptyPlan; // reset the current plan variable for left arm
+		success_left = left_arm.plan(currentPlan_left); // create a path plan for current trajectory point for left arm
+
+		right_arm.setPoseTarget(pose_trajectory.pose_right[planIndex]); // set the next target for right arm
+		previousPlans[1] = currentPlan_right;
+		currentPlan_right = emptyPlan; // reset the current plan variable for right arm
+		success_right = right_arm.plan(currentPlan_right); // create a path plan for current trajectory point for right arm
+
+		if ((success_left) && (success_right)) {
+			std::vector<double> lastTrajectoryPoint_left  = currentPlan_left.trajectory_.joint_trajectory.points.back().positions;
+			std::vector<double> lastTrajectoryPoint_right = currentPlan_right.trajectory_.joint_trajectory.points.back().positions;
+			std::vector<double> lastTrajectoryPoint = lastTrajectoryPoint_left;
+			lastTrajectoryPoint.insert(lastTrajectoryPoint.end(),lastTrajectoryPoint_right.begin(),lastTrajectoryPoint_right.end());
+
+			both_arms.setJointValueTarget(lastTrajectoryPoint);
+			previousPlans[2] = currentPlan;
+			currentPlan = emptyPlan;
+			plan.success = both_arms.plan(currentPlan);
+
+			if (plan.success) {
+				planIndex++; // increment the plan counter
+				plan.plans.push_back(currentPlan); // add the newly create plan to the plan vector
+				ROS_INFO("Plan created for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning was executed for
+			} else { // if the planning was not successful
+				ROS_WARN("Plan failed for both arms for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
+			}
+		} else { // if the planning was not successful
+			if ((!(success_left)) && (!(success_right))) {
+				ROS_WARN("Plan failed for both arms for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
+			} else if (!(success_left)) {
+				ROS_WARN("Plan failed for left arm for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
+			} else if (!(success_right)) {
+				ROS_WARN("Plan failed for right arm for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
+			}
+		}
+
+		// if ((success_left) && (success_right)) {
+		// 	int totalJoints_right = currentPlan_right.trajectory_.joint_trajectory.points[0].positions.size();
+		// 	int planLeft_size  = currentPlan_left.trajectory_.joint_trajectory.points.size();
+		// 	int planRight_size = currentPlan_right.trajectory_.joint_trajectory.points.size();
+		// 	planningInterface::MoveGroup::Plan currentPlan; // variable used to combine the left arm and right arm plans
+		// 	trajectory_msgs::JointTrajectoryPoint jointValues;
+		// 	std::vector<std::string> jointNames;
+
+		// 	jointNames = currentPlan_left.trajectory_.joint_trajectory.joint_names;
+		// 	jointNames.insert(jointNames.end(),currentPlan_right.trajectory_.joint_trajectory.joint_names.begin(),currentPlan_right.trajectory_.joint_trajectory.joint_names.end());
+		// 	currentPlan.trajectory_.joint_trajectory.joint_names = jointNames;
+
+		// 	int largestPlan = std::max(planLeft_size,planRight_size);
+		// 	for (int point = 0; point < largestPlan; point++) {
+		// 		if (point < planLeft_size) {
+		// 			jointValues = currentPlan_left.trajectory_.joint_trajectory.points[point];
+		// 		} else {
+		// 			jointValues = currentPlan_left.trajectory_.joint_trajectory.points[planLeft_size-1];
+		// 		}
+
+		// 		if (point < planRight_size) {
+		// 			for (int joint = 0; joint < totalJoints_right; joint++) { 
+		// 				jointValues.positions.push_back(currentPlan_right.trajectory_.joint_trajectory.points[point].positions[joint]);
+		// 				jointValues.velocities.push_back(currentPlan_right.trajectory_.joint_trajectory.points[point].velocities[joint]);
+		// 				jointValues.accelerations.push_back(currentPlan_right.trajectory_.joint_trajectory.points[point].accelerations[joint]);
+		// 				//jointValues.effort.push_back(currentPlan_right.trajectory_.joint_trajectory.points[point].effort[joint]);
+		// 				/* NOTE: Effort not added due to recurring seg faults | DATE: 2016-07-01 */
+		// 			}
+		// 		} else {
+		// 			for (int joint = 0; joint < totalJoints_right; joint++) { 
+		// 				jointValues.positions.push_back(currentPlan_right.trajectory_.joint_trajectory.points[planRight_size-1].positions[joint]);
+		// 				jointValues.velocities.push_back(currentPlan_right.trajectory_.joint_trajectory.points[planRight_size-1].velocities[joint]);
+		// 				jointValues.accelerations.push_back(currentPlan_right.trajectory_.joint_trajectory.points[planRight_size-1].accelerations[joint]);
+		// 				//jointValues.effort.push_back(currentPlan_right.trajectory_.joint_trajectory.points[planRight_size].effort[joint]);
+		// 				/* NOTE: Effort not added due to recurring seg faults | DATE: 2016-07-01 */
+		// 			}
+		// 		}
+
+		// 		jointValues.time_from_start = currentPlan_left.trajectory_.joint_trajectory.points[point].time_from_start; // use the left arm duration since start trajectory point
+		// 		/* NOTE: Should figure out if pose to joint conversion through planning should be replanned to ensure proper velocities and accelerations | DATE: 2016-07-01 */
+		// 		currentPlan.trajectory_.joint_trajectory.points.push_back(jointValues);
+		// 	}
+			
+		// 	// Add Newly Create Plan to Planner Structure
+		// 	planIndex++;
+		// 	plan.plans.push_back(currentPlan); // add the newly create plan to the plan vector
+		// 	ROS_INFO("Plan created for trajectory point: %d of %d",planIndex,pose_trajectory.totalPoints); // notify user of the trajectory point which planning was executed for
+		// } else { // if the planning was not successful
+		// 	if ((!(success_left)) && (!(success_right))) {
+		// 		ROS_WARN("Plan failed for both arms for trajectory point: %d of %d",planIndex+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
+		// 	} else if (!(success_left)) {
+		// 		ROS_WARN("Plan failed for left arm for trajectory point: %d of %d",planIndex+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
+		// 	} else if (!(success_right)) {
+		// 		ROS_WARN("Plan failed for right arm for trajectory point: %d of %d",planIndex+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
+		// 	}
+		// }
+	}
+
+	// Notfiy User of Planning Success Totals
+	plan.success = true; // set plan to success
+	plan.totalPlans = plan.plans.size(); // store the total plans within the planner
+	ROS_INFO("Finished planning. Total plans created: %d of %d",plan.totalPlans,pose_trajectory.totalPoints); // notify user that the planner has finished
+	return plan; // return the planner success flag and the vector of plans
 }

@@ -259,6 +259,8 @@ void writePose(planningInterface::MoveGroup& group1, planningInterface::MoveGrou
       > command - string signifying type of point
       > output_fileName - full path of the output file
     OUTPUT(S): None
+
+    DEPENDENCIES: Assumed the gripper prismatic joint is the last joint in the SRDF for both the left and right arm
 */
 	// Intiialize Variables
 	std::stringstream trajectory_point; // create a string stream for concatenation

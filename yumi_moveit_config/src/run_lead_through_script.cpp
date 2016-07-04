@@ -1,23 +1,21 @@
 #include <ros/ros.h> // include node functionality
 #include <moveit/move_group_interface/move_group.h> // include move group functionality
-
-#include <moveit_msgs/GetPositionIK.h>
-
-#include <moveit/robot_model_loader/robot_model_loader.h> // include robot model loader functionality for IK
-#include <moveit/robot_model/robot_model.h> // include robot model capabilities for IK
-#include <moveit/robot_state/robot_state.h> // include robot state capabiliteis for IK
-
 #include <moveit/robot_state/conversions.h> // include robot state conversion functionality
 #include <moveit_msgs/RobotTrajectory.h> // include robot trajectory
 #include <geometry_msgs/Pose.h> // include pose for move group functionality
+#include <rosbag/bag.h> // allow rosbag functionality
 #include <sstream> // include string stream functionality
 #include <fstream> // include file stream functionality
 #include <string> // include string functionality
+#include <stack> // include stack functionality
+#include <ctime> // include timing functionality
+
+#include <yumi_moveit_config/PrePlan.h> // include custom message for planner
 
 // Define Global Constants
 const double gripper_open_position = 0.024; // gripper open position (m)
 const double gripper_closed_position = 0.0; // gripper closed position (m)
-const std::string pathsDirectory = "/home/yumi/yumi_ws/src/yumi/yumi_moveit_config/paths/"; // full path to folder where trajectory text files should be stored
+const std::string moveitConfigDirectory = "/home/yumi/yumi_ws/src/yumi/yumi_moveit_config/"; // full path to folder where trajectory text files should be stored
 
 // Namespace Commands and Variables
 using namespace ros; // use namespace of ros
@@ -26,29 +24,48 @@ namespace moveitCore = moveit::core; // define commonly used namespace for plann
 
 // Define Structures
 struct planner {
-	std::vector<planningInterface::MoveGroup::Plan> plans; // include vector to retrieve planned paths for trajectory points
 	std::string groupName; // include group name
+	std::vector<planningInterface::MoveGroup::Plan> plans; // include vector to retrieve planned paths for trajectory points
 	bool success; // include boolean to retrieve whether the planner was successful or not
-	int totalPlans;
+	int totalPlans; // include count of total plans
 };
 
 struct trajectoryJoints {
 	std::string groupName; // include group name
-	std::string intendedGroup;
-	std::vector<std::vector<double>> joints;
-	int totalJoints;
-	int totalPoints;
+	std::string intendedGroup; // include name of the intended group for data within structure
+	std::vector<std::vector<double>> joints; // contain trajectory of joints
+	int totalJoints; // include count of total joints
+	int totalPoints; // include count of total trajectory points
 };
 
 struct trajectoryPoses {
-	std::string groupName;
-	std::string intendedGroup;
-	std::vector<geometry_msgs::Pose> pose_left;
-	std::vector<geometry_msgs::Pose> pose_right;
-	int totalPoints;
+	std::string groupName; // include group name
+	std::string intendedGroup; // include name of the intended group for data within structure
+	std::vector<geometry_msgs::Pose> pose_left; // include trajectory of poses for the left arm
+	std::vector<geometry_msgs::Pose> pose_right; // include trajectory of poses for the right arm
+	bool usingGripper_left = false; // include boolean to indicate if gripper data was provided for the left arm
+	bool usingGripper_right = false; // include bollean to indicate if gripper data was provided for the right arm
+	std::vector<double> gripperPos_left; // include gripper values for the trajectory for the left arm
+	std::vector<double> gripperPos_right; // include gripper values for the trajectory for the right arm
+	int totalPoints; // include count of total trajectory points
 };
 
+// Basic Functions
+// REFERENCE: stackoverflow.com/questions/13485266/how-to-have-matlab-tic-toc-in-c
+std::stack<clock_t> tictoc_stack; // create a stack of type clock
+
+void tic() { // similar to MATLAB version of tic
+    tictoc_stack.push(clock()); // add the current clock to the top of the stack
+}
+
+double toc() { // similar to MATLAB version of toc
+	double totalTime = ((double)(clock() - tictoc_stack.top())) / CLOCKS_PER_SEC; // get total time elapsed
+    tictoc_stack.pop(); // remove top of stack
+    return totalTime; // return total time elapsed
+}
+
 // Function Prototypes
+void createBag(std::string, std::string, planner&);
 std::string getFileDataType(std::string);
 trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup&, std::string);
 trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup&, std::string);
@@ -75,18 +92,17 @@ int main(int argc,char **argv) {
 
 	// Get Desired Input File
 	if (argv[1] == NULL) { // check if an output file name was supplied
-		ROS_INFO("An input file name needs to be executed as an additional argument."); // notify user that no output file name was supplied 
+		ROS_ERROR("An input file name needs to be executed as an additional argument."); // notify user that no output file name was supplied 
 		shutdown(); // showdown the node
 		return 1; // exit due to error
 	}
 	std::stringstream fullPath; // initialize variable to concatenate the full path
-	fullPath << pathsDirectory << argv[1] << ".txt"; // concatenate full path
+	fullPath << moveitConfigDirectory << "paths/" << argv[1] << ".txt"; // concatenate full path
 	std::string inputFile = fullPath.str(); // retrieve the full path
 
+	// Initialize ROS
 	init(argc,argv,"run_lead_through"); // initialize ROS node
 	NodeHandle nodeHandle; // initialize node handle
-
-	ServiceClient serviceIK = nodeHandle.serviceClient<moveit_msgs::GetPositionIK>("compute_ik"); // create client for IK service
 
 	// Start a background "spinner" for node to process ROS messages
 	AsyncSpinner spinner(1);
@@ -102,41 +118,98 @@ int main(int argc,char **argv) {
 	right_arm.setNumPlanningAttempts(5); // set number of planning attempts for right arm
 	both_arms.setNumPlanningAttempts(5); // set number of planning attempts for both arms
 
-	// Get Trajectory From File
+	// Get Trajectory From File and Create Plans
 	planner plans;
-
 	std::string dataType = getFileDataType(inputFile);
 	if (dataType.compare("joints") == 0) {
 		trajectoryJoints jointTrajectory = getTrajectoryJoints(both_arms,inputFile);
 		if (jointTrajectory.groupName.compare("") != 0) {
 			plans = generatePlans(both_arms,jointTrajectory);
+			createBag("test","test",plans);
 		}
 	} else if (dataType.compare("poses") == 0) {
 		trajectoryPoses poseTrajectory = getTrajectoryPoses(both_arms,inputFile);
 		if (poseTrajectory.groupName.compare("") != 0) {
 			plans = generatePlans(left_arm,right_arm,both_arms,poseTrajectory);
+			createBag("test","test",plans);
 		}
 	}
 
+	// Execute Plans
 	bool success = executePlans(both_arms,plans);
-
-
-
 
 	return 0;
 }
 
 /* -----------------------------------------------
-   ----------- FILE READNG FUNCTIONS -------------
+   ------- FILE READNG/WRITING FUNCTIONS ---------
    ----------------------------------------------- */
-std::string getFileDataType(std::string inputFile) {
+void createBag(std::string bagName, std::string topicName, planner& plan) {
 
+	/* =============================================== */
+	/* NEED TO ENSURE .bag IS NOT INCLUDED IN BAG NAME */
+	/* =============================================== */
+	ROS_INFO("Creating ROS bag for group: %s",plan.groupName.c_str());
+	
+	bagName = moveitConfigDirectory + "bags/" + bagName + ".bag";
+	rosbag::Bag bag(bagName, rosbag::bagmode::Write);
+
+	yumi_moveit_config::PrePlan plan_msg;
+	plan_msg.groupName = plan.groupName;
+	plan_msg.totalTrajectories = plan.totalPlans;
+	for (int plans = 0; plans < plan.totalPlans; plans++) {
+		plan_msg.trajectory.push_back(plan.plans[plans].trajectory_);
+	}
+
+	bag.write(topicName, ros::Time::now(), plan_msg);
+	bag.close();
+
+	ROS_INFO("Successfully created ROS bag.");
+	ROS_INFO("Location: %s",bagName.c_str());
+	ROS_INFO("Topic name: %s",topicName.c_str());
+}
+
+void retrieveBag(std::string bagName, std::string topicName) {
+
+	bagName = moveitConfigDirectory + "bags/" + bagName + ".bag";
+	ROS_INFO("Retrieving ROS bag at location: %s");
+
+	rosbag::Bag bag(bagName);
+	rosbag::View view(bag, rosbag::TopicQuery(topicName));
+
+	planner plan;
+
+	BOOST_FOREACH(rosbag::MessageInstance const m, view) {
+		plan.groupName = m.instantiate<string>();
+		plan.totalPoints = m.instantiate<uint32>();
+		plan.plans = m.instantiate<moveit_msgs/RobotTrajectory[]>();
+
+		// HOW DOES THIS WORK ^?
+	}
+
+	bag.close();
+
+	ROS_INFO("Successfully retrieved ROS bag.");
+}
+
+std::string getFileDataType(std::string inputFile) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+	DATE CREATE: 2016-07-01
+	PURPOSE: Retrive the data type from the provided input file
+
+	INPUT(S):
+		> inputFile - file name that contains the desired 
+	OUTPUT(S):
+		< dataType - Data type retrived from the provided input file
+
+	DEPENDENCIES: None
+*/
 	// Initialize Variables
 	std::string line; // variable to retrieve each line of text from the input file
-	std::string dataType;
-	bool success = true;
+	std::string dataType; // variable to store the data type from the provided input file
+	bool success = true; // flag to indicate if any error occurred
 
-	ROS_INFO("Getting file data type.");
+	ROS_INFO("Getting file data type."); // notify the user that the file data type for the provided input file is being retrived
 
 	// Get Provided File Data Type
 	std::ifstream textFile(inputFile.c_str()); // open provided text file
@@ -150,26 +223,26 @@ std::string getFileDataType(std::string inputFile) {
 				ROS_WARN("The first line needs to indicate what type of data is in the provided file."); // notify the user the purpose of the indended group name
 				ROS_WARN("Recognized data types: joints, poses"); // notify the user of recognized group names
 				ROS_WARN("Provided group: %s",dataType.c_str()); // notify the user of the intended group retrieved from file
-				success = false;
+				success = false; // indicate that there was an error
 			}
 		} else { // if the provided file is empty
 			ROS_ERROR("The provided file is empty."); // notify the user that the provided file is empty
-			success = false;
+			success = false; // indicate that there was an error
 		}
 		textFile.close(); // close the text file
 	} else { // if the file was not open successfully
 		ROS_ERROR("The provided file name could not be opened or does not exist."); // notify user of failure to open file
 		ROS_WARN("File: %s",inputFile.c_str()); // notify user of the supplied file
-		success = false;
+		success = false; // indicate that there was an error
 	}
 
 	// Return Data Type if Retrieved
-	if (success) {
-		ROS_INFO("File contains data of type: %s",dataType.c_str());
-		return dataType;
-	} else {
-		ROS_WARN("File data type was not able to be retrived.");
-		return "";
+	if (success) { // if there were no errors with getting the file data type variable from the provided file
+		ROS_INFO("File contains data of type: %s",dataType.c_str()); // notify the user of the data type from the provided input file
+		return dataType; // return the data type from the file
+	} else { // if there were erros with getting the file data type variable from the provided file
+		ROS_ERROR("File data type was not able to be retrived."); // notify the user that there was an error with getting the data type from the provided input file
+		return ""; // return an empty string
 	}
 }
 
@@ -180,7 +253,7 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 
 	INPUT(S):
 		> group - group data to retrieve from file
-		> inputFile - file name that contains the desired point
+		> inputFile - file name that contains the joint data for stored robot states
 	OUTPUT(S):
 		< trajectoryJoints - joint trajectory structure containing all joint values retrived from provided file
 
@@ -198,10 +271,8 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 	std::string intendedGroup; // variable to retrieve the intended arm for the data in the provided file
 	int lineIndex = 0; // counter to indicate the current line
 
-	std::string groupName_1; // variable to retrieve the first group name
-	std::string groupName_2; // variable to retrieve the second group name
-	std::vector<double>::size_type totalJoints_1; // variable to retrieve the joint values for the first group
-	std::vector<double>::size_type totalJoints_2; // variable to retrieve the joint values for the second group
+	std::string groupName_1, groupName_2; // variables to retrieve the first and second group name
+	std::vector<double>::size_type totalJoints_1, totalJoints_2; // variables to retrieve the joint values for the first and second group
 
 	std::string groupName = group.getName(); // get name of the provided group
 	trajectoryJoints trajectory_joints; // create structure to retrieve joint values from file
@@ -225,6 +296,7 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 	// Notfify User that the Planner is About to Start
 	ROS_INFO("Getting stored trajectory joints from file."); // notify user that the planner is about to start
 	ROS_INFO("File location: %s",inputFile.c_str()); // notify user of the full path of the input file
+	tic(); // start timer
 
 	// Open File and Generate Plans for Trajectories
 	std::ifstream textFile(inputFile.c_str()); // open provided text file
@@ -275,6 +347,7 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 			/* NEED TO ADD CHECK TO MAKE SURE THE INPUT FILE HAS CORRECT AMOUNT OF INPUTS FOR EACH LINE */
 			/* ======================================================================================== */
 
+			// Check Group Names in Input File to Make Sure They Are Expected
 			if (lineIndex == 0) { // if this is the first time running through the while loop
 				if (groupName_index == 3) { // if the user would like to retrive data for both arms
 					if (((groupName_1.compare("right_arm") == 0) || (groupName_2.compare("right_arm") == 0)) && ((groupName_1.compare("left_arm") == 0) || (groupName_2.compare("left_arm") == 0))) { // if both group names from the provided file are what was expected
@@ -324,6 +397,7 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 				break; // break from the loop due to error
 			}
 
+			// Retrieve the Current Joint Values into the Trajectory Structure
 			if (groupName_index == 1) { // if the user would like to only retrieve data for the left arm
 				if (groupName_1.compare("left_arm") == 0) { // if the first group contains data for the left arm
 					trajectory_joints.joints.push_back(jointValues_1); // add the joint values for the left arm into the joint trajectory structure
@@ -356,13 +430,16 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 		ROS_WARN("File: %s",inputFile.c_str()); // notify user of the supplied file
 	}
 
+	// Check If There Were Errors During Function Execution and Notify User
 	if (groupName_index == -1) { // if an error occured with the group name or retrieving data from the provided file
 		trajectory_joints.totalJoints = 0; // reset the total joints in the joint trajectory structure
 		trajectory_joints.groupName = ""; // reset the group name in the joint trajectory structure
 		ROS_ERROR("There was an error retriving file data. Please fix any issues stated above."); // notify the user an error occurred with the file reading or with the provided group
+		toc(); // reset clock variable
 	} else { // if no errors occurred with the group name or retrieving data from the file
 		trajectory_joints.totalPoints = trajectory_joints.joints.size(); // store the total trajectory points to the joint trajectory structure
 		ROS_INFO("Retrieved %d points from input file.",trajectory_joints.totalPoints); // notify the user of the total trajectory points
+		ROS_INFO("Processing time: %.4f",toc()); // display processing time
 	}
 
 	return trajectory_joints; // return the join trajectory structure
@@ -375,14 +452,14 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 
 	INPUT(S):
 		> group - group data to retrieve from file
-		> inputFile - file name that contains the desired point
+		> inputFile - file name that contains pose data for stored robot states
 	OUTPUT(S):
 		< trajectoryPoses - pose trajectory structure containing all poses retrived from provided file
 
 	DEPENDENCIES: None
 
 	INPUT FILE CONVENTION: The input file must have the following convention for each trajectory point:
-		- $(Command Name) $(Group 1 Name) $(Group 1 Total Joints (N_1)) $(Joint 1 Value) ... $(Joint N_1 Value) $(Group 2 Name) $(Group 2 Total Joints (N_2)) $(Joint 1 Value) ... $(Joint N_2 Value)
+		- $(Command Name) $(Group 1 Name) $(gripper_exist (true/false)) $(if gripper_exist, gripper_pos) $(pose.position.x) ... $(pose.orientation.w) $(Group 2 Name) ... $(pose.orientation.w)
 
 	NOTE: Currently not doing anything with the joint command from provided input file | DATE: 2016-06-22
 */
@@ -393,10 +470,10 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 	std::string intendedGroup; // variable to retrieve the intended arm for the data in the provided file
 	int lineIndex = 0; // counter to indicate the current line
 
-	std::string groupName_1; // variable to retrieve the first group name
-	std::string groupName_2; // variable to retrieve the second group name
-	geometry_msgs::Pose pose_1; // variable to retrieve poses from the first group
-	geometry_msgs::Pose pose_2; // variable to retrieve poses from the second group
+	std::string groupName_1, groupName_2; // variables to retrieve the first and second group name
+	std::string gripperExist_1, gripperExist_2; // variables to retrive if the gripper for the first and second group exist
+	double gripperPos_1, gripperPos_2; // variables to retrieve the gripper position if it exists
+	geometry_msgs::Pose pose_1, pose_2; // variables to retrieve poses from the first and second group
 
 	std::string groupName = group.getName(); // get name of the provided group
 	trajectoryPoses trajectory_poses; // create structure to retrieve poses from file
@@ -420,6 +497,7 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 	// Notfify User that the Planner is About to Start
 	ROS_INFO("Getting stored trajectory poses from file."); // notify user that the planner is about to start
 	ROS_INFO("File location: %s",inputFile.c_str()); // notify user of the full path of the input file
+	tic();
 
 	// Open File and Generate Plans for Trajectories
 	std::ifstream textFile(inputFile.c_str()); // open provided text file
@@ -454,11 +532,13 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 			currentLine >> command; // get command name for current trajectory point
 
 			// Get Group Names and Poses for Current Trajectory Point
-			currentLine >> groupName_1; //  get the command and the group name for the first group
+			currentLine >> groupName_1 >> gripperExist_1; //  get the group name and whether the gripper exists for the first group
+			if (gripperExist_1.compare("true") == 0) { currentLine >> gripperPos_1; } // get the gripper position for the first group if it exists
 			currentLine >> pose_1.position.x >> pose_1.position.y >> pose_1.position.z; // get position for current pose from first group
 			currentLine >> pose_1.orientation.x >> pose_1.orientation.y >> pose_1.orientation.z >> pose_1.orientation.w; // get orientation for current pose from first group
 
-			currentLine >> groupName_2; //  get the group name for the second group
+			currentLine >> groupName_2 >> gripperExist_2; //  get the group name and whether the gripper exists for the second group
+			if (gripperExist_2.compare("true") == 0) { currentLine >> gripperPos_2; } // get the gripper position for the second group if it exists
 			currentLine >> pose_2.position.x >> pose_2.position.y >> pose_2.position.z; // get position for current pose from second group
 			currentLine >> pose_2.orientation.x >> pose_2.orientation.y >> pose_2.orientation.z >> pose_2.orientation.w; // get orientation for current pose from second group
 
@@ -466,8 +546,9 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 			/* NEED TO ADD CHECK TO MAKE SURE THE INPUT FILE HAS CORRECT AMOUNT OF INPUTS FOR EACH LINE */
 			/* ======================================================================================== */
 
-			// Check Group Names in Input File to Make Sure They Are Expected
+			// Check Group Names in Input File to Make Sure They Are Expected and Check If Gripper Exists for Groups
 			if (lineIndex == 0) { // if this is the first time running through the while loop
+				// Check Group Names in Input File to Make Sure They Are Expected
 				if (groupName_index == 3) { // if the user would like to retrieve data for both arms
 					if (!(((groupName_1.compare("right_arm") == 0) || (groupName_2.compare("right_arm") == 0)) && ((groupName_1.compare("left_arm") == 0) || (groupName_2.compare("left_arm") == 0)))) { // if one of the group names from the provided file is not regonized
 						ROS_ERROR("One of the group names within the provided input file is not recognized."); // notify the user that one of the group names is not recognized
@@ -495,28 +576,68 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 				} else if (groupName_index == -1) { // if the provided group is already not recognized
 					break; // break from the loop due to error
 				}
+
+				// Check If Groups From File Have Grippers
+				if (gripperExist_1.compare("true") == 0) { // if the first group contains data for the gripper position
+					if (groupName_1.compare("left_arm") == 0) { // if the first group provides data for the left arm
+						trajectory_poses.usingGripper_left = true; // indicate that the left arm data from the text file contains gripper position data
+					} else { // if the first group provides data for the right arm
+						trajectory_poses.usingGripper_right = true; // indicate that the right arm data from the text file contains gripper position data
+					}
+				}
+				if (gripperExist_2.compare("true") == 0) { // if the second group contains data for the gripper position
+					if (groupName_2.compare("left_arm") == 0) { // if the second group provides data for the left arm
+						trajectory_poses.usingGripper_left = true; // indicate that the left arm data from the text file contains gripper position data
+					} else { // if the second group provides data for the right arm
+						trajectory_poses.usingGripper_right = true; // indicate that the right arm data from the text file contains gripper position data
+					}
+				}
 			}
 
 			// Retrieve the Current Pose into the Trajectory Structure
 			if (groupName_index == 1) { // if the user would like to only retrieve data for the left arm
 				if (groupName_1.compare("left_arm") == 0) { // if the first group from the file is for the left arm
 					trajectory_poses.pose_left.push_back(pose_1); // retrieve the pose from the first group into the pose structure for the left arm
+					if (trajectory_poses.usingGripper_left) { // if the gripper exists for the first group
+						trajectory_poses.gripperPos_left.push_back(gripperPos_1); // retrieve the gripper position for the first group into the pose structure for the left arm
+					}
 				} else { // if the second group from the file is for the left arm
 					trajectory_poses.pose_left.push_back(pose_2); // retrieve the pose from the second group into the pose structure for the left arm
+					if (trajectory_poses.usingGripper_left) { // if the gripper exists for the second group
+						trajectory_poses.gripperPos_left.push_back(gripperPos_2); // retrieve the gripper position for the second group into the pose structure for the left arm
+					}
 				}
 			} else if (groupName_index == 2) { // if the user would like to only retrieve data for the right arm
 				if (groupName_1.compare("right_arm") == 0) { // if the first group from the file is for the right arm
 					trajectory_poses.pose_right.push_back(pose_1); // retrieve the pose from the first group into the pose structure for the right arm
+					if (trajectory_poses.usingGripper_right) { // if the gripper exists for the first group
+						trajectory_poses.gripperPos_right.push_back(gripperPos_1); // retrieve the gripper position from the first group into the pose structure for the right arm
+					}
 				} else { // if the second group from the file is for the right arm
 					trajectory_poses.pose_right.push_back(pose_2); // retrieve the pose from the second group into the pose structure for the right arm
+					if (trajectory_poses.usingGripper_right) { // if the gripper exists for the second group
+						trajectory_poses.gripperPos_right.push_back(gripperPos_2); // retrieve the gripper position from the second group into the pose structure for the right arm
+					}
 				}
 			} else if (groupName_index == 3) { // if the user would like to retrieve data for the both arma
 				if (groupName_1.compare("left_arm") == 0) { // if the first group from the file is for the left arm
 					trajectory_poses.pose_left.push_back(pose_1); // retrieve the pose from the first group into the pose structure for the left arm
 					trajectory_poses.pose_right.push_back(pose_2); // retrieve the pose from the second group into the pose structure for the right arm
+					if (trajectory_poses.usingGripper_left) { // if the gripper exists for the first group
+						trajectory_poses.gripperPos_left.push_back(gripperPos_1); // retrieve the gripper position from the first group into the pose structure for the left arm
+					}
+					if (trajectory_poses.usingGripper_right) { // if the gripper exists for the second group
+						trajectory_poses.gripperPos_right.push_back(gripperPos_2); // retrieve the gripper position from the second group into the pose structure for the right arm
+					}
 				} else { // if the second group from the file is for the left arm
 					trajectory_poses.pose_left.push_back(pose_2); // retrieve the pose from the second group into the pose structure for the left arm
 					trajectory_poses.pose_right.push_back(pose_1); // retrieve the pose from the first group into the pose structure for the right arm
+					if (trajectory_poses.usingGripper_left) { // if the gripper exists for the second group
+						trajectory_poses.gripperPos_left.push_back(gripperPos_2); // retrieve the gripper position from the first group into the pose structure for the left arm
+					}
+					if (trajectory_poses.usingGripper_right) { // if the gripper exists for the first group
+						trajectory_poses.gripperPos_right.push_back(gripperPos_1); // retrieve the gripper position from the second group into the pose structure for the right arm
+					}
 				}
 			}
 
@@ -528,9 +649,11 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 		ROS_WARN("File: %s",inputFile.c_str()); // notify user of the supplied file
 	}
 
+	// Check If There Were Errors During Function Execution and Notify User
 	if (groupName_index == -1) { // if the group was not regonized or there was an issue with the group names in the provided file
 		trajectory_poses.groupName = ""; // reset the group name to an empty set
 		ROS_ERROR("There was an error retriving file data. Please fix any issues stated above."); // notify the user of the error
+		toc(); // reset clock variable
 	} else { // if there were no issues with storing the data from the provided file
 		if (groupName_index == 1) { // if the user would like to only retrieve data for the left arm
 			trajectory_poses.totalPoints = trajectory_poses.pose_left.size(); // set the size of the points to the size of the left pose within the pose structure
@@ -538,6 +661,7 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 			trajectory_poses.totalPoints = trajectory_poses.pose_right.size(); // set the size of the points to the size of the right pose within the pose structure
 		}
 		ROS_INFO("Retrieved %d points from input file.",trajectory_poses.totalPoints); // notify the user of the total points that were retrieved from the provided file
+		ROS_INFO("Processing time: %.4f",toc()); // display processing time
 	}
 
 	return trajectory_poses; // return the pose structure
@@ -715,7 +839,8 @@ planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface:
 	OUTPUT(S):
 		< planner - planner structure, created to ensure proper execution is performed
 
-	DEPENDENCIES: None
+	DEPENDENCIES: Assumed the gripper prismatic joint is the last joint in the SRDF for both the left and right arm
+	              SRDF group for both_arms must contain all the joints for the left arm first, then the joints for the right arm
 
 	NOTE: Should the function be stopped if the planner fails for a given trajectory point? | DATE: 2016-06-28
 */
@@ -744,10 +869,42 @@ planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface:
 	planningInterface::MoveGroup::Plan currentPlan;
 	planningInterface::MoveGroup::Plan currentPlan_left; // initialize the current plan variable for left arm
 	planningInterface::MoveGroup::Plan currentPlan_right; // initialize the current plan variable for right arm
-	std::vector<planningInterface::MoveGroup::Plan> previousPlans(3);
+	std::vector<planningInterface::MoveGroup::Plan> lastSuccessfulPlan(3);
 	planningInterface::MoveGroup::Plan emptyPlan; // initialize an empty plan
 	bool success_left  = false;
 	bool success_right = false;
+
+	bool usingGripper_left  = false;
+	bool usingGripper_right = false;
+	int totalJoints_left  = left_arm.getActiveJoints().size();
+	int totalJoints_right = right_arm.getActiveJoints().size();
+	std::string lastJointName_left  = left_arm.getActiveJoints().back(); // get the last active joint name (exclude fixed joints) for the left arm
+	std::string lastJointName_right = right_arm.getActiveJoints().back(); // get the last active joint name (excludes fixed joints) for the right arm
+
+
+	// Check If Either Group Is Using a Gripper
+	if (lastJointName_left.compare(0,7,"gripper") == 0) { // if the last active joint for the left arm is a gripper
+		usingGripper_left = true; // indicate the first group has a gripper
+	}
+	if (lastJointName_right.compare(0,7,"gripper") == 0) { // if the last active joint for the right arm is a gripper
+		usingGripper_right = true; // indicate the second group has a gripper
+	}
+
+	// Notify the User If There Is Any Mismatch Between Gripper Data and the Gripper Existing
+	if ((usingGripper_left) && (!pose_trajectory.usingGripper_left)) { 
+		ROS_WARN("The loaded YuMi is using a gripper on the left arm, but the provided pose structure does not contain gripper position data."); 
+		ROS_WARN("Result: The gripper position for the left arm will be set to 0.");
+	} else if ((!usingGripper_left) && (pose_trajectory.usingGripper_left)) {
+		ROS_WARN("The loaded YuMi is not using a gripper on the left arm, but the provided pose structure does contain gripper position data.");
+		ROS_WARN("Result: The gripper position data for the left arm will be discarded.");
+	}
+	if ((usingGripper_right) && (!pose_trajectory.usingGripper_right)) {
+		ROS_WARN("The loaded YuMi is using a gripper on the right arm, but the provided pose structure does not contain gripper position data."); 
+		ROS_WARN("Result: The gripper position for the right arm will be set to 0.");
+	} else if ((!usingGripper_right) && (pose_trajectory.usingGripper_right)) { 
+		ROS_WARN("The loaded YuMi is not using a gripper on the right arm, but the provided pose structure does contain gripper position data.");
+		ROS_WARN("Result: The gripper position data for the right arm will be discarded.");
+	}
 
 	// Notfify User that the Planner is About to Start
 	ROS_INFO("Starting planner."); // notify user that the planner is about to start
@@ -755,14 +912,20 @@ planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface:
 	for (int plans = 0; plans < pose_trajectory.totalPoints; plans++) {
 		// Set Start State Planner Parameter for Provided Group
 		if (planIndex == 0) { // if first time running through the while loop
-			left_arm.setStartStateToCurrentState(); // set the start location to the current location of the robot for the left arm
-			right_arm.setStartStateToCurrentState(); // set the start location to the current location of the robot for the right arm
-			both_arms.setStartStateToCurrentState(); // set the start location to the current location of the robot for both arms
+			left_arm.setStartStateToCurrentState(); // set the start location for the planner to the current location of the robot for the left arm
+			right_arm.setStartStateToCurrentState(); // set the start location for the planner to the current location of the robot for the right arm
+			both_arms.setStartStateToCurrentState(); // set the start location for the planner to the current location of the robot for both arms
 		} else { // if it is not the first time running through the while loop
-			if (!(success_left)) { currentPlan_left = previousPlans[0]; }
-			if (!(success_right)) { currentPlan_right = previousPlans[1]; }
-			if (!(plan.success)) { currentPlan = previousPlans[2]; }
+			// Set Current Plan to Previous Plan if it Was Not Successful
+			if ((!success_left) || (!success_right)) { // if each of the previous plans for the arms were not successful on the last iteration
+				currentPlan_left  = lastSuccessfulPlan[0]; // set the previous plan to the last successful plan for the right arm
+				currentPlan_right = lastSuccessfulPlan[1]; // set the previous plan to the last successful plan for the right arm
+			}
+			if (!(plan.success)) { // if the planner for both arms was not successful on the previous iteration
+				currentPlan = lastSuccessfulPlan[2]; // set the previous plan to the last sucessful plan for both arms
+			}
 
+			// Set the State State of New Plan to Previous Trajectory Target from Planner
 			moveitCore::RobotState state_left(left_arm.getRobotModel()); // create state structure using the robots current state for the left arm
 			moveitCore::jointTrajPointToRobotState(currentPlan_left.trajectory_.joint_trajectory, (currentPlan_left.trajectory_.joint_trajectory.points.size()-1), state_left); // update the state structure to the given trajectory point for the left arm
 			left_arm.setStartState(state_left); // set the start state as the newly generated state for the left arm
@@ -776,29 +939,52 @@ planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface:
 			both_arms.setStartState(state_both); // set the start state as the newly generated state for the left arm
 		}
 
-		// Plan Trajectories for Both Arms
+		// Store Previous Plans if They Were Successful
+		if ((success_left) && (success_right)) { // if both plans were successful on the previous iteration
+			lastSuccessfulPlan[0] = currentPlan_left; // store the previous plan for the left arm
+			lastSuccessfulPlan[1] = currentPlan_right; // store the previous plan for the right arm
+		}
+
+		// Plan Trajectories for Each Arm
 		left_arm.setPoseTarget(pose_trajectory.pose_left[planIndex]); // set the next target for the left arm
-		previousPlans[0] = currentPlan_left;
 		currentPlan_left = emptyPlan; // reset the current plan variable for left arm
 		success_left = left_arm.plan(currentPlan_left); // create a path plan for current trajectory point for left arm
 
 		right_arm.setPoseTarget(pose_trajectory.pose_right[planIndex]); // set the next target for right arm
-		previousPlans[1] = currentPlan_right;
 		currentPlan_right = emptyPlan; // reset the current plan variable for right arm
 		success_right = right_arm.plan(currentPlan_right); // create a path plan for current trajectory point for right arm
 
-		if ((success_left) && (success_right)) {
-			std::vector<double> lastTrajectoryPoint_left  = currentPlan_left.trajectory_.joint_trajectory.points.back().positions;
-			std::vector<double> lastTrajectoryPoint_right = currentPlan_right.trajectory_.joint_trajectory.points.back().positions;
-			std::vector<double> lastTrajectoryPoint = lastTrajectoryPoint_left;
-			lastTrajectoryPoint.insert(lastTrajectoryPoint.end(),lastTrajectoryPoint_right.begin(),lastTrajectoryPoint_right.end());
+		if ((success_left) && (success_right)) { // if the planner for each arm was successful
+			// Build the Next Trajectory Target for Both Arms
+			std::vector<double> lastTrajectoryPoint_left  = currentPlan_left.trajectory_.joint_trajectory.points.back().positions; // get the last set of joint values from the left planner for the current plan
+			std::vector<double> lastTrajectoryPoint_right = currentPlan_right.trajectory_.joint_trajectory.points.back().positions; // get the last set of joint values from the right planner for the current plan
+			std::vector<double> lastTrajectoryPoint = lastTrajectoryPoint_left; // store the joint values for left arm in the both_arms group as the last set of joint values from the left planner
+			lastTrajectoryPoint.insert(lastTrajectoryPoint.end(),lastTrajectoryPoint_right.begin(),lastTrajectoryPoint_right.end()); // store the joint values for the right arm in the both_arms group as the last set of joint values from the right planner
 
-			both_arms.setJointValueTarget(lastTrajectoryPoint);
-			previousPlans[2] = currentPlan;
-			currentPlan = emptyPlan;
-			plan.success = both_arms.plan(currentPlan);
+			// Force Gripper Position in Trajectory Target if Both the Loaded Arm and Pose Structure Data Exist with a Gripper and Gripper Data Respectively
+			if (usingGripper_left) { // if the YuMi model contains a gripper for the left arm
+				if (pose_trajectory.usingGripper_left) { // if the provided pose structure contains data for the left gripper position
+					lastTrajectoryPoint[totalJoints_left-1] = pose_trajectory.gripperPos_left[plans]; // force the left gripper position to the data from the provided pose structure
+				} else { // if the provided pose structure does not contain data for the left gripper
+					lastTrajectoryPoint[totalJoints_left-1] = gripper_closed_position; // force the left gripper position to the closed position
+				}
+			}
+			if (usingGripper_right) { // if the YuMi model contains a gripper for the right arm
+				if (pose_trajectory.usingGripper_right) { // if the provided pose structure contains data for the right gripper position
+					lastTrajectoryPoint[totalJoints_left+totalJoints_right-1] = pose_trajectory.gripperPos_right[plans]; // force the right gripper position to the data from the provided pose structure
+				} else { // if the provided pose structure does not contain data for the right gripper
+					lastTrajectoryPoint[totalJoints_left+totalJoints_right-1] = gripper_closed_position; // force the right gripper position to the closed position
+				}
+			}
 
-			if (plan.success) {
+			// Plan Trajectory for Both Arms
+			both_arms.setJointValueTarget(lastTrajectoryPoint); // set the target to the newly created joint value vector
+			lastSuccessfulPlan[2] = currentPlan; // store the previous plan for both arms
+			currentPlan = emptyPlan; // reset the plan variable for both arms
+			plan.success = both_arms.plan(currentPlan); // try to create a plan for both arms
+
+			// Check if Plan Was Successful
+			if (plan.success) { // if the plan was successfully created
 				planIndex++; // increment the plan counter
 				plan.plans.push_back(currentPlan); // add the newly create plan to the plan vector
 				ROS_INFO("Plan created for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning was executed for
@@ -806,71 +992,14 @@ planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface:
 				ROS_WARN("Plan failed for both arms for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
 			}
 		} else { // if the planning was not successful
-			if ((!(success_left)) && (!(success_right))) {
+			if ((!(success_left)) && (!(success_right))) { // if both the left and right arms planners were unsuccessful
 				ROS_WARN("Plan failed for both arms for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
-			} else if (!(success_left)) {
+			} else if (!(success_left)) { // if only the left arm planner was unsuccessful
 				ROS_WARN("Plan failed for left arm for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
-			} else if (!(success_right)) {
+			} else if (!(success_right)) { // if only the right arm planner was unsuccessful
 				ROS_WARN("Plan failed for right arm for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
 			}
 		}
-
-		// if ((success_left) && (success_right)) {
-		// 	int totalJoints_right = currentPlan_right.trajectory_.joint_trajectory.points[0].positions.size();
-		// 	int planLeft_size  = currentPlan_left.trajectory_.joint_trajectory.points.size();
-		// 	int planRight_size = currentPlan_right.trajectory_.joint_trajectory.points.size();
-		// 	planningInterface::MoveGroup::Plan currentPlan; // variable used to combine the left arm and right arm plans
-		// 	trajectory_msgs::JointTrajectoryPoint jointValues;
-		// 	std::vector<std::string> jointNames;
-
-		// 	jointNames = currentPlan_left.trajectory_.joint_trajectory.joint_names;
-		// 	jointNames.insert(jointNames.end(),currentPlan_right.trajectory_.joint_trajectory.joint_names.begin(),currentPlan_right.trajectory_.joint_trajectory.joint_names.end());
-		// 	currentPlan.trajectory_.joint_trajectory.joint_names = jointNames;
-
-		// 	int largestPlan = std::max(planLeft_size,planRight_size);
-		// 	for (int point = 0; point < largestPlan; point++) {
-		// 		if (point < planLeft_size) {
-		// 			jointValues = currentPlan_left.trajectory_.joint_trajectory.points[point];
-		// 		} else {
-		// 			jointValues = currentPlan_left.trajectory_.joint_trajectory.points[planLeft_size-1];
-		// 		}
-
-		// 		if (point < planRight_size) {
-		// 			for (int joint = 0; joint < totalJoints_right; joint++) { 
-		// 				jointValues.positions.push_back(currentPlan_right.trajectory_.joint_trajectory.points[point].positions[joint]);
-		// 				jointValues.velocities.push_back(currentPlan_right.trajectory_.joint_trajectory.points[point].velocities[joint]);
-		// 				jointValues.accelerations.push_back(currentPlan_right.trajectory_.joint_trajectory.points[point].accelerations[joint]);
-		// 				//jointValues.effort.push_back(currentPlan_right.trajectory_.joint_trajectory.points[point].effort[joint]);
-		// 				/* NOTE: Effort not added due to recurring seg faults | DATE: 2016-07-01 */
-		// 			}
-		// 		} else {
-		// 			for (int joint = 0; joint < totalJoints_right; joint++) { 
-		// 				jointValues.positions.push_back(currentPlan_right.trajectory_.joint_trajectory.points[planRight_size-1].positions[joint]);
-		// 				jointValues.velocities.push_back(currentPlan_right.trajectory_.joint_trajectory.points[planRight_size-1].velocities[joint]);
-		// 				jointValues.accelerations.push_back(currentPlan_right.trajectory_.joint_trajectory.points[planRight_size-1].accelerations[joint]);
-		// 				//jointValues.effort.push_back(currentPlan_right.trajectory_.joint_trajectory.points[planRight_size].effort[joint]);
-		// 				/* NOTE: Effort not added due to recurring seg faults | DATE: 2016-07-01 */
-		// 			}
-		// 		}
-
-		// 		jointValues.time_from_start = currentPlan_left.trajectory_.joint_trajectory.points[point].time_from_start; // use the left arm duration since start trajectory point
-		// 		/* NOTE: Should figure out if pose to joint conversion through planning should be replanned to ensure proper velocities and accelerations | DATE: 2016-07-01 */
-		// 		currentPlan.trajectory_.joint_trajectory.points.push_back(jointValues);
-		// 	}
-			
-		// 	// Add Newly Create Plan to Planner Structure
-		// 	planIndex++;
-		// 	plan.plans.push_back(currentPlan); // add the newly create plan to the plan vector
-		// 	ROS_INFO("Plan created for trajectory point: %d of %d",planIndex,pose_trajectory.totalPoints); // notify user of the trajectory point which planning was executed for
-		// } else { // if the planning was not successful
-		// 	if ((!(success_left)) && (!(success_right))) {
-		// 		ROS_WARN("Plan failed for both arms for trajectory point: %d of %d",planIndex+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
-		// 	} else if (!(success_left)) {
-		// 		ROS_WARN("Plan failed for left arm for trajectory point: %d of %d",planIndex+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
-		// 	} else if (!(success_right)) {
-		// 		ROS_WARN("Plan failed for right arm for trajectory point: %d of %d",planIndex+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
-		// 	}
-		// }
 	}
 
 	// Notfiy User of Planning Success Totals
@@ -904,7 +1033,7 @@ bool executePlans(planningInterface::MoveGroup& group, planner& plan) {
 		executeSuccess_flag = false; // set success flag to indicate the execution was not successful
 	} else if (plan.success == 0) {
 		ROS_WARN("Provided planner did not successfully create plans for one or all trajectory points for supplid text file.");
-		ROS_INFO("Please (re-)run the generatePaths() function before executing paths again.");
+		ROS_INFO("Please (re)run the generatePaths() function before executing paths again.");
 		executeSuccess_flag = false; // set success flag to indicate the execution was not successful
 	} else {
 		// Notify User that the Plan Exection is About to be Started
