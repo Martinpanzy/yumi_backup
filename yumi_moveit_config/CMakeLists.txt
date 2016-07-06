@@ -15,7 +15,7 @@ add_message_files(FILES
 )
 
 generate_messages(DEPENDENCIES
-   moveit_msgs
+	moveit_msgs
 )
 
 catkin_package(CATKIN_DEPENDS 

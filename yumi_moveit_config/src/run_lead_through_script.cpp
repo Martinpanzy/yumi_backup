@@ -1,14 +1,18 @@
-#include <ros/ros.h> // include node functionality
-#include <moveit/move_group_interface/move_group.h> // include move group functionality
-#include <moveit/robot_state/conversions.h> // include robot state conversion functionality
-#include <moveit_msgs/RobotTrajectory.h> // include robot trajectory
-#include <geometry_msgs/Pose.h> // include pose for move group functionality
-#include <rosbag/bag.h> // allow rosbag functionality
 #include <sstream> // include string stream functionality
 #include <fstream> // include file stream functionality
 #include <string> // include string functionality
 #include <stack> // include stack functionality
 #include <ctime> // include timing functionality
+
+#include <boost/foreach.hpp>
+#include <geometry_msgs/Pose.h> // include pose for move group functionality
+#include <moveit/move_group_interface/move_group.h> // include move group functionality
+#include <moveit/robot_state/conversions.h> // include robot state conversion functionality
+#include <moveit_msgs/RobotTrajectory.h> // include robot trajectory
+#include <moveit_msgs/RobotState.h>
+#include <ros/ros.h> // include node functionality
+#include <rosbag/bag.h> // allow rosbag functionality
+#include <rosbag/view.h>
 
 #include <yumi_moveit_config/PrePlan.h> // include custom message for planner
 
@@ -66,14 +70,15 @@ double toc() { // similar to MATLAB version of toc
 
 // Function Prototypes
 void createBag(std::string, std::string, planner&);
+planner retrieveBag(std::string, std::string);
 std::string getFileDataType(std::string);
 trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup&, std::string);
 trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup&, std::string);
 
-planner generatePlans(planningInterface::MoveGroup&, trajectoryJoints&);
-planner generatePlans(planningInterface::MoveGroup&, trajectoryPoses&);
-planner generatePlans(planningInterface::MoveGroup&, planningInterface::MoveGroup&, planningInterface::MoveGroup&, trajectoryPoses&) ;
-bool executePlans(planningInterface::MoveGroup&, planner&);
+planner generatePlans(planningInterface::MoveGroup&, trajectoryJoints&, bool debug = false);
+planner generatePlans(planningInterface::MoveGroup&, trajectoryPoses&, bool debug  = false);
+planner generatePlans(planningInterface::MoveGroup&, planningInterface::MoveGroup&, planningInterface::MoveGroup&, trajectoryPoses&, bool debug = false);
+bool executePlans(planningInterface::MoveGroup&, planner&, bool debug = false);
 
 bool gotoGroupState(planningInterface::MoveGroup&, std::string);
 bool gotoPose(planningInterface::MoveGroup&, geometry_msgs::Pose&);
@@ -120,23 +125,24 @@ int main(int argc,char **argv) {
 
 	// Get Trajectory From File and Create Plans
 	planner plans;
-	std::string dataType = getFileDataType(inputFile);
-	if (dataType.compare("joints") == 0) {
-		trajectoryJoints jointTrajectory = getTrajectoryJoints(both_arms,inputFile);
-		if (jointTrajectory.groupName.compare("") != 0) {
-			plans = generatePlans(both_arms,jointTrajectory);
-			createBag("test","test",plans);
-		}
-	} else if (dataType.compare("poses") == 0) {
-		trajectoryPoses poseTrajectory = getTrajectoryPoses(both_arms,inputFile);
-		if (poseTrajectory.groupName.compare("") != 0) {
-			plans = generatePlans(left_arm,right_arm,both_arms,poseTrajectory);
-			createBag("test","test",plans);
-		}
-	}
+	plans = retrieveBag("test", "test");
+	// std::string dataType = getFileDataType(inputFile);
+	// if (dataType.compare("joints") == 0) {
+	// 	trajectoryJoints jointTrajectory = getTrajectoryJoints(both_arms, inputFile);
+	// 	if (jointTrajectory.groupName.compare("") != 0) {
+	// 		plans = generatePlans(both_arms, jointTrajectory);
+	// 		createBag("test","test",plans);
+	// 	}
+	// } else if (dataType.compare("poses") == 0) {
+	// 	trajectoryPoses poseTrajectory = getTrajectoryPoses(both_arms, inputFile);
+	// 	if (poseTrajectory.groupName.compare("") != 0) {
+	// 		plans = generatePlans(left_arm, right_arm, both_arms, poseTrajectory);
+	// 		createBag("test", "test", plans);
+	// 	}
+	// }
 
 	// Execute Plans
-	bool success = executePlans(both_arms,plans);
+	bool success = executePlans(both_arms, plans);
 
 	return 0;
 }
@@ -149,52 +155,72 @@ void createBag(std::string bagName, std::string topicName, planner& plan) {
 	/* =============================================== */
 	/* NEED TO ENSURE .bag IS NOT INCLUDED IN BAG NAME */
 	/* =============================================== */
-	ROS_INFO("Creating ROS bag for group: %s",plan.groupName.c_str());
+	// Notify User of Storing a Bag
+	ROS_INFO("Creating ROS bag for group: %s", plan.groupName.c_str());
 	
+	// Create Bag with Provided Name
 	bagName = moveitConfigDirectory + "bags/" + bagName + ".bag";
 	rosbag::Bag bag(bagName, rosbag::bagmode::Write);
 
-	yumi_moveit_config::PrePlan plan_msg;
-	plan_msg.groupName = plan.groupName;
-	plan_msg.totalTrajectories = plan.totalPlans;
+	// Store Planner Data into Bag Message
+	yumi_moveit_config::PrePlan prePlan_msg;
+	prePlan_msg.group_name = plan.groupName;
+	prePlan_msg.start_state = plan.plans[0].start_state_;
+	prePlan_msg.total_trajectories = plan.totalPlans;
 	for (int plans = 0; plans < plan.totalPlans; plans++) {
-		plan_msg.trajectory.push_back(plan.plans[plans].trajectory_);
+		prePlan_msg.trajectory.push_back(plan.plans[plans].trajectory_);
 	}
 
-	bag.write(topicName, ros::Time::now(), plan_msg);
+	// Write to Bag
+	bag.write(topicName, ros::Time::now(), prePlan_msg);
 	bag.close();
 
+	// Notify User of Successful Bag Writing
 	ROS_INFO("Successfully created ROS bag.");
-	ROS_INFO("Location: %s",bagName.c_str());
-	ROS_INFO("Topic name: %s",topicName.c_str());
+	ROS_INFO("Location: %s", bagName.c_str());
+	ROS_INFO("Topic name: %s", topicName.c_str());
 }
 
-void retrieveBag(std::string bagName, std::string topicName) {
+planner retrieveBag(std::string bagName, std::string topicName) {
 
+	// Notify User of Retrieving a Bag
 	bagName = moveitConfigDirectory + "bags/" + bagName + ".bag";
-	ROS_INFO("Retrieving ROS bag at location: %s");
+	ROS_INFO("Retrieving ROS bag at location: %s", bagName.c_str());
 
-	rosbag::Bag bag(bagName);
+	// Get Bag with Specified Topic
+	rosbag::Bag bag(bagName, rosbag::bagmode::Read);
 	rosbag::View view(bag, rosbag::TopicQuery(topicName));
 
-	planner plan;
-
+	// Store Bag Elements
+	yumi_moveit_config::PrePlan::ConstPtr prePlan_msg;
 	BOOST_FOREACH(rosbag::MessageInstance const m, view) {
-		plan.groupName = m.instantiate<string>();
-		plan.totalPoints = m.instantiate<uint32>();
-		plan.plans = m.instantiate<moveit_msgs/RobotTrajectory[]>();
-
-		// HOW DOES THIS WORK ^?
+		prePlan_msg = m.instantiate<yumi_moveit_config::PrePlan>();
 	}
 
-	bag.close();
+	// Get Elements from Retrieved Bag
+	planner plan;
+	plan.groupName = prePlan_msg->group_name;
+	plan.totalPlans = prePlan_msg->total_trajectories;
+	std::vector<moveit_msgs::RobotTrajectory> trajectory = prePlan_msg->trajectory;
 
+	// Store Trajectories Into Planner Structure
+	for (int plans = 0; plans < plan.totalPlans; plans++) {
+		planningInterface::MoveGroup::Plan currentPlan;
+		currentPlan.trajectory_ = trajectory[plans];
+		plan.plans.push_back(currentPlan);
+	}
+	plan.plans[0].start_state_ = prePlan_msg->start_state;
+
+	// Close the Bag and Notify the User
+	bag.close();
 	ROS_INFO("Successfully retrieved ROS bag.");
+
+	return plan; // return the plan
 }
 
 std::string getFileDataType(std::string inputFile) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
-	DATE CREATE: 2016-07-01
+	DATE CREATED: 2016-07-01
 	PURPOSE: Retrive the data type from the provided input file
 
 	INPUT(S):
@@ -208,7 +234,7 @@ std::string getFileDataType(std::string inputFile) {
 	std::string line; // variable to retrieve each line of text from the input file
 	std::string dataType; // variable to store the data type from the provided input file
 	bool success = true; // flag to indicate if any error occurred
-
+ 
 	ROS_INFO("Getting file data type."); // notify the user that the file data type for the provided input file is being retrived
 
 	// Get Provided File Data Type
@@ -222,7 +248,7 @@ std::string getFileDataType(std::string inputFile) {
 				ROS_ERROR("Provided file is malformatted or the header contains a non-recognized data type."); // notify the user the indended group name from the input file is not recognized
 				ROS_WARN("The first line needs to indicate what type of data is in the provided file."); // notify the user the purpose of the indended group name
 				ROS_WARN("Recognized data types: joints, poses"); // notify the user of recognized group names
-				ROS_WARN("Provided group: %s",dataType.c_str()); // notify the user of the intended group retrieved from file
+				ROS_WARN("Provided group: %s", dataType.c_str()); // notify the user of the intended group retrieved from file
 				success = false; // indicate that there was an error
 			}
 		} else { // if the provided file is empty
@@ -238,7 +264,7 @@ std::string getFileDataType(std::string inputFile) {
 
 	// Return Data Type if Retrieved
 	if (success) { // if there were no errors with getting the file data type variable from the provided file
-		ROS_INFO("File contains data of type: %s",dataType.c_str()); // notify the user of the data type from the provided input file
+		ROS_INFO("File contains data of type: %s", dataType.c_str()); // notify the user of the data type from the provided input file
 		return dataType; // return the data type from the file
 	} else { // if there were erros with getting the file data type variable from the provided file
 		ROS_ERROR("File data type was not able to be retrived."); // notify the user that there was an error with getting the data type from the provided input file
@@ -248,7 +274,7 @@ std::string getFileDataType(std::string inputFile) {
 
 trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::string inputFile) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
-	DATE CREATE: 2016-06-28
+	DATE CREATED: 2016-06-28
 	PURPOSE: Retrive joint values from a provided file for the provided group
 
 	INPUT(S):
@@ -447,7 +473,7 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 
 trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::string inputFile) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
-	DATE CREATE: 2016-06-28
+	DATE CREATED: 2016-06-28
 	PURPOSE: Retrive poses from a provided file for the provided group
 
 	INPUT(S):
@@ -646,7 +672,7 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 		textFile.close(); // close the text file
 	} else { // if the file was not open successfully
 		ROS_ERROR("The provided file name could not be opened or does not exist."); // notify user of failure to open file
-		ROS_WARN("File: %s",inputFile.c_str()); // notify user of the supplied file
+		ROS_WARN("File: %s", inputFile.c_str()); // notify user of the supplied file
 	}
 
 	// Check If There Were Errors During Function Execution and Notify User
@@ -660,8 +686,8 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 		} else { // if ther user would like to only retrieve data for the right arm or retrieve data for both arms
 			trajectory_poses.totalPoints = trajectory_poses.pose_right.size(); // set the size of the points to the size of the right pose within the pose structure
 		}
-		ROS_INFO("Retrieved %d points from input file.",trajectory_poses.totalPoints); // notify the user of the total points that were retrieved from the provided file
-		ROS_INFO("Processing time: %.4f",toc()); // display processing time
+		ROS_INFO("Retrieved %d points from input file.", trajectory_poses.totalPoints); // notify the user of the total points that were retrieved from the provided file
+		ROS_INFO("Processing time: %.4f", toc()); // display processing time
 	}
 
 	return trajectory_poses; // return the pose structure
@@ -670,14 +696,15 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 /* -----------------------------------------------
    ---------- PATH GENERATOR FUNCTIONS -----------
    ----------------------------------------------- */
-planner generatePlans(planningInterface::MoveGroup& group, trajectoryJoints& joint_trajectory) {
+planner generatePlans(planningInterface::MoveGroup& group, trajectoryJoints& joint_trajectory, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
-	DATE CREATE: 2016-06-22
+	DATE CREATED: 2016-06-22
 	PURPOSE: Generate plans from input file for provided group
 
 	INPUT(S):
 		> group - group to use for planning trajectories
 		> joint_trajectory - structure containing the joint values for a trajectory
+		> debug - indicate if the function should skip trajectory points if the plan for that point fails. true) skip point, false) stop funciton execution
 	OUTPUT(S):
 		< planner - planner structure, created to ensure proper execution is performed
 
@@ -690,8 +717,9 @@ planner generatePlans(planningInterface::MoveGroup& group, trajectoryJoints& joi
 		ROS_ERROR("Provided joint trajectory is not meant for the provided group."); // notify the user that the provided planner structure is not for the provided group
 		ROS_WARN("Joint trajectory group: %s",joint_trajectory.groupName.c_str()); // notify user of the group the planner is intended to be used for
 		ROS_WARN("Provided group: %s",group.getName().c_str()); // notify user of the name of the supplied group
-		planner plan;
-		return plan;
+		planner plan; // create a plan variable
+		plan.success = false; // indicate the planner was unsuccessful
+		return plan; // return empty plan
 	}
 
 	// Initialize Variables
@@ -699,6 +727,14 @@ planner generatePlans(planningInterface::MoveGroup& group, trajectoryJoints& joi
 	plan.groupName = group.getName(); // get the group name of the provided group
 	plan.success = false; // flag to indicate the success of the planner for provided trajectories
 	int planIndex = 0; // counter to indicate the current plan
+
+	planningInterface::MoveGroup::Plan currentPlan; // variable to store the current plan
+	planningInterface::MoveGroup::Plan lastSuccessfulPlan; // variable to store the last successful plan
+
+	// Check Optional Variable(s)
+	if (debug) { // if this function is being run in debug mode
+		ROS_WARN("Planning is being run in debug mode."); // notify the user that this function is being run in debug mode
+	}
 
 	// Notfify User that the Planner is About to Start
 	ROS_INFO("Starting planner."); // notify user that the planner is about to start
@@ -708,36 +744,55 @@ planner generatePlans(planningInterface::MoveGroup& group, trajectoryJoints& joi
 		if (planIndex == 0) { // if first time running through the while loop
 			group.setStartStateToCurrentState(); // set the start location to the current location of the robot
 		} else { // if it is not the first time running through the while loop
+			if (!(plan.success)) { // if the previous plan was not successful
+				currentPlan = lastSuccessfulPlan; // reset the current plan as the last successful plan
+			}
 			moveitCore::RobotState state(group.getRobotModel()); // create state structure using the robots current state
 			moveitCore::jointTrajPointToRobotState(plan.plans[planIndex-1].trajectory_.joint_trajectory, (plan.plans[planIndex-1].trajectory_.joint_trajectory.points.size()-1), state); // update the state structure to the given trajectory point
 			group.setStartState(state); // set the start state as the newly generated state
 		}
 
+		// Store Previous Plan if it was Successful
+		if (plan.success) { // if the plan was successful on the previous iteration
+			lastSuccessfulPlan = currentPlan; // store the previous plan
+		}
+
 		// Plan Trajectory
-		group.setJointValueTarget(joint_trajectory.joints[planIndex]); // set the next target for the provided group
+		group.setJointValueTarget(joint_trajectory.joints[plans]); // set the next target for the provided group
 		planningInterface::MoveGroup::Plan currentPlan; // initialize the current plan variable
 		plan.success = group.plan(currentPlan); // create a path plan for current trajectory point
 
 		// Add Planned Trajectory to Planner Vector if Plan Was Successful
-		if (plan.success == true) { // if the planning was successful
+		if (plan.success) { // if the planning was successful
 			planIndex++; // increment the plan counter
 			plan.plans.push_back(currentPlan); // add the newly create plan to the plan vector
 			ROS_INFO("Plan created for trajectory point: %d of %d",plans+1,joint_trajectory.totalPoints); // notify user of the trajectory point which planning was executed for
 		} else { // if the planning was not successful
 			ROS_WARN("Plan failed for trajectory point: %d of %d",plans+1,joint_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
+			if (debug) { // if the function is in debug mode
+				plan.success = true; // reset the planner success flag to true since in debug mode
+				ROS_WARN("Skipping trajectory point and continuing planner (planner is in debug mode)."); // notify the user that the trajectory point is being skipped due to debug mode
+			} else { // if the function is not in debug mode
+				ROS_WARN("Stopping planner."); // notify the user that the planner is being stopped
+				break; // exit planning loop
+			}
 		}
 	}
 
-	// Notfiy User of Planning Success Totals
-	plan.success = true; // set plan to success
-	plan.totalPlans = plan.plans.size(); // store the total plans within the planner
-	ROS_INFO("Finished planning. Total plans created: %d of %d",plan.totalPlans,joint_trajectory.totalPoints); // notify user that the planner has finished
+	// Notfiy User if Planner Succeessful and/or Success Totals
+	if (plan.success) { // if the planning was successful or was in debug mode
+		plan.totalPlans = plan.plans.size(); // store the total plans within the planner
+		ROS_INFO("Finished planning. Total plans created: %d of %d",plan.totalPlans,joint_trajectory.totalPoints); // notify user that the planner has finished
+	} else { // if the planning was not successful
+		ROS_INFO("Planning unsuccessful. Planning failed for trajectory point: %d of %d",planIndex+1,joint_trajectory.totalPoints); // notify user that the planner has finished
+	}
+	
 	return plan; // return the planner success flag and the vector of plans
 }
 
-planner generatePlans(planningInterface::MoveGroup& group, trajectoryPoses& pose_trajectory) {
+planner generatePlans(planningInterface::MoveGroup& group, trajectoryPoses& pose_trajectory, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
-	DATE CREATE: 2016-07-01
+	DATE CREATED: 2016-07-01
 	PURPOSE: Generate plans from input file for provided group
 
 	INPUT(S):
@@ -755,8 +810,9 @@ planner generatePlans(planningInterface::MoveGroup& group, trajectoryPoses& pose
 		ROS_ERROR("Provided pose trajectory is not meant for the provided group."); // notify the user that the provided planner structure is not for the provided group
 		ROS_WARN("Pose trajectory group: %s",pose_trajectory.groupName.c_str()); // notify user of the group the planner is intended to be used for
 		ROS_WARN("Provided group: %s",group.getName().c_str()); // notify user of the name of the supplied group
-		planner plan;
-		return plan;
+		planner plan; // create a plan variable
+		plan.success = false; // indicate the planner was unsuccessful
+		return plan; // return empty plan
 	}
 
 	// Initialize Variables
@@ -765,71 +821,89 @@ planner generatePlans(planningInterface::MoveGroup& group, trajectoryPoses& pose
 	plan.success = false; // flag to indicate the success of the planner for provided trajectories
 	int planIndex = 0; // counter to indicate the current plan
 
-	// Notfify User that the Planner is About to Start
-	ROS_INFO("Starting planner."); // notify user that the planner is about to start
+	planningInterface::MoveGroup::Plan currentPlan; // variable to store the current plan
+	planningInterface::MoveGroup::Plan lastSuccessfulPlan; // variable to store the last successful plan
 
+	std::vector<geometry_msgs::Pose> poses;
+
+	// Check Which Arm was Provided
+	std::string arm;
 	if (plan.groupName.compare("left_arm") == 0) {
-		for (int plans = 0; plans < pose_trajectory.totalPoints; plans++) {
-			// Set Start State Planner Parameter for Provided Group
-			if (planIndex == 0) { // if first time running through the while loop
-				group.setStartStateToCurrentState(); // set the start location to the current location of the robot
-			} else { // if it is not the first time running through the while loop
-				moveitCore::RobotState state(group.getRobotModel()); // create state structure using the robots current state
-				moveitCore::jointTrajPointToRobotState(plan.plans[planIndex-1].trajectory_.joint_trajectory, (plan.plans[planIndex-1].trajectory_.joint_trajectory.points.size()-1), state); // update the state structure to the given trajectory point
-				group.setStartState(state); // set the start state as the newly generated state
-			}
-
-			// Plan Trajectory
-			group.setPoseTarget(pose_trajectory.pose_left[planIndex]); // set the next target for the provided group
-			planningInterface::MoveGroup::Plan currentPlan; // initialize the current plan variable
-			plan.success = group.plan(currentPlan); // create a path plan for current trajectory point
-
-			// Add Planned Trajectory to Planner Vector if Plan Was Successful
-			if (plan.success == true) { // if the planning was successful
-				planIndex++; // increment the plan counter
-				plan.plans.push_back(currentPlan); // add the newly create plan to the plan vector
-				ROS_INFO("Plan created for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning was executed for
-			} else { // if the planning was not successful
-				ROS_WARN("Plan failed for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
-			}
-		}
+		arm  = "left";
+		poses = pose_trajectory.pose_left;
 	} else if (plan.groupName.compare("right_arm") == 0) {
-		for (int plans = 0; plans < pose_trajectory.totalPoints; plans++) {
-			// Set Start State Planner Parameter for Provided Group
-			if (planIndex == 0) { // if first time running through the while loop
-				group.setStartStateToCurrentState(); // set the start location to the current location of the robot
-			} else { // if it is not the first time running through the while loop
-				moveitCore::RobotState state(group.getRobotModel()); // create state structure using the robots current state
-				moveitCore::jointTrajPointToRobotState(plan.plans[planIndex-1].trajectory_.joint_trajectory, (plan.plans[planIndex-1].trajectory_.joint_trajectory.points.size()-1), state); // update the state structure to the given trajectory point
-				group.setStartState(state); // set the start state as the newly generated state
+		arm  = "right";
+		poses = pose_trajectory.pose_right;
+	} else {
+		ROS_WARN("Provided group was not one of the expected groups.");
+		ROS_WARN("Expected groups: left_arm, right_arm");
+		ROS_WARN("Provided group: %s",plan.groupName.c_str());
+		plan.groupName = "";
+		return plan; // return empty plan
+	}
+
+	// Check Optional Variable(s)
+	if (debug) { // if this function is being run in debug mode
+		ROS_WARN("Planning is being run in debug mode."); // notify the user that this function is being run in debug mode
+	}
+
+	// Notfify User that the Planner is About to Start
+	ROS_INFO("Starting planner for %s arm.",arm.c_str()); // notify user that the planner is about to start
+
+	for (int plans = 0; plans < pose_trajectory.totalPoints; plans++) {
+		// Set Start State Planner Parameter for Provided Group
+		if (planIndex == 0) { // if first time running through the while loop
+			group.setStartStateToCurrentState(); // set the start location to the current location of the robot
+		} else { // if it is not the first time running through the while loop
+			if (!(plan.success)) { // if the previous plan was not successful
+				currentPlan = lastSuccessfulPlan; // reset the current plan as the last successful plan
 			}
+			moveitCore::RobotState state(group.getRobotModel()); // create state structure using the robots current state
+			moveitCore::jointTrajPointToRobotState(currentPlan.trajectory_.joint_trajectory, (currentPlan.trajectory_.joint_trajectory.points.size()-1), state); // update the state structure to the given trajectory point
+			group.setStartState(state); // set the start state as the newly generated state
+		}
 
-			// Plan Trajectory
-			group.setPoseTarget(pose_trajectory.pose_right[planIndex]); // set the next target for the provided group
-			planningInterface::MoveGroup::Plan currentPlan; // initialize the current plan variable
-			plan.success = group.plan(currentPlan); // create a path plan for current trajectory point
+		// Store Previous Plan if it was Successful
+		if (plan.success) { // if the plan was successful on the previous iteration
+			lastSuccessfulPlan = currentPlan; // store the previous plan
+		}
 
-			// Add Planned Trajectory to Planner Vector if Plan Was Successful
-			if (plan.success == true) { // if the planning was successful
-				planIndex++; // increment the plan counter
-				plan.plans.push_back(currentPlan); // add the newly create plan to the plan vector
-				ROS_INFO("Plan created for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning was executed for
-			} else { // if the planning was not successful
-				ROS_WARN("Plan failed for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
+		// Plan Trajectory
+		group.setPoseTarget(poses[plans]); // set the next target for the provided group
+		planningInterface::MoveGroup::Plan currentPlan; // initialize the current plan variable
+		plan.success = group.plan(currentPlan); // create a path plan for current trajectory point
+
+		// Add Planned Trajectory to Planner Vector if Plan Was Successful
+		if (plan.success) { // if the planning was successful
+			planIndex++; // increment the plan counter
+			plan.plans.push_back(currentPlan); // add the newly create plan to the plan vector
+			ROS_INFO("Plan created for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning was executed for
+		} else { // if the planning was not successful
+			ROS_WARN("Plan failed for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
+			if (debug) { // if the function is in debug mode
+				plan.success = true; // reset the planner success flag to true since in debug mode
+				ROS_WARN("Skipping trajectory point and continuing planner (planner is in debug mode)."); // notify the user that the trajectory point is being skipped due to debug mode
+			} else { // if the function is not in debug mode
+				ROS_WARN("Stopping planner."); // notify the user that the planner is being stopped
+				break; // exit planning loop
 			}
 		}
 	}
 
-	// Notfiy User of Planning Success Totals
-	plan.success = true; // set plan to success
-	plan.totalPlans = plan.plans.size(); // store the total plans within the planner
-	ROS_INFO("Finished planning. Total plans created: %d of %d",plan.totalPlans,pose_trajectory.totalPoints); // notify user that the planner has finished
+	// Notfiy User if Planner Succeessful and/or Success Totals
+	if (plan.success) { // if the planning was successful or was in debug mode
+		plan.totalPlans = plan.plans.size(); // store the total plans within the planner
+		ROS_INFO("Finished planning. Total plans created: %d of %d",plan.totalPlans,pose_trajectory.totalPoints); // notify user that the planner has finished
+	} else { // if the planning was not successful
+		ROS_INFO("Planning unsuccessful. Planning failed for trajectory point: %d of %d",planIndex+1,pose_trajectory.totalPoints); // notify user that the planner has finished
+	}
+	
 	return plan; // return the planner success flag and the vector of plans
 }
 
-planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface::MoveGroup& right_arm, planningInterface::MoveGroup& both_arms, trajectoryPoses& pose_trajectory) {
+planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface::MoveGroup& right_arm, planningInterface::MoveGroup& both_arms, trajectoryPoses& pose_trajectory, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
-	DATE CREATE: 2016-06-22
+	DATE CREATED: 2016-06-22
 	PURPOSE: Generate plans from input file for provided group
 
 	INPUT(S):
@@ -849,8 +923,9 @@ planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface:
 		ROS_ERROR("Provided joint trajectory is not meant for the provided group."); // notify the user that the provided planner structure is not for the provided group
 		ROS_WARN("Intended pose trajectory group: %s",pose_trajectory.groupName.c_str()); // notify user of the group the planner is intended to be used for
 		ROS_WARN("This function will use poses for group: both_arms"); // notify user of the name of the group that the trajectory will be used for in this function
-		planner plan;
-		return plan;
+		planner plan; // create a plan variable
+		plan.success = false; // indicate the planner was unsuccessful
+		return plan; // return empty plan
 	}
 
 	// Ensure Groups Are Correctly Provided
@@ -876,8 +951,8 @@ planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface:
 
 	bool usingGripper_left  = false;
 	bool usingGripper_right = false;
-	int totalJoints_left  = left_arm.getActiveJoints().size();
-	int totalJoints_right = right_arm.getActiveJoints().size();
+	int totalJoints_left  = left_arm.getCurrentJointValues().size();
+	int totalJoints_right = right_arm.getCurrentJointValues().size();
 	std::string lastJointName_left  = left_arm.getActiveJoints().back(); // get the last active joint name (exclude fixed joints) for the left arm
 	std::string lastJointName_right = right_arm.getActiveJoints().back(); // get the last active joint name (excludes fixed joints) for the right arm
 
@@ -904,6 +979,11 @@ planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface:
 	} else if ((!usingGripper_right) && (pose_trajectory.usingGripper_right)) { 
 		ROS_WARN("The loaded YuMi is not using a gripper on the right arm, but the provided pose structure does contain gripper position data.");
 		ROS_WARN("Result: The gripper position data for the right arm will be discarded.");
+	}
+
+	// Check Optional Variable(s)
+	if (debug) { // if this function is being run in debug mode
+		ROS_WARN("Planning is being run in debug mode."); // notify the user that this function is being run in debug mode
 	}
 
 	// Notfify User that the Planner is About to Start
@@ -946,11 +1026,11 @@ planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface:
 		}
 
 		// Plan Trajectories for Each Arm
-		left_arm.setPoseTarget(pose_trajectory.pose_left[planIndex]); // set the next target for the left arm
+		left_arm.setPoseTarget(pose_trajectory.pose_left[plans]); // set the next target for the left arm
 		currentPlan_left = emptyPlan; // reset the current plan variable for left arm
 		success_left = left_arm.plan(currentPlan_left); // create a path plan for current trajectory point for left arm
 
-		right_arm.setPoseTarget(pose_trajectory.pose_right[planIndex]); // set the next target for right arm
+		right_arm.setPoseTarget(pose_trajectory.pose_right[plans]); // set the next target for right arm
 		currentPlan_right = emptyPlan; // reset the current plan variable for right arm
 		success_right = right_arm.plan(currentPlan_right); // create a path plan for current trajectory point for right arm
 
@@ -990,6 +1070,13 @@ planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface:
 				ROS_INFO("Plan created for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning was executed for
 			} else { // if the planning was not successful
 				ROS_WARN("Plan failed for both arms for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
+				if (debug) { // if the function is in debug mode
+					plan.success = true; // reset the planner success flag to true since in debug mode
+					ROS_WARN("Skipping trajectory point and continuing planner (planner is in debug mode)."); // notify the user that the trajectory point is being skipped due to debug mode
+				} else { // if the function is not in debug mode
+					ROS_WARN("Stopping planner."); // notify the user that the planner is being stopped
+					break; // exit planning loop
+				}
 			}
 		} else { // if the planning was not successful
 			if ((!(success_left)) && (!(success_right))) { // if both the left and right arms planners were unsuccessful
@@ -999,19 +1086,32 @@ planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface:
 			} else if (!(success_right)) { // if only the right arm planner was unsuccessful
 				ROS_WARN("Plan failed for right arm for trajectory point: %d of %d",plans+1,pose_trajectory.totalPoints); // notify user of the trajectory point which planning failed to execute for
 			}
+
+			if (debug) { // if the function is in debug mode
+				plan.success = true; // reset the planner success flag to true since in debug mode
+				ROS_WARN("Skipping trajectory point and continuing planner (planner is in debug mode)."); // notify the user that the trajectory point is being skipped due to debug mode
+			} else { // if the function is not in debug mode
+				plan.success = false; // indicate that the planner for failed
+				ROS_WARN("Stopping planner."); // notify the user that the planner is being stopped
+				break; // exit planning loop
+			}
 		}
 	}
 
-	// Notfiy User of Planning Success Totals
-	plan.success = true; // set plan to success
-	plan.totalPlans = plan.plans.size(); // store the total plans within the planner
-	ROS_INFO("Finished planning. Total plans created: %d of %d",plan.totalPlans,pose_trajectory.totalPoints); // notify user that the planner has finished
+	// Notfiy User if Planner Succeessful and/or Success Totals
+	if (plan.success) { // if the planning was successful or was in debug mode
+		plan.totalPlans = plan.plans.size(); // store the total plans within the planner
+		ROS_INFO("Finished planning. Total plans created: %d of %d",plan.totalPlans,pose_trajectory.totalPoints); // notify user that the planner has finished
+	} else { // if the planning was not successful
+		ROS_INFO("Planning unsuccessful. Planning failed for trajectory point: %d of %d",planIndex+1,pose_trajectory.totalPoints); // notify user that the planner has finished
+	}
+
 	return plan; // return the planner success flag and the vector of plans
 }
 
-bool executePlans(planningInterface::MoveGroup& group, planner& plan) {
+bool executePlans(planningInterface::MoveGroup& group, planner& plan, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
-	DATE CREATE: 2016-06-22
+	DATE CREATED: 2016-06-22
 	PURPOSE: Execute provided plans for provided group
 
 	INPUT(S):
@@ -1024,6 +1124,11 @@ bool executePlans(planningInterface::MoveGroup& group, planner& plan) {
 */
 	// Initialize Variables
 	bool executeSuccess_flag;// flag to indicate the success of the execution for provided plans
+
+	// Check Optional Variable(s)
+	if (debug) { // if this function is being run in debug mode
+		ROS_WARN("Planning is being run in debug mode."); // notify the user that this function is being run in debug mode
+	}
 
 	// Ensure Proper Group is Used for Provided Planner
 	if (plan.groupName.compare(group.getName()) != 0) { // if the given group does not have the same name as the name within the planner object
@@ -1039,20 +1144,36 @@ bool executePlans(planningInterface::MoveGroup& group, planner& plan) {
 		// Notify User that the Plan Exection is About to be Started
 		ROS_INFO("Executing trajectories."); // notify user that the execution of the plans is about to start
 
+		// Go to Trajectory Start State
+		group.setStartStateToCurrentState();
+		group.setJointValueTarget(plan.plans[0].start_state_.joint_state.position);
+		executeSuccess_flag = group.move();
+		if (!(executeSuccess_flag)) {
+			ROS_WARN("Not able to go to the start state of the trajectory.");
+			if (debug) {
+				executeSuccess_flag = true;
+				ROS_WARN("Continuing execution (debug mode is on).");
+			} else {
+				ROS_WARN("Stopping execution of trajectories.");
+			}
+		}
+
 		// Execute Given Plans
-		for (int currentPlan = 0; currentPlan < plan.totalPlans; currentPlan++) { // for all plans in plans vector
-			executeSuccess_flag = group.execute(plan.plans[currentPlan]); // execute trajectory for the current plan
-			if (executeSuccess_flag == true) { // if the execution was successful
-				ROS_INFO("Executed trajectory: %d",currentPlan+1); // notify user of the plan number that was executed successfully
-			} else { // if the execution was not successful
-				ROS_WARN("Failed to execute trajectory for plan: %d",currentPlan+1); // notify user of the plan number that was not executed successfully
-				break; // break from the for loop
+		if (executeSuccess_flag) {
+			for (int currentPlan = 0; currentPlan < plan.totalPlans; currentPlan++) { // for all plans in plans vector
+				executeSuccess_flag = group.execute(plan.plans[currentPlan]); // execute trajectory for the current plan
+				if (executeSuccess_flag) { // if the execution was successful
+					ROS_INFO("Executed trajectory: %d",currentPlan+1); // notify user of the plan number that was executed successfully
+				} else { // if the execution was not successful
+					ROS_WARN("Failed to execute trajectory for plan: %d",currentPlan+1); // notify user of the plan number that was not executed successfully
+					break; // break from the for loop
+				}
 			}
 		}
 	}
 
 	// Notify User if the Execition Was Successful
-	if (executeSuccess_flag == true) { // if the execution was successful
+	if (executeSuccess_flag) { // if the execution was successful
 		ROS_INFO("Finished executing trajectories."); // notify the user that the execution has finished
 	} else { // if the execution was not successful
 		ROS_ERROR("Execution error occurred, exiting execution function."); // notify the user that the execution failed

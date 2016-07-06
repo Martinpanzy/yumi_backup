@@ -1,3 +1,4 @@
-string groupName
+string group_name
+moveit_msgs/RobotState start_state
 moveit_msgs/RobotTrajectory[] trajectory
-uint32 totalTrajectories
+uint32 total_trajectories
