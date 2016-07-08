@@ -22,6 +22,7 @@ if(res.error_code_.val != res.error_code_.SUCCESS)
 }
 
 void preplanTrajectory(trajectoryPoses& pose_trajectory, std::vector<std::vector<int>> confdata) {
+
 	robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
 	robot_model::RobotModelPtr robot_model = robot_model_loader.getModel();
 	planning_scene::PlanningScenePtr planning_scene(new planning_scene::PlanningScene(robot_model));
@@ -29,23 +30,22 @@ void preplanTrajectory(trajectoryPoses& pose_trajectory, std::vector<std::vector
 
 	planning_interface::MotionPlanRequest motion_request;
 	planning_interface::MotionPlanResponse motion_response;
-
-	std::vector<double> tolerance_pose(3, 0.01);
-	std::vector<double> tolerance_angle(3, 0.01);
-
-	req.group_name = group.getName();
-
 	geometry_msgs::PoseStamped poses_left  = pose_trajectory.pose_left;
 	geometry_msgs::PoseStamped poses_right = pose_trajectory.pose_right;
 
+	std::vector<double> tolerance_pose(3, 0.001);
+	std::vector<double> tolerance_angle(3, 0.001);
+	motion_request.group_name = group.getName();
+
 	moveit_msgs::Constraints pose_constraints  = kinematic_constraints::constructGoalConstraints(group.getEndEffector(), pose, tolerance_pose, tolerance_angle);
-	moveit_msgs::Constraints joint_constraints = setAxisConfigurations(confdata, planningInterface::MoveGroup& group, joint_values);
+	moveit_msgs::Constraints joint_constraints = setAxisConfigurations(confdata, planningInterface::MoveGroup& group);
 	moveit_msgs::Constraints goal_constraints  = kinematic_constraints::mergeConstraints(pose_constraints, joint_constraints);
-	req.goal_constraints.push_back(pose_goal);
+	motion_request.goal_constraints.push_back(pose_goal);
 
 	planning_pipeline->generatePlan(planning_scene, motion_request, motion_response);
-	if(res.error_code_.val != res.error_code_.SUCCESS) {
-	  ROS_ERROR("Could not compute plan successfully");
+	if (motion_response.error_code_.val != motion_response.error_code_.SUCCESS) {
+		ROS_ERROR("Could not compute plan successfully");
+		ROS_WARN("Error code: %d", motion_response.error_code_.val);
 	}
 
 	moveit_msgs::MotionPlanResponse motion_plan;
@@ -53,7 +53,7 @@ void preplanTrajectory(trajectoryPoses& pose_trajectory, std::vector<std::vector
 }
 
 
-moveit_msgs::Constraints setAxisConfigurations(std::vector<int> confdata(3), planningInterface::MoveGroup& group, std::vector<double> start_joint_values) {
+moveit_msgs::Constraints setAxisConfigurations(std::vector<int> confdata(3), planningInterface::MoveGroup& group) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
 
 	INPUT(S):
@@ -72,7 +72,7 @@ moveit_msgs::Constraints setAxisConfigurations(std::vector<int> confdata(3), pla
 	for (int constraint = 0; constraint < joint_constraints.size(); constraint++) {
 		std::vector<moveit_msgs::JointConstraint> joint_constraint;
 		joint_constraint.joint_name      = active_joints_names[config_joints[constraint]];
-		joint_constraint.position        = start_joint_values[config_joints[constraint]] + ((confdata[constraint] * PI/2) + TOLERANCE);
+		joint_constraint.position        = (confdata[constraint] * PI/2) + TOLERANCE;
 		joint_constraint.tolerance_above = TOLERANCE;
 		joint_constraint.tolerance_below = TOLERANCE;
 		joint_constraint.weight          = WEIGHT; 

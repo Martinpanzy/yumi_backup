@@ -51,7 +51,19 @@ struct trajectoryPoses {
 	bool usingGripper_right = false; // include bollean to indicate if gripper data was provided for the right arm
 	std::vector<double> gripperPos_left; // include gripper values for the trajectory for the left arm
 	std::vector<double> gripperPos_right; // include gripper values for the trajectory for the right arm
+	std::vector<std::vector<int>> confdata_left;
+	std::vector<std::vector<int>> confdata_right;
 	int totalPoints; // include count of total trajectory points
+};
+
+struct RAPIDModuleData {
+	std::string moduleName;
+	std::vector<std::string> pose_names;
+	std::vector<geometry_msgs::Pose> poses;
+	std::vector<std::vector<int>> confdata;
+	std::vector<double> joint7_positions;
+	std::vector<bool> gripper_positions;
+	int totalPoints;
 };
 
 // Basic Functions
@@ -69,8 +81,14 @@ double toc() { // similar to MATLAB version of toc
 }
 
 // Function Prototypes
+RAPIDModuleData getYuMiLeadThroughData(std::string, bool debug = false);
+trajectoryPoses convertRAPIDtoPoseTrajectory(RAPIDModuleData&, std::string);
+trajectoryPoses convertRAPIDtoPoseTrajectory(RAPIDModuleData&, RAPIDModuleData&);
+void getRobtargetData(std::string, geometry_msgs::Pose&, std::vector<int>&, double& joint_7_position, bool debug = false);
+
 void createBag(std::string, std::string, planner&);
 planner retrieveBag(std::string, std::string);
+
 std::string getFileDataType(std::string);
 trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup&, std::string);
 trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup&, std::string);
@@ -101,31 +119,36 @@ int main(int argc,char **argv) {
 		shutdown(); // showdown the node
 		return 1; // exit due to error
 	}
-	std::stringstream fullPath; // initialize variable to concatenate the full path
-	fullPath << moveitConfigDirectory << "paths/" << argv[1] << ".txt"; // concatenate full path
-	std::string inputFile = fullPath.str(); // retrieve the full path
+	// std::stringstream fullPath; // initialize variable to concatenate the full path
+	// fullPath << moveitConfigDirectory << "paths/" << argv[1] << ".txt"; // concatenate full path
+	// std::string inputFile = fullPath.str(); // retrieve the full path
 
 	// Initialize ROS
 	init(argc,argv,"run_lead_through"); // initialize ROS node
 	NodeHandle nodeHandle; // initialize node handle
 
-	// Start a background "spinner" for node to process ROS messages
-	AsyncSpinner spinner(1);
-	spinner.start();
+	std::string file_name = argv[1];
+	RAPIDModuleData module = getYuMiLeadThroughData(file_name);
 
-	// Define Move Groups
-	planningInterface::MoveGroup left_arm("left_arm");
-	planningInterface::MoveGroup right_arm("right_arm");
-	planningInterface::MoveGroup both_arms("both_arms");
 
-	// Set Planning Parameters
-	left_arm.setNumPlanningAttempts(5); // set number of planning attempts for left arm
-	right_arm.setNumPlanningAttempts(5); // set number of planning attempts for right arm
-	both_arms.setNumPlanningAttempts(5); // set number of planning attempts for both arms
 
-	// Get Trajectory From File and Create Plans
-	planner plans;
-	plans = retrieveBag("test", "test");
+	// // Start a background "spinner" for node to process ROS messages
+	// AsyncSpinner spinner(1);
+	// spinner.start();
+
+	// // Define Move Groups
+	// planningInterface::MoveGroup left_arm("left_arm");
+	// planningInterface::MoveGroup right_arm("right_arm");
+	// planningInterface::MoveGroup both_arms("both_arms");
+
+	// // Set Planning Parameters
+	// left_arm.setNumPlanningAttempts(5); // set number of planning attempts for left arm
+	// right_arm.setNumPlanningAttempts(5); // set number of planning attempts for right arm
+	// both_arms.setNumPlanningAttempts(5); // set number of planning attempts for both arms
+
+	// // Get Trajectory From File and Create Plans
+	// planner plans;
+	// plans = retrieveBag("test", "test");
 	// std::string dataType = getFileDataType(inputFile);
 	// if (dataType.compare("joints") == 0) {
 	// 	trajectoryJoints jointTrajectory = getTrajectoryJoints(both_arms, inputFile);
@@ -141,14 +164,245 @@ int main(int argc,char **argv) {
 	// 	}
 	// }
 
-	// Execute Plans
-	bool success = executePlans(both_arms, plans);
+	// // Execute Plans
+	// bool success = executePlans(both_arms, plans);
 
 	return 0;
 }
 
 /* -----------------------------------------------
-   ------- FILE READNG/WRITING FUNCTIONS ---------
+   --------- READ WINDOWS 10 APP FILES -----------
+   ----------------------------------------------- */
+trajectoryPoses convertRAPIDtoPoseTrajectory(RAPIDModuleData& module, std::string group_name) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+	DATE CREATED: 2016-07-08
+*/
+	trajectoryPoses pose_trajectory;
+}
+
+trajectoryPoses convertRAPIDtoPoseTrajectory(RAPIDModuleData& left_module, RAPIDModuleData& right_module) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+	DATE CREATED: 2016-07-08
+*/
+	trajectoryPoses pose_trajectory;
+}
+
+RAPIDModuleData getYuMiLeadThroughData(std::string file_name, bool debug) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+	DATE CREATED: 2016-07-07
+*/
+	// Initialize Variables
+	std::string line; // variable to retrieve each line of text from the input file
+	std::string empty; // variable to store unwanted data from file
+	std::string module_name; // variable to store the module name
+	std::string data_type; // variable to store the data type from the provided input file
+	std::string robtarget;
+
+	geometry_msgs::Pose pose;
+	std::vector<geometry_msgs::Pose> poses;
+	std::vector<int> confdata(4);
+	std::vector<std::vector<int>> confdatas;
+	double joint_7_position;
+	std::vector<double> joint_7_positions;
+	bool gripper_position = 1; // variable to indicate the gripper state - 0) closed, 2) open
+	std::vector<bool> gripper_positions; // vector of gripper states - 0) closed, 1) open
+	
+	std::string store_point_name;
+	std::vector<std::string> store_point_names;
+	std::string move_point_name; // variable to store the point name
+	std::vector<std::string> move_point_names; // vector of point names
+
+	int line_index = 0; // variable to indicate what line is currently being pulled
+	int execution_line = 0;
+	bool robtarget_end = 0; // variable to indicate if still storing robtargets
+	bool success = true; // flag to indicate if any error occurred
+
+ 	std::string input_file = moveitConfigDirectory + "demo/" + file_name + ".mod";
+
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically// Check Optional Variable(s)
+	if (debug) { // if this function is being run in debug mode
+		ROS_WARN("Retrieving YuMi file is being run in debug mode."); // notify the user that this function is being run in debug mode
+	}
+
+	ROS_INFO("Getting YuMi file data."); // notify the user that the file data type for the provided input file is being retrived
+	tic();
+
+	// Get Provided File Data Type
+	std::ifstream text_file(input_file.c_str()); // open provided text file
+	if (text_file.is_open()) { // if the file was able to successfully open
+		// Get Module Name for Provided File
+		if (std::getline(text_file, line)) { // if the file exists and contains a first line
+			line_index++; // increment the current line counter
+			if (debug) { ROS_INFO("----- Pulling line: %d -----",line_index); }
+
+			std::istringstream first_line(line); // create a string steam element for delimiting data by spaces
+			first_line >> empty >> module_name; // get the module name
+			ROS_INFO("Module name: %s",module_name.c_str());
+			while (std::getline(text_file, line)) {
+				line_index++; // increment the current line counter
+				if (debug) { ROS_INFO("----- Pulling line: %d -----",line_index); }
+
+				std::istringstream current_line(line); // create a string steam element for delimiting data by spaces
+				current_line >> data_type;
+
+				if (data_type.compare(0, 1, "P") == 0) {
+					robtarget_end = 1;
+					if (debug) { ROS_INFO("Reading from Main function."); }
+				} else if (!(robtarget_end)) {
+					current_line >> empty >> data_type;
+					if (data_type.compare(0, 1, "r") == 0) {
+						current_line >> store_point_name >> empty >> robtarget;
+						getRobtargetData(robtarget, pose, confdata, joint_7_position, debug);
+
+						poses.push_back(pose);
+						confdatas.push_back(confdata);
+						joint_7_positions.push_back(joint_7_position);
+						store_point_names.push_back(store_point_name);
+
+						if (debug) { ROS_INFO("Pulled robtarget for position: %s. Stored data.",store_point_name.c_str()); }
+					} else if (data_type.compare(0, 1, "s") == 0) {
+						std::string yumi_app;
+						current_line >> yumi_app;
+						if (yumi_app.compare(0, 8, "YuMi_App") != 0) {
+							ROS_ERROR("The provided file was not generated from the YuMi Windows 10 App.");
+							success = false;
+							break;
+						}
+					}
+				} else if (data_type.compare(0, 1, "E") == 0) {
+					ROS_INFO("End of file reached.");
+					break;
+				} else {
+					execution_line++;
+					if (data_type.compare("MoveSync") == 0) {
+						current_line >> move_point_name;
+						move_point_name = move_point_name.substr(0, move_point_name.length()-1);
+					} else if (data_type.compare("OpenHand;") == 0) {
+						gripper_position = 1;
+					} else if (data_type.compare("CloseHand;") == 0) {
+						gripper_position = 0;
+					}
+					move_point_names.push_back(move_point_name);
+					gripper_positions.push_back(gripper_position);
+					if (debug) { ROS_INFO("Main function line: %d, pose name: %s, gripper position (open is 1): %d", execution_line, move_point_name.c_str(), gripper_position); }
+				}
+			}
+		} else { // if the provided file is empty
+			ROS_ERROR("The provided file is empty."); // notify the user that the provided file is empty
+			success = false; // indicate that there was an error
+		}
+		text_file.close(); // close the text file
+	} else { // if the file was not open successfully
+		ROS_ERROR("The provided file name could not be opened or does not exist."); // notify user of failure to open file
+		ROS_WARN("File: %s",input_file.c_str()); // notify user of the supplied file
+		success = false; // indicate that there was an error
+	}
+
+	RAPIDModuleData module;
+	if (success) {
+		if (debug) { ROS_INFO(" ===================="); }
+		ROS_INFO("Storing trajectory. Total trajectory points to store: %lu", move_point_names.size());
+
+		module.moduleName  = module_name;
+		module.pose_names  = move_point_names;
+		module.totalPoints = move_point_names.size();
+
+		int stored_location;
+		int total_stored_points = store_point_names.size();
+		for (int point = 0; point < module.totalPoints; point++) {
+			std::string point_name = module.pose_names[point];
+			for (int position = 0; position < total_stored_points; position++) {
+				if (store_point_names[position].compare(point_name) == 0) {
+					stored_location = position;
+					break;
+				}
+			}
+			module.gripper_positions.push_back(gripper_positions[point]);
+			module.poses.push_back(poses[stored_location]);
+			module.confdata.push_back(confdatas[stored_location]);
+			module.joint7_positions.push_back(joint_7_positions[stored_location]);
+
+			if (debug) { ROS_INFO("Trajectory point %d was stored successfully", point+1); }
+		}
+	} else {
+		ROS_ERROR("Not able to parse YuMi lead through file.");
+	}
+
+	if (debug) {
+		ROS_INFO(" ====================");
+		ROS_INFO("Module Name: %s", module.moduleName.c_str());
+
+		std::string current_point_name;
+		std::string previous_point_name = "";
+		for (int point = 0; point < module.totalPoints; point++) {
+			current_point_name = module.pose_names[point].c_str();
+			if (previous_point_name.compare(current_point_name) == 0) {
+				if (module.gripper_positions[point] == 1) {
+					ROS_INFO("Open Hand");
+				} else {
+					ROS_INFO("Close Hand");
+				}
+			} else {
+				ROS_INFO("Name: %s | Position: %.4f, %.4f, %.4f | Orientation: %.4f, %.4f, %.4f, %.4f | Configuration: %d, %d, %d, %d | Joint 7: %.4f",
+					module.pose_names[point].c_str(),
+					module.poses[point].position.x, module.poses[point].position.y, module.poses[point].position.z, 
+					module.poses[point].orientation.w, module.poses[point].orientation.x, module.poses[point].orientation.y, module.poses[point].orientation.z, 
+					module.confdata[point][0], module.confdata[point][1], module.confdata[point][2], module.confdata[point][3], 
+					module.joint7_positions[point]);
+			}
+			previous_point_name = current_point_name;
+		}
+	}
+
+	ROS_INFO("Processing time: %.4f",toc()); // display processing time
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
+	return module;
+}
+
+void getRobtargetData(std::string robtarget, geometry_msgs::Pose& pose, std::vector<int>& confdata, double& joint_7_position, bool debug) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+	DATE CREATED: 2016-07-07
+*/
+	// Initialize Variables
+	std::string robtarget_search = "0123456789.-";
+
+	bool pose_pulled = 0;
+	std::size_t start_char = 2;
+	std::size_t end_char = 0;
+	int element = 0;
+
+	while (!(pose_pulled)) {
+		element++;
+
+		end_char = robtarget.find_first_not_of(robtarget_search, start_char);
+		double current_val = std::stod(robtarget.substr(start_char, (end_char-start_char)), nullptr);
+
+		if (element == 1) { pose.position.x = current_val; }
+		else if (element == 2) { pose.position.y = current_val; }
+		else if (element == 3) { pose.position.z = current_val; }
+		else if (element == 4) { pose.orientation.w = current_val; }
+		else if (element == 5) { pose.orientation.x = current_val; }
+		else if (element == 6) { pose.orientation.y = current_val; }
+		else if (element == 7) { pose.orientation.z = current_val; }
+		else if (element == 8) { confdata[0] = ((int)current_val); }
+		else if (element == 9) { confdata[1] = ((int)current_val); }
+		else if (element == 10) { confdata[2] = ((int)current_val); }
+		else if (element == 11) { confdata[3] = ((int)current_val); }
+		else if (element == 12) { joint_7_position = current_val; }
+		else if (element >= 13) { break; }
+
+		start_char = robtarget.find_first_of(robtarget_search, end_char);
+	}
+
+	if (debug) {
+		ROS_INFO("Pose: %.4f, %.4f, %.4f | %.4f, %.4f, %.4f, %.4f", pose.position.x, pose.position.y, pose.position.z, pose.orientation.w, pose.orientation.x, pose.orientation.y, pose.orientation.z);
+		ROS_INFO("Confdata size: %lu, values: %d, %d, %d, %d", confdata.size(), confdata[0], confdata[1], confdata[2], confdata[3]);
+		ROS_INFO("Joint 7 position: %.4f", joint_7_position);
+	}
+}
+
+/* -----------------------------------------------
+   -------- BAG READNG/WRITING FUNCTIONS ---------
    ----------------------------------------------- */
 void createBag(std::string bagName, std::string topicName, planner& plan) {
 
@@ -156,6 +410,7 @@ void createBag(std::string bagName, std::string topicName, planner& plan) {
 	/* NEED TO ENSURE .bag IS NOT INCLUDED IN BAG NAME */
 	/* =============================================== */
 	// Notify User of Storing a Bag
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 	ROS_INFO("Creating ROS bag for group: %s", plan.groupName.c_str());
 	
 	// Create Bag with Provided Name
@@ -179,12 +434,14 @@ void createBag(std::string bagName, std::string topicName, planner& plan) {
 	ROS_INFO("Successfully created ROS bag.");
 	ROS_INFO("Location: %s", bagName.c_str());
 	ROS_INFO("Topic name: %s", topicName.c_str());
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 }
 
 planner retrieveBag(std::string bagName, std::string topicName) {
 
 	// Notify User of Retrieving a Bag
 	bagName = moveitConfigDirectory + "bags/" + bagName + ".bag";
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 	ROS_INFO("Retrieving ROS bag at location: %s", bagName.c_str());
 
 	// Get Bag with Specified Topic
@@ -214,10 +471,14 @@ planner retrieveBag(std::string bagName, std::string topicName) {
 	// Close the Bag and Notify the User
 	bag.close();
 	ROS_INFO("Successfully retrieved ROS bag.");
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 
 	return plan; // return the plan
 }
 
+/* -----------------------------------------------
+   --- LEAD THROUGH READNG/WRITING FUNCTIONS -----
+   ----------------------------------------------- */
 std::string getFileDataType(std::string inputFile) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
 	DATE CREATED: 2016-07-01
@@ -235,6 +496,7 @@ std::string getFileDataType(std::string inputFile) {
 	std::string dataType; // variable to store the data type from the provided input file
 	bool success = true; // flag to indicate if any error occurred
  
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 	ROS_INFO("Getting file data type."); // notify the user that the file data type for the provided input file is being retrived
 
 	// Get Provided File Data Type
@@ -270,6 +532,7 @@ std::string getFileDataType(std::string inputFile) {
 		ROS_ERROR("File data type was not able to be retrived."); // notify the user that there was an error with getting the data type from the provided input file
 		return ""; // return an empty string
 	}
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 }
 
 trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::string inputFile) {
@@ -304,6 +567,8 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 	trajectoryJoints trajectory_joints; // create structure to retrieve joint values from file
 	trajectory_joints.groupName = groupName; // set the group name for the joint values structure
 	int groupName_index; // variable to indicate which group the user would like to retrive data for
+
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 
 	// Get Group Name
 	if (groupName.compare("left_arm") == 0) { // if the user would like to only retrieve data for the left arm
@@ -468,6 +733,7 @@ trajectoryJoints getTrajectoryJoints(planningInterface::MoveGroup& group, std::s
 		ROS_INFO("Processing time: %.4f",toc()); // display processing time
 	}
 
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 	return trajectory_joints; // return the join trajectory structure
 }
 
@@ -505,6 +771,8 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 	trajectoryPoses trajectory_poses; // create structure to retrieve poses from file
 	trajectory_poses.groupName = groupName; // set the group name for the pose structure
 	int groupName_index; // variable to indicate which group the user would like to retrieve data for
+
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 
 	// Get Group Name
 	if (groupName.compare("left_arm") == 0) { // if the user would like to only retrieve data for the left arm
@@ -690,6 +958,7 @@ trajectoryPoses getTrajectoryPoses(planningInterface::MoveGroup& group, std::str
 		ROS_INFO("Processing time: %.4f", toc()); // display processing time
 	}
 
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 	return trajectory_poses; // return the pose structure
 }
 
@@ -730,6 +999,9 @@ planner generatePlans(planningInterface::MoveGroup& group, trajectoryJoints& joi
 
 	planningInterface::MoveGroup::Plan currentPlan; // variable to store the current plan
 	planningInterface::MoveGroup::Plan lastSuccessfulPlan; // variable to store the last successful plan
+
+
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 
 	// Check Optional Variable(s)
 	if (debug) { // if this function is being run in debug mode
@@ -787,6 +1059,7 @@ planner generatePlans(planningInterface::MoveGroup& group, trajectoryJoints& joi
 		ROS_INFO("Planning unsuccessful. Planning failed for trajectory point: %d of %d",planIndex+1,joint_trajectory.totalPoints); // notify user that the planner has finished
 	}
 	
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 	return plan; // return the planner success flag and the vector of plans
 }
 
@@ -825,6 +1098,8 @@ planner generatePlans(planningInterface::MoveGroup& group, trajectoryPoses& pose
 	planningInterface::MoveGroup::Plan lastSuccessfulPlan; // variable to store the last successful plan
 
 	std::vector<geometry_msgs::Pose> poses;
+
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 
 	// Check Which Arm was Provided
 	std::string arm;
@@ -898,6 +1173,7 @@ planner generatePlans(planningInterface::MoveGroup& group, trajectoryPoses& pose
 		ROS_INFO("Planning unsuccessful. Planning failed for trajectory point: %d of %d",planIndex+1,pose_trajectory.totalPoints); // notify user that the planner has finished
 	}
 	
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 	return plan; // return the planner success flag and the vector of plans
 }
 
@@ -927,6 +1203,8 @@ planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface:
 		plan.success = false; // indicate the planner was unsuccessful
 		return plan; // return empty plan
 	}
+
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 
 	// Ensure Groups Are Correctly Provided
 	if ((left_arm.getName().compare("left_arm") != 0) || (right_arm.getName().compare("right_arm") != 0)) {
@@ -1106,6 +1384,7 @@ planner generatePlans(planningInterface::MoveGroup& left_arm, planningInterface:
 		ROS_INFO("Planning unsuccessful. Planning failed for trajectory point: %d of %d",planIndex+1,pose_trajectory.totalPoints); // notify user that the planner has finished
 	}
 
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 	return plan; // return the planner success flag and the vector of plans
 }
 
@@ -1124,6 +1403,8 @@ bool executePlans(planningInterface::MoveGroup& group, planner& plan, bool debug
 */
 	// Initialize Variables
 	bool executeSuccess_flag;// flag to indicate the success of the execution for provided plans
+
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 
 	// Check Optional Variable(s)
 	if (debug) { // if this function is being run in debug mode
@@ -1179,6 +1460,7 @@ bool executePlans(planningInterface::MoveGroup& group, planner& plan, bool debug
 		ROS_ERROR("Execution error occurred, exiting execution function."); // notify the user that the execution failed
 	}
 
+ 	ROS_INFO(">--------------------"); // add a cutoff to group together and make it easier to see info from this function specifically
 	return executeSuccess_flag; // return the execution success flag
 }
 
