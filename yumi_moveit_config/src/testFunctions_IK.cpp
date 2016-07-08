@@ -21,7 +21,7 @@ if(res.error_code_.val != res.error_code_.SUCCESS)
   return 0;
 }
 
-void preplanTrajectory(trajectoryPoses& pose_trajectory, std::vector<std::vector<int>> confdata) {
+void preplanTrajectory(planningInterface::MoveGroup& group, trajectoryPoses& pose_trajectory, std::vector<std::vector<int>> confdata) {
 
 	robot_model_loader::RobotModelLoader robot_model_loader("robot_description");
 	robot_model::RobotModelPtr robot_model = robot_model_loader.getModel();
