@@ -14,12 +14,12 @@
 #include <rosbag/bag.h> // allow rosbag functionality
 #include <rosbag/view.h>
 
-#include <yumi_moveit_config/PrePlan.h> // include custom message for planner
+#include <yumi_scripts/PrePlan.h> // include custom message for planner
 
 // Define Global Constants
 const double gripper_open_position = 0.024; // gripper open position (m)
 const double gripper_closed_position = 0.0; // gripper closed position (m)
-const std::string moveitConfigDirectory = "/home/yumi/yumi_ws/src/yumi/yumi_moveit_config/"; // full path to folder where trajectory text files should be stored
+const std::string moveitConfigDirectory = "/home/yumi/yumi_ws/src/yumi/yumi_scripts/"; // full path to folder where trajectory text files should be stored
 
 // Namespace Commands and Variables
 using namespace ros; // use namespace of ros
@@ -418,7 +418,7 @@ void createBag(std::string bagName, std::string topicName, planner& plan) {
 	rosbag::Bag bag(bagName, rosbag::bagmode::Write);
 
 	// Store Planner Data into Bag Message
-	yumi_moveit_config::PrePlan prePlan_msg;
+	yumi_scripts::PrePlan prePlan_msg;
 	prePlan_msg.group_name = plan.groupName;
 	prePlan_msg.start_state = plan.plans[0].start_state_;
 	prePlan_msg.total_trajectories = plan.totalPlans;
@@ -449,9 +449,9 @@ planner retrieveBag(std::string bagName, std::string topicName) {
 	rosbag::View view(bag, rosbag::TopicQuery(topicName));
 
 	// Store Bag Elements
-	yumi_moveit_config::PrePlan::ConstPtr prePlan_msg;
+	yumi_scripts::PrePlan::ConstPtr prePlan_msg;
 	BOOST_FOREACH(rosbag::MessageInstance const m, view) {
-		prePlan_msg = m.instantiate<yumi_moveit_config::PrePlan>();
+		prePlan_msg = m.instantiate<yumi_scripts::PrePlan>();
 	}
 
 	// Get Elements from Retrieved Bag

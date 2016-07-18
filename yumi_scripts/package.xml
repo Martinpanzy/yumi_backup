@@ -1,0 +1,42 @@
+<package>
+
+  <name>yumi_scripts</name>
+  <version>0.2.0</version>
+  <description>
+     Scripts for YuMi
+  </description>
+  <author email="wachterfreddy@gmail.com">Frederick Wachter</author>
+  <maintainer email="wachterfreddy@gmail.com">Frederick Wachter</maintainer>
+
+  <license>BSD</license>
+
+  <url type="website">http://moveit.ros.org/</url>
+  <url type="bugtracker"></url>
+  <url type="repository">https://github.com/ethz-asl/yumi</url>
+
+  <run_depend>moveit_ros_move_group</run_depend>
+  <run_depend>moveit_planners_ompl</run_depend>
+  <run_depend>moveit_ros_visualization</run_depend>
+  <run_depend>joint_state_publisher</run_depend>
+  <run_depend>robot_state_publisher</run_depend>
+  <run_depend>xacro</run_depend>
+  <build_depend>yumi_description</build_depend>
+  <run_depend>yumi_description</run_depend>
+
+  <build_depend>roscpp</build_depend>
+  <run_depend>roscpp</run_depend>
+  <build_depend>moveit_ros_planning_interface</build_depend>
+  <run_depend>moveit_ros_planning_interface</run_depend>
+  <build_depend>geometry_msgs</build_depend>
+  <run_depend>geometry_msgs</run_depend>
+  <build_depend>std_msgs</build_depend>
+  <run_depend>std_msgs</run_depend>
+
+  <build_depend>message_generation</build_depend>
+  <run_depend>message_runtime</run_depend>
+  <build_depend>rosbag</build_depend>
+  <run_depend>rosbag</run_depend>
+
+  <buildtool_depend>catkin</buildtool_depend>
+  
+</package>

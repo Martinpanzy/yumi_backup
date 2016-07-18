@@ -37,7 +37,7 @@ int main(int argc,char **argv) {
 	std::string output_fileName; // initialize variable to store the full path for the output file
 	std::string output_fileName_joints; // initialize variable to store the full path for the output file for outputting joint values if both joints values and poses are desired for output
 	std::string output_fileName_poses; // initialize variable to store the full path for the output file for outputting poses if both joints values and poses are desired for output
-	std::string output_filePath = "/home/yumi/yumi_ws/src/yumi/yumi_moveit_config/paths/"; // initializing an output file with default name
+	std::string output_filePath = "/home/yumi/yumi_ws/src/yumi/yumi_scripts/paths/"; // initializing an output file with default name
 
 	int desiredGroup = -1; // indicates which arm should be used for outputting joints/points: 1) left arm, 2) right arm, 3) both arms
 	int outputType = -1; // indicates what function type to call: 1) joints, 2) points, 3) all

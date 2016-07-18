@@ -10,10 +10,12 @@ flag_argError=false; # create flag to indicate if input arguments were valid
 flag_twoGrippers=false; # flag to indicate if two grippers argument has already been set
 flag_stateServersOnly=false; # flag to indicate if state servers only argument has already been set
 flag_ipAddress=false; # flag to inficate if the ip address argument has already been set
+total_arguments=0; # indicate the total arguments passed
 
 # Iterate Through Provided Arguments
 for argument in "$@"; do # for all provided arguments
 	if [ "$argument" == "state_servers_only" ]; then # if the user would like to only run the state servers
+		((total_arguments++)); # increment the passed argument count
 		if [ $flag_stateServersOnly = false ]; then # if this argument has not been set yet
 			echo "Running only the state servers." # notify the user that the argument has been received
 			runCommand="$runCommand state_servers_only:=true"; # add argument to the run command
@@ -22,6 +24,7 @@ for argument in "$@"; do # for all provided arguments
 			echo "Already set the argument for state_servers_only." # notify the user that this argument has already been set
 		fi
 	elif [ "$argument" == "two_grippers" ]; then # if the user is using two gripperson YuMi
+		((total_arguments++)); # increment the passed argument count
 		if [ $flag_twoGrippers = false ]; then # if this argument has not been set yet
 			echo "Assuming using two grippers." # notify the user that the argument has been received
 			runCommand="$runCommand two_grippers:=true"; # add argument to the run command
@@ -30,6 +33,7 @@ for argument in "$@"; do # for all provided arguments
 			echo "Already set the argument for two_grippers." # notify the user that this argument has already been set
 		fi
 	elif [[ "$argument" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then # if the user would like to specify the IP of YuMi
+		((total_arguments++)); # increment the passed argument count
 		if [ $flag_ipAddress = false ]; then  # if this argument has not been set yet
 			echo "Setting robot interface node IP address to $argument." # notify the user that the argument has been received
 			runCommand="$runCommand robot_ip:=$argument"; # add argument to the run command
@@ -43,6 +47,13 @@ for argument in "$@"; do # for all provided arguments
 		break; # break from the loop
 	fi
 done
+
+# Check if no arguments were passed
+if [ $total_arguments -eq 0 ]; then # if no arguments were passed
+	echo "No arguments were passed. Assuming YuMi has camera assembly and one gripper, and running both state and motion servers." # notfiy the user of the effects of not passing any arguments
+	echo "To run only the state server, command: state_servers_only" # notify the user the command for loading rviz on execution
+	echo "To load two grippers, command: two_grippers" # notify the user the command for loading two grippers on execution
+fi
 
 # Check if All Arguments Were Valid
 if [ $flag_argError = false ]; then # if all arguments were valid
