@@ -1,10 +1,11 @@
-#include <ros/ros.h> // allow ROS commands
-#include <moveit/move_group_interface/move_group.h> // allow MoveIt! commands
-#include <geometry_msgs/Pose.h> // allow pose for move group functionality
-#include <std_msgs/String.h> // allow string messages
-#include <sstream> // allow string streams
 #include <fstream> // allow file streaming
 #include <regex> // allow regular expressions
+#include <sstream> // allow string streams
+#include <std_msgs/String.h> // allow string messages
+
+#include <geometry_msgs/Pose.h> // allow pose for move group functionality
+#include <moveit/move_group_interface/move_group.h> // allow MoveIt! commands
+#include <ros/ros.h> // allow ROS commands
 
 // Namespace Commands and Variables
 using namespace ros; // using ROS namespace
@@ -82,6 +83,13 @@ int main(int argc,char **argv) {
 	fullPath << output_filePath << argv[1] << ".txt"; // concatenate full path
 	output_fileName = fullPath.str(); // store the full path
 
+	// Check if Desire Output File Already Exists
+	if (std::ifstream(output_fileName)) { // if the desired output file already exists
+	     ROS_ERROR("Provided output file name already exists. Please use another name or delete the existing file."); // notify the user that the file already exists
+	     ROS_WARN("Provided output file path: %s", output_fileName.c_str()); // notify the user of the full path of the desired output file
+	     return 1; // exit the program due to error
+	}
+
 	init(argc,argv,"lead_through"); // initialize ROS node
 
 	// Define Move Groups
@@ -94,12 +102,19 @@ int main(int argc,char **argv) {
 	NodeHandle nh; // initialize a node handle
 	Subscriber sub = nh.subscribe("lead_through_commands",1000,commandCallback); // subscribe to "lead_through_comamnds" topic
 
+	ROS_INFO(">--------------------"); // add a spacer in output window to make important information stand out 
+
 	// Get Proper File Names and Add Header to File
 	std::vector<std::string> output_fileNames = addOutputHeader(outputType, desiredGroup, output_fileName); // add header to the output file
 	if (outputType == 3) { // if the user would like to output both the joint values and poses
 		output_fileName_joints = output_fileNames[0]; // store the file name for outputting joint values
 		output_fileName_poses = output_fileNames[1]; // store the file name for outputting poses
 	}
+
+	// Notify User the Program is Ready to Accept Commands
+	ROS_INFO("Program ready to accept commands. Run the following command to store position."); // notify the user that program is ready to accept commands
+	ROS_INFO("Command: rostopic pub /lead_through_commands std_msgs/String $position_name"); // notify the user of the command to use for sending command to store current position
+	ROS_INFO(">--------------------"); // add a spacer in output window to make important information stand out 
 	
 	// Write Positions/Joints to File
 	while(ok()) { // while the ROS node is still in good condition

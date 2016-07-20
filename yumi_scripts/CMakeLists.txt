@@ -4,9 +4,9 @@ project(yumi_scripts)
 find_package(catkin REQUIRED COMPONENTS
 	roscpp
 	moveit_ros_planning_interface
+	message_generation
 	geometry_msgs
 	std_msgs
-	message_generation
 	rosbag
 )
 
@@ -22,17 +22,21 @@ catkin_package(CATKIN_DEPENDS
 	message_runtime
 )
 
-install(DIRECTORY launch DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
-install(DIRECTORY config DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION})
+install(
+	DIRECTORY launch config
+	DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
 
 include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(demo_script src/demo_script.cpp)
-target_link_libraries(demo_script ${catkin_LIBRARIES})
+add_executable(test_script src/test.cpp)
+target_link_libraries(test_script ${catkin_LIBRARIES})
+
 add_executable(lead_through src/lead_through_script_generator.cpp)
 target_link_libraries(lead_through ${catkin_LIBRARIES})
+
 add_executable(run_lead_through src/run_lead_through_script.cpp)
 target_link_libraries(run_lead_through ${catkin_LIBRARIES})
 

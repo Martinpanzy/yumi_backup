@@ -89,8 +89,8 @@ std::vector<double> computeIK(ServiceClient serviceIK, trajectoryPoses& pose_tra
 	moveit_msgs::GetPositionIK::Response serviceResponse;
 	
 	std::vector<geometry_msgs::PoseStamped> poseStamped(2);
-	std::string left_arm_eef  = left_arm.getEndEffector();
-	std::string right_arm_eef = right_arm.getEndEffector();
+	std::string left_arm_eef  = left_arm.getEndEffectorLink();
+	std::string right_arm_eef = right_arm.getEndEffectorLink();
 	
 	geometry_msgs::PoseStamped poseStamped_left;
 	geometry_msgs::PoseStamped poseStamped_right;
@@ -114,6 +114,46 @@ std::vector<double> computeIK(ServiceClient serviceIK, trajectoryPoses& pose_tra
 	serviceRequest.ik_request.robot_state.joint_state.name     = joint_names;
 	serviceRequest.ik_request.robot_state.joint_state.position = currentJointValues;
 	serviceRequest.ik_request.pose_stamped_vector = poseStamped;
+	
+	ROS_INFO("Working 2");
+	
+	serviceIK.call(serviceRequest,serviceResponse);
+	
+	ROS_INFO("Working 3");
+	
+	std::vector<double> jointValues     = serviceResponse.solution.joint_state.position;
+	std::vector<std::string> jointNames = serviceResponse.solution.joint_state.name;
+	for (int joint = 0; joint < jointValues.size(); joint++) {
+		ROS_INFO("Joint %s: %.4f",jointNames[joint].c_str(),jointValues[joint]);
+	}
+	
+	ROS_INFO("Joint value size %lu",jointValues.size());
+	ROS_INFO("Error code: %d",serviceResponse.error_code);
+	
+	return jointValues;
+}
+
+std::vector<double> computeIK(ServiceClient serviceIK, planningInterface::MoveGroup& group, geometry_msgs::Pose pose_unstamped, std::vector<int> confdata) {
+
+	std::string end_effector = group.getEndEffectorLink();
+	std::vector<std::string> joint_names = group.getActiveJoints();
+	
+	geometry_msgs::PoseStamped pose;
+	pose.header.frame_id  = end_effector;
+	pose.pose = pose_unstamped;
+	
+	ROS_INFO("Working 1");
+	
+	moveit_msgs::GetPositionIK::Request serviceRequest;
+	moveit_msgs::GetPositionIK::Response serviceResponse;
+
+	serviceRequest.ik_request.group_name       = "both_arms";
+	serviceRequest.ik_request.avoid_collisions = true;
+	serviceRequest.ik_request.attempts         = 10;
+	serviceRequest.ik_request.constraints      = setAxisConfigurations(group, confdata);
+	serviceRequest.ik_request.robot_state.joint_state.name     = joint_names;
+	serviceRequest.ik_request.robot_state.joint_state.position = currentJointValues;
+	serviceRequest.ik_request.pose_stamped = pose;
 	
 	ROS_INFO("Working 2");
 	
