@@ -62,9 +62,9 @@
       <group name="left_arm"/>
       <group name="right_arm"/>
     </group>
-
-    <end_effector name="right_end_effector" parent_link="yumi_link_7_r" group="right_arm"/>
-    <end_effector name="left_end_effector" parent_link="yumi_link_7_l" group="left_arm"/>
+    
+    <end_effector name="right_end_effector" parent_link="yumi_link_7_r" group="both_arms"/>
+    <end_effector name="left_end_effector" parent_link="yumi_link_7_l" group="both_arms"/>
 
 
     <!--==================================-->

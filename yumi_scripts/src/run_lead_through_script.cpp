@@ -7,6 +7,8 @@
 
 #include <boost/foreach.hpp>
 #include <geometry_msgs/Pose.h> // include pose for move group functionality
+#include <moveit/kinematics_base/kinematics_base.h>
+#include <moveit/kdl_kinematics_plugin/kdl_kinematics_plugin.h>
 #include <moveit/kinematic_constraints/utils.h>
 #include <moveit/move_group_interface/move_group.h> // include move group functionality
 #include <moveit/planning_interface/planning_interface.h>
@@ -21,11 +23,13 @@
 #include <moveit_msgs/PlanningScene.h>
 #include <moveit_msgs/RobotTrajectory.h> // include robot trajectory
 #include <moveit_msgs/RobotState.h>
+#include <pluginlib/class_loader.h>
 #include <ros/ros.h> // include node functionality
 #include <rosbag/bag.h> // allow rosbag functionality
 #include <rosbag/view.h> // allow rosbag loading functionality
 
 #include <yumi_scripts/PrePlan.h> // include custom message for planner
+
 
 // Define Global Constants
 const double gripper_open_position = 0.024; // gripper open position (m)
@@ -41,8 +45,8 @@ namespace moveitCore = moveit::core; // define commonly used namespace for plann
 struct planner {
 	std::string groupName; // include group name
 	std::vector<planningInterface::MoveGroup::Plan> plans; // include vector to retrieve planned paths for trajectory points
-	bool success; // include boolean to retrieve whether the planner was successful or not
 	int totalPlans; // include count of total plans
+	bool success; // include boolean to retrieve whether the planner was successful or not
 };
 
 struct trajectoryJoints {
@@ -63,7 +67,9 @@ struct trajectoryPoses {
 	std::vector<double> gripperPos_left; // include gripper values for the trajectory for the left arm
 	std::vector<double> gripperPos_right; // include gripper values for the trajectory for the right arm
 	std::vector<std::vector<int>> confdata_left; // include axis configuration data for the left arm
-	std::vector<std::vector<int>> confdata_right; // include axis configuration data for the right arm
+	std::vector<std::vector<int>> confdata_right; // include axis configuration data for the right arm	
+	std::vector<double> joint_7_positions_left;
+	std::vector<double> joint_7_positions_right;
 	int totalPoints; // include count of total trajectory points
 };
 
@@ -74,6 +80,7 @@ struct RAPIDModuleData {
 	std::vector<std::vector<int>> confdata;
 	std::vector<double> joint7_positions;
 	std::vector<bool> gripper_positions;
+	bool only_move_sync = true;
 	int totalPoints;
 };
 
@@ -96,7 +103,7 @@ std::vector<double> computeIK(ServiceClient, planningInterface::MoveGroup&, geom
 std::vector<double> computeIK(ServiceClient, planningInterface::MoveGroup&, geometry_msgs::Pose, double);
 std::vector<double> computeIK(ServiceClient, planningInterface::MoveGroup&, geometry_msgs::Pose);
 moveit_msgs::MotionPlanResponse preplanTrajectory(planningInterface::MoveGroup&, geometry_msgs::Pose, std::vector<int>, ros::NodeHandle);
-moveit_msgs::Constraints setAxisConfigurations(planningInterface::MoveGroup&, std::vector<int>, double, bool debug = false);
+moveit_msgs::Constraints setAxisConfigurations(planningInterface::MoveGroup&, std::vector<int>, double, std::vector<double>&, bool debug = false);
 moveit_msgs::Constraints setExternalAxisConstraint(double);
 
 RAPIDModuleData getYuMiLeadThroughData(std::string, bool debug = false);
@@ -147,14 +154,48 @@ int main(int argc,char **argv) {
 	AsyncSpinner spinner(1);
 	spinner.start();
 
-
-	planningInterface::MoveGroup right_arm("right_arm");
-	right_arm.getCurrentJointValues();
-	right_arm.getCurrentPose();
+	// Initialize Move Groups
 	planningInterface::MoveGroup left_arm("left_arm");
-	left_arm.getCurrentJointValues();
+	left_arm.startStateMonitor();
+	planningInterface::MoveGroup right_arm("right_arm");
+	right_arm.startStateMonitor();
 	planningInterface::MoveGroup both_arms("both_arms");
-	both_arms.getCurrentJointValues();
+	both_arms.startStateMonitor();
+
+	// std::vector<planningInterface::MoveGroup> *move_groups(3);
+	// move_groups[0] = &left_arm;
+	// move_groups[1] = &right_arm;
+	// move_groups[2] = &both_arms;
+
+	int total_allowed_arguments = 8;
+	while (true) {
+		std::vector<std::string> inputs(total_allowed_arguments,"");
+
+		std::string input;
+		getline(std::cin, input);
+		std::istringstream input_stream(input);
+
+		int argument = 0;
+		while ((input_stream >> inputs[argument]) && (argument < total_allowed_arguments)) {
+			ROS_INFO("Argument %d: %s", argument+1, inputs[argument].c_str());
+			argument++;
+		}
+
+		if (inputs[0].compare("exit") == 0) {
+			break;
+		} else if (inputs[0].compare("help") == 0) {
+			ROS_INFO("List of allowed arguments:");
+			ROS_INFO("module <file_name> <move_group> <execute> <save>");
+			ROS_INFO("module <file_name_1> <move_group_1> two_arms <file_name_2> <move_group_2> <execute> <save>");
+			ROS_INFO("file <file_name> <move_group> <execute> <save>");
+			ROS_INFO(" ");
+			ROS_INFO("File names should NOT include file extensions (*.txt, *.mod, etc.)");
+			ROS_INFO("<execute> and <save> must be either \"true\" or \"false\".");
+			ROS_INFO("  - They indicate if the trajectories should be executed and/or saved respectively.");
+			ROS_INFO("To exit the program, type: \"exit\"");
+		} 
+	}
+
 
 	// // both_arms.startStateMonitor();
 	// sleep(0.5);
@@ -166,6 +207,77 @@ int main(int argc,char **argv) {
 	ros::ServiceClient service_client = node_handle.serviceClient<moveit_msgs::GetPositionIK>("compute_ik");
 
 	std::string file_name = argv[1];
+
+	//kdl_kinematics_plugin::KDLKinematicsPlugin *ik_right = new kdl_kinematics_plugin::KDLKinematicsPlugin;
+
+	// boost::shared_ptr<pluginlib::ClassLoader<kinematics::KinematicsBase>> kinematics_loader;
+	// kinematics::KinematicsBasePtr ik_right;
+
+	// kinematics_loader.reset(new pluginlib::ClassLoader<kinematics::KinematicsBase>("moveit_core", "kinematics::KinematicsBase"));
+
+ //    // instantiate our plugin
+ //    std::string plugin_name = "kdl_kinematics_plugin/KDLKinematicsPlugin";
+ //    try
+ //    {
+ //      ik_right = kinematics_loader->createInstance(plugin_name);
+ //    }
+ //    catch(pluginlib::PluginlibException& ex)//handle the class failing to load
+ //    {
+ //      ROS_ERROR("The plugin failed to load. Error: %s", ex.what());
+ //      return false;
+ //    }
+
+	// bool success; 
+	// success = ik_right->initialize("/robot_description", "right_arm", right_arm.getPoseReferenceFrame(), right_arm.getEndEffectorLink(), 0.001);
+	// ROS_INFO("IK initialize status: %s", success?"success":"failed");
+
+	// trajectoryJoints jointTrajectory;
+	// trajectoryPoses poseTrajectory;
+
+	// std::string dataType = getFileDataType(inputFile);
+	// if (dataType.compare("joints") == 0) {
+	// 	jointTrajectory = getTrajectoryJoints(right_arm, inputFile);
+	// } else if (dataType.compare("poses") == 0) {
+	// 	poseTrajectory = getTrajectoryPoses(right_arm, inputFile);
+	// }
+
+	// const double PI = 3.1416;
+	// std::vector<double> seed;
+	// std::vector<double> consistency(8);
+	// std::vector<double> solution;
+	// moveit_msgs::MoveItErrorCodes error_code;
+
+	// for (int joint = 0; joint < consistency.size(); joint++) {
+	// 	if ((joint == 0) || (joint == 4) || (joint == 6)) {
+	// 		consistency[joint] = PI/4;
+	// 	} else if (joint == 2) {
+	// 		consistency[joint] = PI/32;
+	// 	} else {
+	// 		consistency[joint] = PI;
+	// 	}
+	// }
+
+	// std::vector<std::vector<int>> confdata;
+	// std::vector<double> joint_7_positions;
+
+	// std::vector<int> confdata_entry(3);
+	// confdata_entry[0] = 0;
+	// confdata_entry[1] = -2;
+	// confdata_entry[2] = -1;
+	// confdata.push_back(confdata_entry);
+	// joint_7_positions.push_back(-1.2217);
+
+	// setAxisConfigurations(right_arm, confdata[0], joint_7_positions[0], seed, true);
+
+	// success = ik_right->searchPositionIK(poseTrajectory.pose_right[0], seed, 5.0, consistency, solution, error_code); // 5.0, consistency, 
+	// ROS_INFO("IK calculation status: %s", success?"success":"failed");
+
+	// for (int joint = 0; joint < solution.size(); joint++) {
+	// 	ROS_INFO("Joint value: %.4f", solution[joint]);
+	// }
+
+	// gotoJoints(right_arm, solution);
+
 
 	// geometry_msgs::PoseStamped pose_stamped;
 	// geometry_msgs::Pose pose;
@@ -219,59 +331,89 @@ int main(int argc,char **argv) {
 
 
 
-	planner plans;
-	trajectoryJoints jointTrajectory;
-	trajectoryPoses poseTrajectory;
 
-	std::string dataType = getFileDataType(inputFile);
-	if (dataType.compare("joints") == 0) {
-		jointTrajectory = getTrajectoryJoints(right_arm, inputFile);
-	} else if (dataType.compare("poses") == 0) {
-		poseTrajectory = getTrajectoryPoses(right_arm, inputFile);
-	}
 
-	std::vector<std::vector<int>> confdata;
-	std::vector<double> joint_7_positions;
 
-	std::vector<int> confdata_entry(3);
-	confdata_entry[0] = 0;
-	confdata_entry[1] = -2;
-	confdata_entry[2] = -1;
-	confdata.push_back(confdata_entry);
-	joint_7_positions.push_back(-1.2217);
 
-	confdata_entry[0] = 0;
-	confdata_entry[1] = -1;
-	confdata_entry[2] = -2;
-	confdata.push_back(confdata_entry);
-	joint_7_positions.push_back(-1.7453);
+	// planner plans;
+	// trajectoryJoints jointTrajectory;
+	// trajectoryPoses poseTrajectory;
 
-	confdata_entry[0] = 0;
-	confdata_entry[1] = -2;
-	confdata_entry[2] = -1;
-	confdata.push_back(confdata_entry);
-	joint_7_positions.push_back(-1.2217);
+	// std::string dataType = getFileDataType(inputFile);
+	// if (dataType.compare("joints") == 0) {
+	// 	jointTrajectory = getTrajectoryJoints(right_arm, inputFile);
+	// } else if (dataType.compare("poses") == 0) {
+	// 	poseTrajectory = getTrajectoryPoses(right_arm, inputFile);
+	// }
 
-	std::vector<std::string> group_states(3);
-	group_states[0] = "ready";
-	group_states[1] = "home";
-	group_states[2] = "ready";
+	// std::vector<std::vector<int>> confdata;
+	// std::vector<double> joint_7_positions;
 
-	for (int point = 0; point < poseTrajectory.totalPoints; point++) {
-		ROS_INFO("Position: %.4f, %.4f, %.4f | Orientation: %.4f, %.4f, %.4f, %.4f",
-			poseTrajectory.pose_right[point].position.x, poseTrajectory.pose_right[point].position.y, poseTrajectory.pose_right[point].position.z, 
-			poseTrajectory.pose_right[point].orientation.w, poseTrajectory.pose_right[point].orientation.x, poseTrajectory.pose_right[point].orientation.y, poseTrajectory.pose_right[point].orientation.z);
-		std::vector<double> joint_values_3 = computeIK(service_client, right_arm, poseTrajectory.pose_right[point], confdata[point], joint_7_positions[point]);
-		ROS_INFO("--------------------");
-		std::vector<double> joint_values_4 = computeIK(service_client, right_arm, poseTrajectory.pose_right[point]);
-		//preplanTrajectory(right_arm, module.poses[point], module.confdata[point], node_handle);
-		// gotoPose(right_arm, poseTrajectory.pose_right[point]);
-		// sleep(4);
-		// gotoGroupState(right_arm, group_states[point]);
-		// sleep(4);
-		//sleep(2);
-		ROS_INFO("====================");
-	}
+	// std::vector<int> confdata_entry(3);
+	// confdata_entry[0] = 0;
+	// confdata_entry[1] = -2;
+	// confdata_entry[2] = -1;
+	// confdata.push_back(confdata_entry);
+	// joint_7_positions.push_back(-1.2217);
+
+	// confdata_entry[0] = 0;
+	// confdata_entry[1] = -1;
+	// confdata_entry[2] = -2;
+	// confdata.push_back(confdata_entry);
+	// joint_7_positions.push_back(-1.7453);
+
+	// confdata_entry[0] = 0;
+	// confdata_entry[1] = -2;
+	// confdata_entry[2] = -1;
+	// confdata.push_back(confdata_entry);
+	// joint_7_positions.push_back(-1.2217);
+
+	// std::vector<std::string> group_states(3);
+	// group_states[0] = "ready";
+	// group_states[1] = "home";
+	// group_states[2] = "ready";
+
+	// for (int point = 0; point < poseTrajectory.totalPoints; point++) {
+	// 	ROS_INFO("Position: %.4f, %.4f, %.4f | Orientation: %.4f, %.4f, %.4f, %.4f",
+	// 		poseTrajectory.pose_right[point].position.x, poseTrajectory.pose_right[point].position.y, poseTrajectory.pose_right[point].position.z, 
+	// 		poseTrajectory.pose_right[point].orientation.w, poseTrajectory.pose_right[point].orientation.x, poseTrajectory.pose_right[point].orientation.y, poseTrajectory.pose_right[point].orientation.z);
+	// 	std::vector<double> joint_values_3 = computeIK(service_client, right_arm, poseTrajectory.pose_right[point], confdata[point], joint_7_positions[point]);
+	// 	ROS_INFO("--------------------");
+	// 	std::vector<double> joint_values_4 = computeIK(service_client, right_arm, poseTrajectory.pose_right[point]);
+
+	// 	if (joint_values_3.size() > 0) {
+
+	// 		int currentJoint = 0;
+	// 		std::vector<double> joint_values(8);
+	// 		for (int joint = 0; joint < joint_values_3.size(); joint++) {
+	// 			if (((joint > 8) && (joint < 16)) || (joint == 17)) {
+	// 				joint_values[currentJoint] = joint_values_3[joint];
+	// 				ROS_INFO("Joint value: %.4f", joint_values[currentJoint]);
+	// 				currentJoint++;
+	// 			}
+	// 		}
+
+	// 		gotoJoints(right_arm, joint_values_3);
+	// 		sleep(5);
+	// 		gotoGroupState(right_arm, group_states[point]);
+	// 		sleep(5);
+	// 		gotoJoints(right_arm, joint_values_3);
+	// 		sleep(5);
+	// 	}
+	// 	//preplanTrajectory(right_arm, module.poses[point], module.confdata[point], node_handle);
+	// 	// gotoPose(right_arm, poseTrajectory.pose_right[point]);
+	// 	// sleep(4);
+	// 	// gotoGroupState(right_arm, group_states[point]);
+	// 	// sleep(4);
+	// 	//sleep(2);
+	// 	ROS_INFO("====================");
+	// }
+
+
+
+
+
+
 
 	// dataType = getFileDataType(inputFile);
 	// if (dataType.compare("joints") == 0) {
@@ -414,8 +556,15 @@ std::vector<double> computeIK(ServiceClient serviceIK, planningInterface::MoveGr
 	std::vector<double> tolerance_pose(3, 0.001);
 	std::vector<double> tolerance_angle(3, 0.001);
 	moveit_msgs::Constraints pose_constraints  = kinematic_constraints::constructGoalConstraints(group.getEndEffectorLink(), pose, tolerance_pose, tolerance_angle);
-	moveit_msgs::Constraints joint_constraints = setAxisConfigurations(group, confdata, joint_7_position, true);
+	moveit_msgs::Constraints joint_constraints = setAxisConfigurations(group, confdata, joint_7_position, currentJointValues, true);
 	moveit_msgs::Constraints goal_constraints  = kinematic_constraints::mergeConstraints(pose_constraints, joint_constraints);
+
+	ROS_INFO("--------------------");
+	ROS_INFO("Seed Joint Values");
+	for (int i = 0; i < currentJointValues.size(); i++) {
+		ROS_INFO("Joint: %s | Seed: %.4f", joint_names[i].c_str(), currentJointValues[i]);
+	}
+	ROS_INFO("--------------------");
 
 	serviceRequest.ik_request.group_name       = group.getName();
 	serviceRequest.ik_request.avoid_collisions = true;
@@ -438,7 +587,7 @@ std::vector<double> computeIK(ServiceClient serviceIK, planningInterface::MoveGr
 	}
 	
 	ROS_INFO("Joint value size %lu",jointValues.size());
-	ROS_INFO("Error code: %d",serviceResponse.error_code);
+	ROS_INFO("Error code: %d",serviceResponse.error_code.val);
 	
 	return jointValues;
 }
@@ -530,7 +679,7 @@ std::vector<double> computeIK(ServiceClient serviceIK, planningInterface::MoveGr
 	}
 	
 	ROS_INFO("Joint value size: %lu", jointValues.size());
-	ROS_INFO("Error code: %d", serviceResponse.error_code);
+	ROS_INFO("Error code: %d", serviceResponse.error_code.val);
 	
 	return jointValues;
 }
@@ -580,7 +729,7 @@ std::vector<double> computeIK(ServiceClient serviceIK, planningInterface::MoveGr
 // }
 
 
-moveit_msgs::Constraints setAxisConfigurations(planningInterface::MoveGroup& group, std::vector<int> confdata, double joint_7_position, bool debug) {
+moveit_msgs::Constraints setAxisConfigurations(planningInterface::MoveGroup& group, std::vector<int> confdata, double joint_7_position, std::vector<double>& joint_values_seed, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
 	DATE CREATED: 2016-07-02
 
@@ -597,6 +746,7 @@ moveit_msgs::Constraints setAxisConfigurations(planningInterface::MoveGroup& gro
 
 	std::string group_name = group.getName(); // get the name of the provided group
 	std::vector<std::string> active_joint_names = group.getActiveJoints(); // get the names of all the active joints
+	std::vector<double> joint_values = group.getCurrentJointValues();
 
 	// Add Joint Constraints for Axis 1, 4, and 6
 	moveit_msgs::Constraints goal_constraints;
@@ -606,7 +756,9 @@ moveit_msgs::Constraints setAxisConfigurations(planningInterface::MoveGroup& gro
 		joint_constraint.position        = (confdata[constraint] * PI/2) + TOLERANCE_CF146 - 0.01;
 		joint_constraint.tolerance_above = TOLERANCE_CF146;
 		joint_constraint.tolerance_below = TOLERANCE_CF146;
-		joint_constraint.weight          = WEIGHT; 
+		joint_constraint.weight          = WEIGHT;
+
+		joint_values[config_joints[constraint]] = joint_constraint.position;
 
 		if (debug) {
 			ROS_INFO("Name: %s, Window: %.4f to %.4f", joint_constraint.joint_name.c_str(), joint_constraint.position-TOLERANCE_CF146, joint_constraint.position+TOLERANCE_CF146);
@@ -623,6 +775,8 @@ moveit_msgs::Constraints setAxisConfigurations(planningInterface::MoveGroup& gro
 	joint_constraint.tolerance_below = TOLERANCE_AXIS_7;
 	joint_constraint.weight          = WEIGHT; 
 
+	joint_values[2] = joint_constraint.position;
+
 	if (debug) {
 		ROS_INFO("Name: %s, Window: %.4f to %.4f", joint_constraint.joint_name.c_str(), joint_constraint.position-TOLERANCE_AXIS_7, joint_constraint.position+TOLERANCE_AXIS_7);
 	}
@@ -634,6 +788,7 @@ moveit_msgs::Constraints setAxisConfigurations(planningInterface::MoveGroup& gro
 		// Need to add code for CFX from confdata
 	}
 
+	joint_values_seed = joint_values;
 	return goal_constraints;
 }
 
@@ -687,6 +842,8 @@ trajectoryPoses convertRAPIDtoPoseTrajectory(RAPIDModuleData& left_module, RAPID
 RAPIDModuleData getYuMiLeadThroughData(std::string file_name, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
 	DATE CREATED: 2016-07-07
+
+	ASSUMPTIONS: Modules do not start with a OpenHand or CloseHand command.
 */
 	// Initialize Variables
 	std::string line; // variable to retrieve each line of text from the input file
@@ -775,8 +932,18 @@ RAPIDModuleData getYuMiLeadThroughData(std::string file_name, bool debug) {
 						current_line >> move_point_name;
 						move_point_name = move_point_name.substr(0, move_point_name.length()-1);
 					} else if (data_type.compare("OpenHand;") == 0) {
+						if (execution_line == 1) {
+							ROS_ERROR("The first command cannot be \"OpenHand\". ");
+							success = false;
+							break;
+						}
 						gripper_position = 1;
 					} else if (data_type.compare("CloseHand;") == 0) {
+						if (execution_line == 1) {
+							ROS_ERROR("The first command cannot be \"CloseHand\". ");
+							success = false;
+							break;
+						}
 						gripper_position = 0;
 					}
 					move_point_names.push_back(move_point_name);
@@ -800,9 +967,10 @@ RAPIDModuleData getYuMiLeadThroughData(std::string file_name, bool debug) {
 		if (debug) { ROS_INFO(" ===================="); }
 		ROS_INFO("Storing trajectory. Total trajectory points to store: %lu", move_point_names.size());
 
-		module.moduleName  = module_name;
-		module.pose_names  = move_point_names;
-		module.totalPoints = move_point_names.size();
+		module.moduleName     = module_name;
+		module.pose_names     = move_point_names;
+		module.totalPoints    = move_point_names.size();
+		//module.only_move_sync = only_move_sync;
 
 		int stored_location;
 		int total_stored_points = store_point_names.size();
@@ -915,6 +1083,7 @@ void getRobtargetData(std::string robtarget, geometry_msgs::Pose& pose, std::vec
    -------- BAG READNG/WRITING FUNCTIONS ---------
    ----------------------------------------------- */
 void createBag(std::string bagName, std::string topicName, planner& plan) {
+	// check if bag name is empty
 
 	/* =============================================== */
 	/* NEED TO ENSURE .bag IS NOT INCLUDED IN BAG NAME */
@@ -948,6 +1117,7 @@ void createBag(std::string bagName, std::string topicName, planner& plan) {
 }
 
 planner retrieveBag(std::string bagName, std::string topicName) {
+	// Need to check if provided topic exists
 
 	// Notify User of Retrieving a Bag
 	bagName = yumiScriptsDirectory + "bags/" + bagName + ".bag";

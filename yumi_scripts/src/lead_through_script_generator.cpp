@@ -73,7 +73,7 @@ int main(int argc,char **argv) {
 		else if (strcmp(argv[3],"both") == 0) { outputType = 3; } // if the output type argument is all
 		else { // if the output type argument is not recognized
 			ROS_INFO("Input for desired output type is not recognized."); // notify the user that the argument is not recognized
-			ROS_INFO("List of valid inputs: joints, pose, all"); // provide the user with a list of arguments that are recognized
+			ROS_INFO("List of valid inputs: joints, pose, both"); // provide the user with a list of arguments that are recognized
 			return 1; // exit due to error
 		}
 	}

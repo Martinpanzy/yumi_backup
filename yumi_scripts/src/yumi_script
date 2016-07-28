@@ -1,0 +1,1045 @@
+using namespace ros;
+namespace planningInterface = moveit::planning_interface;
+
+// GLOBAL CONSTANTS
+const double gripper_open_position = 0.024; // gripper open position (m)
+const double gripper_closed_position = 0.0; // gripper closed position (m)
+const std::string yumiScriptsDirectory = "/home/yumi/yumi_ws/src/yumi/yumi_scripts/"; // full path to folder where trajectory text files should be stored
+
+// STRUCTURES
+struct poseConfig {
+	geometry_msgs::Pose pose;
+	double gripper_position;
+	std::vector<int> confdata;
+	double external_axis_position;
+};
+
+struct trajectoryPoses {
+	std::string group_name;
+	std::string intended_group;
+	std::vector<poseConfig> pose_configs_left;
+	std::vector<poseConfig> pose_configs_right;
+	bool gripper_attached_left  = false;
+	bool gripper_attached_right = false; 
+	int total_points;
+};
+
+struct RAPIDModuleData {
+	std::string group_name;
+	std::string module_name;
+	std::vector<std::string> pose_names;
+	std::vector<poseConfig> poses_configs;
+	int total_points;
+};
+
+struct trajectoryJoints {
+	std::string group_name;
+	std::string intended_group;
+	int total_joints;
+	std::vector<std::vector<double>> joints;
+	int total_points;
+};
+
+struct planner {
+	std::string groupName; // include group name
+	std::vector<planningInterface::MoveGroup::Plan> plans; // include vector to retrieve planned paths for trajectory points
+	int totalPlans; // include count of total plans
+	bool success; // include boolean to retrieve whether the planner was successful or not
+};
+
+int main(int argc,char **argv) {
+
+	// INITIALIZE ROS NODE AND SPINNERS
+	init(argc,argv,"run_lead_through");
+	NodeHandle node_handle;
+	AsyncSpinner spinner(1);
+	spinner.start();
+
+	// INITIALIZE VARIABLES
+	bool debug = false;
+	std::string end_effector_left    = "yumi_link_7_l";
+	std::string end_effector_right   = "yumi_link_7_r";
+	std::string pose_reference_frame = "yumi_body";
+	int total_allowed_arguments = 9;
+	std::string rosbag_topic_name = "plans";
+
+	// INITIALIZE MOVE GROUPS FOR THE LEFT ARM, RIGHT ARM, AND BOTH ARMS
+	planningInterface::MoveGroup left_arm("left_arm");
+	left_arm.startStateMonitor();
+	planningInterface::MoveGroup right_arm("right_arm");
+	right_arm.startStateMonitor();
+	planningInterface::MoveGroup both_arms("both_arms");
+	both_arms.startStateMonitor();
+
+	std::vector<planningInterface::MoveGroup> *move_groups(3);
+	move_groups[0] = &left_arm; // store a pointer to the left_arm group
+	move_groups[1] = &right_arm; // store a pointer to the right_arm group
+	move_groups[2] = &both_arms; // store a pointer to the both_arms group
+
+	// SET MOVE GROUP REFRENCE FRAMES AND END EFFECTORS
+	left_arm.setPoseReferenceFrame(pose_reference_frame);
+	right_arm.setPoseReferenceFrame(pose_reference_frame);
+	both_arms.setPoseReferenceFrame(pose_reference_frame);
+
+	left_arm.setEndEffectorLink(end_effector_left);
+	right_arm.setEndEffectorLink(end_effector_right);
+
+	// INITIALIZE IK SERVICES FOR EACH ARM
+	boost::shared_ptr<pluginlib::ClassLoader<kinematics::KinematicsBase>> kinematics_loader;
+	kinematics::KinematicsBasePtr ik_left;
+	kinematics::KinematicsBasePtr ik_right;
+
+	kinematics_loader.reset(new pluginlib::ClassLoader<kinematics::KinematicsBase>("moveit_core", "kinematics::KinematicsBase"));
+	std::string plugin_name = "kdl_kinematics_plugin/KDLKinematicsPlugin";
+	try {
+		ik_left  = kinematics_loader->createInstance(plugin_name);
+		ik_right = kinematics_loader->createInstance(plugin_name);
+	} catch (pluginlib::PluginlibException& ex) {
+		ROS_ERROR("The plugin failed to load. Error: %s", ex.what());
+		return 1;
+	}
+
+	bool success_ik_left, success_ik_right; 
+	success_ik_left  = ik_left->initialize("/robot_description", "left_arm", left_arm.getPoseReferenceFrame(), left_arm.getEndEffectorLink(), 0.001);
+	success_ik_right = ik_right->initialize("/robot_description", "right_arm", right_arm.getPoseReferenceFrame(), right_arm.getEndEffectorLink(), 0.001);
+
+	if ((success_ik_left) && (success_ik_right)) {
+		ROS_INFO("Successfully initialized IK services for each arm");
+	} else {
+		if (!(success_ik_left)) {
+			ROS_ERROR("Failed to initialize IK for left arm.");
+		} else {
+			ROS_ERROR("Failed to initialize IK for right arm.");
+		}
+		ROS_ERROR("Program existing.");
+		return 1;
+	}
+
+	// WAIT FOR COMMANDS FROM USER
+	bool save(false), execute(false);
+	std::string file_name, group_name, save_name, file_name_1, file_name_2, group_name_1, group_name_2;
+
+	planningInterface::MoveGroup empty, &group = empty, &group_1 = empty, &group_2 = empty;
+	planner plans;
+	trajectoryJoints joint_trajectory;
+
+	while (ok()) {
+		std::vector<std::string> inputs(total_allowed_arguments,"");
+
+		std::string input;
+		getline(std::cin, input);
+		std::istringstream input_stream(input);
+
+		int argument = 0;
+		while ((input_stream >> inputs[argument]) && (argument < total_allowed_arguments)) {
+			ROS_INFO("Argument %d: %s", argument+1, inputs[argument].c_str());
+			argument++;
+		}
+
+		if (inputs[0].compare("exit") == 0) {
+			break;
+		} else if (inputs[0].compare("help") == 0) {
+			ROS_INFO("List of allowed arguments:");
+			ROS_INFO("module $file_name $move_group $execute $save");
+			ROS_INFO("module $file_name_1 $move_group_1 two_arms $file_name_2 $move_group_2 $execute $save");
+			ROS_INFO("file $file_name $move_group $execute $save");
+			ROS_INFO("debug <on/off>");
+			ROS_INFO("state");
+			ROS_INFO("exit");
+			ROS_INFO("--------------------");
+			ROS_INFO("File names should NOT include file extensions (*.txt, *.mod, etc.)");
+			ROS_INFO("$execute and $save must be either \"true\" or \"false\".");
+			ROS_INFO("  - These commands indicate if the trajectories should be executed and/or saved respectively.");
+		} else if (inputs[0].compare("debug") {
+			if (inputs[1].compare("on") == 0) {
+				debug = true;
+			} else if (inputs[1].compare("off") == 0) {
+				debug = false;
+			}
+			ROS_INFO("Debug mode: %s", debug?"on":"off");
+		} else if (inputs[0].compare("state")) {
+			ROS_INFO("Debug mode: %s", debug?"on":"off");
+		} else if (inputs[0].compare("module") == 0) {
+			if (argument < 4) {
+				std::string file_name  = inputs[1];
+				std::string group_name = inputs[2];
+				if (debug) { ROS_INFO("Provided file name(s): %s | Provided group name(s): %s", file_name.c_str(), group_name.c_str()); }
+
+				if (!(checkGroupExists(group_name, move_groups, group))) { continue; }
+				if (debug) { ROS_INFO("Provided group name(s) were recognized."); }
+
+				RAPIDModuleData module = getYuMiLeadThroughData(file_name, debug);
+				if (debug) { ROS_INFO("Successfully retrieve RAPID data from the provided file(s)."); }
+
+				// convert module data to joint trajectory 
+			} else if (inputs[3].compare("two_arms") == 0) {
+				std::string file_name_1  = inputs[1];
+				std::string group_name_1 = inputs[2];
+				std::string file_name_2  = inputs[4];
+				std::string group_name_2 = inputs[5];
+				if (debug) { ROS_INFO("Provided file name(s): %s, %s | Provided group name(s): %s, %s", file_name_1.c_str(), file_name_2.c_str(), group_name_1.c_str(), group_name_2.c_str()); }
+
+				if ((!(checkGroupExists(group_name_1))) || (!(checkGroupExists(group_name_2)))) { continue; }
+				if (group_name_1.compare(group_name_2) == 0) {
+					ROS_ERROR("Provided group names are the same.");
+					ROS_WARN("Provided group names: %s, %s", group_name_1.c_str(), group_name_2.c_str());
+					continue;
+				}
+
+				if (arguments > 6) {
+					if (!(checkBoolInput(inputs[6]))) { continue; }
+					std::istringstream(inputs[6]) >> std::boolalpha >> execute;
+					if (arguments > 7) {
+						if (!(checkBoolInput(inputs[7]))) { continue; }
+						std::istringstream(inputs[7]) >> std::boolalpha >> save;
+						if (save) {
+							save_file = inputs[5];
+						}
+					}
+				}
+
+				RAPIDModuleData module_1 = getYuMiLeadThroughData(file_name_1, debug);
+				RAPIDModuleData module_2 = getYuMiLeadThroughData(file_name_2, debug);
+
+				trajectoryPoses pose_trajectory;
+				bool success = combineModules(module_1, group_name_1, module_2, group_name_2, pose_trajectory);
+
+				// convert pose trajectory to joint trajectory
+			} else {
+				std::string file_name  = inputs[1];
+				std::string group_name = inputs[2];
+				if (debug) { ROS_INFO("Provided file name(s): %s | Provided group name(s): %s", file_name.c_str(), group_name.c_str()); }
+
+				if (!(checkGroupExists(group_name, move_groups, group))) { continue; }
+
+				if (!(checkBoolInput(inputs[3]))) { continue; }
+				std::istringstream(inputs[3]) >> std::boolalpha >> execute;
+				if (arguments > 4) {
+					if (!(checkBoolInput(inputs[4]))) { continue; }
+					std::istringstream(inputs[4]) >> std::boolalpha >> save;
+					if (save) {
+						save_file = inputs[5];
+					}
+				}
+
+				RAPIDModuleData module = getYuMiLeadThroughData(file_name, debug);
+
+				// convert module data to joint trajectory
+			}
+
+			plans = generatePlans(group, joint_trajectory, debug);
+		} else if (inputs[0].compare("file") == 0) {
+			std::string file_name  = inputs[1];
+			std::string group_name = inputs[2];
+			if (debug) { ROS_INFO("Provided file name(s): %s | Provided group name(s): %s", file_name.c_str(), group_name.c_str()); }
+
+			if (!(checkGroupExists(group_name, move_groups, group))) { continue; }
+
+			if (argument > 3) {
+				if (!(checkBoolInput(inputs[3]))) { continue; }
+				std::istringstream(inputs[3]) >> std::boolalpha >> execute;
+				if (argument > 4) {
+					if (!(checkBoolInput(inputs[4]))) { continue; }
+					std::istringstream(inputs[4]) >> std::boolalpha >> save;
+					if (save) {
+						save_file = inputs[5];
+					}
+				}
+			}
+
+			std::string data_type = getFileDataType(file_name);
+
+			// execute file retriever for provided group
+			if (data_type == "poses") {
+				trajectoryPoses pose_trajectory = getTrajectoryPoses(group, file_name);
+				// convert pose trajectory to joint trajectory, get success criteria and continue if not successful
+			} else {
+				joint_trajectory = getTrajectoryJoints(group, file_name);
+			}
+
+			plans = generatePlans(group, joint_trajectory, debug);
+		} else if (inputs[0].compare("bag") == 0) {
+			std::string file_name = inputs[1];
+			execute = true;
+
+			plans = retrieveBag(file_name, rosbag_topic_name);
+		}		
+
+		if (save == true) {
+			createBag(save_file, rosbag_topic_name);
+		}
+		if (execute == true) {
+			executePlans(group, plans, debug);
+		}
+	}
+
+	// CLOSE ROS NODE AND EXIT
+	shutdown();
+	return 0;
+}
+
+bool checkGroupExists(std::string);
+bool checkGroupExists(std::string, std::vector<planningInterface::MoveGroup>&, planningInterface::MoveGroup&);
+bool checkBoolInput(std::string);
+
+bool checkGroupExists(std::string group_name) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-07-25
+*/
+	if (group_name.compare(left_arm.getName()) == 0) {
+		return 1;
+	} else if (group_name.compare(right_arm.getName()) == 0) {
+		return 1;
+	} else if (group_name.compare(both_arms.getName()) == 0) {
+		return 1;
+	} else {
+		ROS_ERROR("The provided group name does is not recognized.");
+		ROS_WARN("Provided group: %s", group_name.c_str());
+		ROS_WARN("Recognized groups: left_arm, right_arm, both_arms");
+		return 0;
+	}
+}
+
+bool checkGroupExists(std::string group_name, std::vector<planningInterface::MoveGroup>& move_groups, planningInterface::MoveGroup& group) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-07-25
+*/
+	if (group_name.compare("left_arm") == 0) {
+		group = move_groups[0];
+		return 1;
+	} else if (group_name.compare("right_arm") == 0) {
+		group = move_groups[1];
+		return 1;
+	} else if (group_name.compare("both_arns") == 0) {
+		group = move_groups[2];
+		return 1;
+	} else {
+		ROS_ERROR("The provided group name does is not recognized.");
+		ROS_WARN("Provided group: %s", group_name.c_str());
+		ROS_WARN("Recognized groups: left_arm, right_arm, both_arms");
+		return 0;
+	}
+}
+
+bool checkBoolInput(std::string input) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-07-25
+*/
+	if (input.compare("true") == 0) {
+		return 1;
+	} else if (input.compare("false") == 0) {
+		return 1;
+	} else {
+		ROS_ERROR("The provided value for the argument <execute> or <save> is not recognized.");
+		ROS_WARN("Provided value: %s", input.c_str());
+		ROS_WARN("Recognized values: true, false");
+		return 0;
+	}
+}
+
+/* ============================================================
+   -------------------- FINISHED FUNCTIONS --------------------
+   ============================================================ */
+
+poseConfig getCurrentPoseConfig(planningInterface::MoveGroup&, bool debug = false);
+poseConfig getAxisConfigurations(planningInterface::MoveGroup&, bool debug = false);
+poseConfig getAxisConfigurations(std::vector<double>, bool debug = false);
+
+poseConfig getCurrentPoseConfig(planningInterface::MoveGroup& group, bool debug) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-07-26
+
+    PURPOSE: The purpose of this function is to get the current pose and configuration of the robot.
+			 This function calles the function getAxisConfigurations to get the confdata and
+			 external axis position from the robots current position, and then the current pose and
+			 gripper position (if a gripper is attached to the provided group) is added to the pose
+			 configuration structure.
+
+	INSTRUCTIONS: The only information that need to be provided to this function is the move group
+				  which the user would like to get the current axis configuration for. The pose and
+				  configuration data structure is then retruned after retrieving the data. The degug
+				  variable is not using in this function, but is passed into the 
+				  getAxisConfigurations function in case the user would like the debug messages.
+*/
+    // INTIIALIZE VARIABLES
+    poseConfig pose_config;
+
+    // GET AXIS CONFIGURATION
+    pose_config = getAxisConfigurations(group, debug);
+    
+    // GET CURRENT POSE
+    pose_config.pose = group.getCurrentPose();
+    if (group.getActiveJoints().back().compare(0, 7, "gripper") == 0) {
+    	pose_config.gripper_position = group.getCurrentJointValues().back();
+    }
+
+    return pose_config;
+}
+
+poseConfig getAxisConfigurations(planningInterface::MoveGroup& group, bool debug) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-07-26
+
+    PURPOSE: The purpose of this function is to get the current axis configuration of the robot based
+    		 on the current joint values of the provided group. The axis configurations are based on 
+    		 the ABB convention, which is shown under the variabe type "confdata" in the ABB RAPID
+    		 reference manual. These configurations are also described below.
+
+	INSTRUCTIONS: The axis configraution is generated for the provided move group. The provided move
+				  group can only be one of the following groups: left_arm, right_arm. If debug mode
+				  is set to true, then the current joint values with be displayed along with the 
+				  confdata calculated from the current joint values.
+
+
+	-------------------- OTHER INFORMATION --------------------
+
+	ABB AXIS CONFIGURATION CONVENTION: [axis_1_config, axis_4_config, axis_6_config, cfx]
+
+	ABB YuMi AXIS NAMING CONVENTION (from YuMi base to end effector): [1, 2, 7, 3, 4, 5, 6]
+
+    CONFIGURATION SETS: -4 -> [-360, -270)   -3 -> [-270, -180)   -2 -> [-180, -90)   -1 -> [-90,   0)
+				         0 -> [0,      90)    1 -> [  90,  180)    2 -> [180,  270)    3 -> [270, 360)
+		- The configuration values above are for joints 1, 4, and 6
+
+ 	CFX: ABCD
+ 	    - A represents configuration for axis 5 and can be either (1) or (0)
+ 	    	> (0) if axis 5 position >= 0 degrees, (1) if axis 5 position < 0 degrees
+ 	    - B represents configuration for axis 3 and can be either (1) or (0)
+ 	    	> (0) if axis 3 position >= -90 degrees, (1) if axis 3 position < -90 degrees
+ 	    - C represents configuration for axis 2 and can be either (1) or (0)
+ 	    	> (0) if axis 2 position >= 0 degrees, (1) if axis 2 position < 0 degrees
+ 	   	- D represents the compatability bit, particulary used for linear movements
+ 	   		> This value is not used and is always set to (0)
+
+ 	EXTERNAL AXIS POSITION CONVENTION: [axis_7_position]
+*/
+ 	if (debug) { ROS_INFO(">--------------------"); }
+
+ 	// ERROR CHECKING
+ 	std::string group_name = group.getName()
+ 	if (group_name.compare("both_arms") == 0) {
+ 		if (!debug) { ROS_INFO(">--------------------"); }
+ 		ROS_ERROR("From: getAxisConfigurations(group, debug)");
+ 		ROS_ERROR("Cannot get axis configurations for both arms. Please run this function for each arm.");
+ 		return;
+ 	} else if ((group_name.compare("left_arm") != 0) && (group_name.compare("right_arm") != 0)) {
+ 		if (!debug) { ROS_INFO(">--------------------"); }
+ 		ROS_ERROR("From: getAxisConfigurations(group, debug)");
+ 		ROS_ERROR("The provided group is not recognized by this function.");
+ 		ROS_WARN("Provided group: %s", group_name.c_str());
+ 		ROS_WARN("Recognized groups: left_arm, right_arm");
+ 		return;
+ 	}
+
+    // INITIALIZE VARIABLES
+    const double PI = 3.14159;
+    const double rad2deg = 180.0/PI;
+
+    poseConfig pose_config;
+    std::vector<double> joint_vaues;
+    int axis_1_config, axis_4_config, axis_6_config, cfx = 0;
+
+    // GET CURRENT JOINT VALUES
+    joint_values = group.getCurrentJointValues();
+
+    if (debug) {
+    	ROS_INFO("_____ (debug) Current joint positions _____");
+    	for (int joint = 0; joint < joint_values.size(); joint++) { ROS_INFO("%.5f", joint_values[joint]); } 
+    }
+
+    // GET AXIS CONFIGURATIONS
+    axis_1_config = floor((joint_values[0] * rad2deg) / 90.0); 
+    axis_4_config = floor((joint_values[4] * rad2deg) / 90.0);
+    axis_6_config = floor((joint_values[6] * rad2deg) / 90.0);
+    if (joint_values[5] < 0)    { cfx += 1000; }
+    if (joint_values[3] < PI/2) { cfx += 100;  }
+    if (joint_values[1] < 0)    { cfx += 10;   }
+
+    pose_config.confdata.push_back(axis_1_config);
+    pose_config.confdata.push_back(axis_4_config);
+    pose_config.confdata.push_back(axis_6_config);
+    pose_config.confdata.push_back(cfx);
+
+    pose_config.external_axis_position = joint_values[2];
+
+    if (debug) {
+    	ROS_INFO("_____ (debug) Axis configuration for current joint positions _____");
+    	ROS_INFO("Configuration: [%d, %d, %d, %d] | External Axis Position: [%0.5f]", 
+    		pose_config.confdata[0], pose_config.confdata[1], pose_config.confdata[2], pose_config.confdata[3], 
+    		pose_config.external_axis_position);
+    }
+
+    return pose_config;
+}
+
+poseConfig getAxisConfigurations(std::vector<double> joint_values, bool debug) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-07-26
+
+    PURPOSE: The purpose of this function is to get the axis configuration of the robot based on the
+    		 supplied joint values. The axis configurations are based on the ABB convention, which is 
+    		 shown under the variabe type "confdata" in the ABB RAPID reference manual. These 
+    		 configurations are also described below.
+
+	INSTRUCTIONS: The axis configraution is generated based on the provided joint values. If debug 
+				  mode is set to true, then the current joint values with be displayed along with the 
+				  confdata calculated from the current joint values.
+
+
+	-------------------- OTHER INFORMATION --------------------
+
+	ABB AXIS CONFIGURATION CONVENTION: [axis_1_config, axis_4_config, axis_6_config, cfx]
+
+	ABB YuMi AXIS NAMING CONVENTION (from YuMi base to end effector): [1, 2, 7, 3, 4, 5, 6]
+
+    CONFIGURATION SETS: -4 -> [-360, -270)   -3 -> [-270, -180)   -2 -> [-180, -90)   -1 -> [-90,   0)
+				         0 -> [   0,   90)    1 -> [  90,  180)    2 -> [ 180, 270)    3 -> [270, 360)
+		- The configuration values above are for joints 1, 4, and 6
+
+ 	CFX: ABCD
+ 	    - A represents configuration for axis 5 and can be either (1) or (0)
+ 	    	> (0) if axis 5 position >= 0 degrees, (1) if axis 5 position < 0 degrees
+ 	    - B represents configuration for axis 3 and can be either (1) or (0)
+ 	    	> (0) if axis 3 position >= -90 degrees, (1) if axis 3 position < -90 degrees
+ 	    - C represents configuration for axis 2 and can be either (1) or (0)
+ 	    	> (0) if axis 2 position >= 0 degrees, (1) if axis 2 position < 0 degrees
+ 	   	- D represents the compatability bit, particulary used for linear movements
+ 	   		> This value is not used and is always set to (0)
+
+ 	EXTERNAL AXIS POSITION CONVENTION: [axis_7_position]
+*/
+ 	if (debug) { ROS_INFO(">--------------------"); }
+
+    // INITIALIZE VARIABLES
+    const double PI = 3.14159;
+    const double rad2deg = 180.0/PI;
+
+    poseConfig pose_config;
+    std::vector<double> joint_vaues;
+    int axis_1_config, axis_4_config, axis_6_config, cfx = 0;
+
+    // GET CURRENT JOINT VALUES
+    joint_values = group.getCurrentJointValues();
+
+    if (debug) {
+    	ROS_INFO("_____ (debug) Provided joint positions _____");
+    	for (int joint = 0; joint < joint_values.size(); joint++) { ROS_INFO("%.5f", joint_values[joint]); } 
+    }
+
+    // GET AXIS CONFIGURATIONS
+    axis_1_config = floor((joint_values[0] * rad2deg) / 90.0); 
+    axis_4_config = floor((joint_values[4] * rad2deg) / 90.0);
+    axis_6_config = floor((joint_values[6] * rad2deg) / 90.0);
+    if (joint_values[5] < 0)    { cfx += 1000; }
+    if (joint_values[3] < PI/2) { cfx += 100;  }
+    if (joint_values[1] < 0)    { cfx += 10;   }
+
+    pose_config.confdata.push_back(axis_1_config);
+    pose_config.confdata.push_back(axis_4_config);
+    pose_config.confdata.push_back(axis_6_config);
+    pose_config.confdata.push_back(cfx);
+
+    pose_config.external_axis_position = joint_values[2];
+
+    if (debug) {
+    	ROS_INFO("_____ (debug) Axis configuration for provided joint positions _____");
+    	ROS_INFO("Configuration: [%d, %d, %d, %d] | External Axis Position: [%0.5f]", 
+    		pose_config.confdata[0], pose_config.confdata[1], pose_config.confdata[2], pose_config.confdata[3], 
+    		pose_config.external_axis_position);
+    }
+
+    return pose_config;
+}
+
+/* ------------------------------------------------------------ */
+/* ------------------------------------------------------------ */
+
+RAPIDModuleData getYuMiLeadThroughData(std::string, planningInterface::MoveGroup&, bool debug = false);
+poseConfig getRobtargetData(std::string, bool debug = false);
+
+RAPIDModuleData getYuMiLeadThroughData(std::string file_name, planningInterface::MoveGroup& group, bool debug) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+	DATE CREATED: 2016-07-07
+
+	PURPOSE: The purpose of this funciton is to open the provided RAPID module, store all the robtargets at the beginning of the 
+			 file, get the order to executing the robtargets from the main function, then reconstructing the final trajectory. A
+			 simple RAPID module and program flow explaination is below along with a good convention to follow when creating these
+			 modules.
+
+	EXPLAINATION: The RAPID module file name should be provided without extentions (.txt, etc.) or file path (/home/user). This 
+				  function will search for that file within the yummi_scripts package in a folder called "demo". Make sure the 
+				  RAPID module is located within that folder. The move group for this file should also be provided in case that
+				  the first command within the RAPID module is OpenHand or CloseHand. In this case, the current pose of the robot
+				  for the provided group will be used as the first pose for the trajectory. If debug is set to true, the user will
+				  be notified about the current status of the function, the robtargets parsed from the file, the order of 
+				  robtargets from the main function, and the final reconstructed trajectory.
+
+
+	-------------------- OTHER INFORMATION --------------------
+
+	SIMPLE MODULE EXAMPLE:
+		1) MODULE module_name
+		2) LOCAL CONST string YuMi_App_Program_Version:="1.0.1";
+		3) LOCAL VAR robtarget s1 := [[316.65,45.52,21.47],[0.0502929,0.702983,-0.635561,0.315196],[-1,0,-1,1010],[-169.577,9E+09,9E+09,9E+09,9E+09,9E+09]];
+		4) PROC main()
+		5) MoveSync s1;
+		6) OpenHand;
+		7) CloseHand;
+		8) ENDPROC
+		9) ENDMODULE
+
+	PROGRAM FLOW:
+		> The module name is retrieved and stored
+		> Second line is skipped
+		> All robtargets are stored until reaching line 4 above
+		> All points and gripper movements are stored in the same order as in the RAPID module
+		> When reaching line 8 above, data retrieval is finished
+		> The trajectory is reconstructed into a trajectory by matching the first trajectory point name in the main function with the stored robtarget with the same name
+		> The reconstructed trajectory is returned
+
+	GOOD CONVENTION: The first trajectory point is not an OpenHand or CloseHand command but rather a pose. If the first command 
+					 is one of these commands, the first pose is assumed to be the current position and configuration of the robot.
+
+	ASSUMPTIONS: Assuming grippers are being used on each arms when creating the RAPID modules.
+
+	NOTE: If the functions runs into an OpenHand or CloseHand command, the pose is assumed to the same as the last pose retrieved
+		  from the main function. The case where an OpenHand or CloseHand command is the first command in the main function is 
+		  described above in the "GOOD CONVENTION" section.
+*/
+	ROS_INFO(">--------------------");
+
+	// INITIALIZE VARIABLES
+	std::string line;
+	std::string empty;
+	std::string data_type;
+	std::string robtarget;
+
+	double gripper_position = gripper_open_position;
+	std::vector<double> gripper_positions;
+
+	poseConfig robtarget_pose_config;
+	std::vector<poseConfig> robtarget_pose_configs;
+	RAPIDModuleData module;
+	module.group_name = group.getName();
+	
+	std::string function_point_name;
+	std::string robtarget_point_name;
+	std::vector<std::string> robtarget_point_names;
+
+	int line_index = 0;
+	int main_function_index = 0;
+
+	bool robtarget_end = 0;
+	bool success = true;
+
+ 	std::string input_file = yumiScriptsDirectory + "demo/" + file_name + ".mod";
+
+ 	// NOTIFY USER FUNCTION IS ABOUT TO START
+	ROS_INFO("Getting YuMi file data.");
+
+	// OPEN RAPID MODULE
+	std::ifstream text_file(input_file.c_str());
+	tic();
+
+	if (text_file.is_open()) {
+		
+		if (std::getline(text_file, line)) {
+
+			line_index++;
+			if (debug) { ROS_INFO("(debug) Pulling line: %d",line_index); }
+
+			// GET MODULE NAME
+			std::istringstream first_line(line);
+			first_line >> empty >> module.module_name;
+			ROS_INFO("Module name: %s",module.module_name.c_str());
+
+			// RUN THROUGH THE REMAINING LINES OF THE RAPID MODULE
+			while (std::getline(text_file, line)) {
+
+				line_index++;
+				if (debug) { ROS_INFO("(debug) Pulling line: %d",line_index); }
+
+				// GET FIRST WORD FROM LINE
+				std::istringstream current_line(line);
+				current_line >> data_type;
+
+				// DETERMINE WHETHER TO STORE A ROBTARGET, STORE TRAJECTORY POINT, OR IF REACHED END OF FILE
+				if (data_type.compare(0, 1, "P") == 0) {
+				/* If the current line reads "PROC main()", then set a flag to indicate that all robtargets have been stored and 
+				   to begin reading the main function */
+					robtarget_end = 1;
+
+					if (debug) { ROS_INFO("(debug) Reading from Main function."); }
+
+				} else if (!(robtarget_end)) {
+				/* If there are still robtargets to store */
+					current_line >> empty >> data_type;
+					if (data_type.compare(0, 1, "r") == 0) {
+						current_line >> robtarget_point_name >> empty >> robtarget;
+						robtarget_point_names.push_back(robtarget_point_name);
+
+						robtarget_pose_config = getRobtargetData(robtarget, debug);
+						robtarget_pose_configs.push_back(robtarget_pose_config);
+
+						if (debug) { ROS_INFO("(debug) Pulled robtarget for position: %s. Stored data.", robtarget_point_name.c_str()); }
+					}
+
+				} else if (data_type.compare(0, 1, "E") == 0) {
+				/* If the current line reads "ENDPROC", then the end of file has been reached and exit the while loop */
+					ROS_INFO("End of file reached.");
+					break;
+
+				} else {
+				/* If all robtargets have been stored and the end of the file has not been reached yet */
+					main_function_index++;
+					if (data_type.compare("MoveSync") == 0) {
+						current_line >> function_point_name;
+						function_point_name = function_point_name.substr(0, function_point_name.length()-1);
+					} else if (data_type.compare("OpenHand;") == 0) {
+					/* If the hand is to be opened at this point, use the previous pose (function_point_name wasn't overwritten)
+					   and update the gripper position to indicate the gripper should be open. */
+						if (main_function_index == 1) {
+						/* If the first instruction is to open the gripper, there is no reference to where the pose of the robot
+						   should be before closing the gripper. In this case, pose used is assumed to be the current pose of
+						   the robot. To do this, first the current pose configuration of the robot is retrieved and then added 
+						   to the stored robtargets list with the name "start". The function_point_name is then also assigned 
+						   with the name "start", which will then be used later in order to find the current pose configuration 
+						   of the robot when reconstructing the final pose trajectory. */
+							poseConfig pose_config = getCurrentPoseConfig(group, debug);
+							robtarget_pose_configs.push_back(pose_config);
+
+							robtarget_point_names.push_back("start");
+							function_point_name = "start";
+						}
+						gripper_position = gripper_open_position;
+					} else if (data_type.compare("CloseHand;") == 0) {
+					/* If the hand is to be closed at this point, use the previous pose (function_point_name wasn't overwritten)
+					   and update the gripper position to indicate the gripper should be closed. */
+						if (main_function_index == 1) {
+						/* If the first instruction is to close the gripper, there is no reference to where the pose of the robot
+						   should be before closing the gripper. In this case, pose used is assumed to be the current pose of
+						   the robot. To do this, first the current pose configuration of the robot is retrieved and then added 
+						   to the stored robtargets list with the name "start". The function_point_name is then also assigned 
+						   with the name "start", which will then be used later in order to find the current pose configuration 
+						   of the robot when reconstructing the final pose trajectory. */
+							poseConfig pose_config = getCurrentPoseConfig(group, debug);
+							robtarget_pose_configs.push_back(pose_config);
+
+							robtarget_point_names.push_back("start");
+							function_point_name = "start";
+						}
+						gripper_position = gripper_closed_position;
+					}
+
+					module.pose_names.push_back(function_point_name);
+					gripper_positions.push_back(gripper_position);
+
+					if (debug) { ROS_INFO("Main function line: %d | Pose name: %s | Gripper position: %.5f", main_function_index, function_point_name.c_str(), gripper_position); }
+				}
+			}
+		} else {
+			ROS_ERROR("From: getYuMiLeadThroughData(file_name, group, debug)");
+			ROS_ERROR("The provided file is empty.");
+			success = false;
+		}
+		text_file.close();
+	} else {
+		ROS_ERROR("From: getYuMiLeadThroughData(file_name, group, debug)");
+		ROS_ERROR("The provided file name could not be opened or does not exist.");
+		ROS_WARN("File: %s",input_file.c_str());
+		success = false;
+	}
+
+	if (success) {
+		if (debug) { ROS_INFO("...................."); }
+
+		module.total_points = module.pose_names.size();
+		ROS_INFO("Storing trajectory. Total trajectory points to store: %lu", module.pose_names.size());
+
+		// CONSTRUCTION THE FINAL POSE TRAJECTORY
+		int stored_location;
+		int total_stored_points = robtarget_point_names.size();
+		for (int point = 0; point < module.total_points; point++) {
+
+			std::string point_name = module.pose_names[point];
+			for (int robtarget_index = 0; robtarget_index < total_stored_points; robtarget_index++) {
+				if (robtarget_point_names[robtarget_index].compare(point_name) == 0) {
+					stored_location = robtarget_index;
+					break; 
+				}
+			}
+
+			module.pose_configs.push_back(robtarget_pose_configs[stored_location]);
+			module.pose_configs.gripper_position[point] = gripper_positions[point];
+
+			if (debug) { ROS_INFO("Trajectory point %d was stored successfully", point+1); }
+		}
+	} else {
+		ROS_ERROR("Not able to parse YuMi lead through file.");
+	}
+
+	if (debug) {
+		ROS_INFO("....................");
+		ROS_INFO("Module Name: %s", module.module_name.c_str());
+
+		std::string current_point_name;
+		std::string previous_point_name = "";
+
+		for (int point = 0; point < module.total_points; point++) {
+			current_point_name = module.pose_names[point].c_str();
+			if (previous_point_name.compare(current_point_name) == 0) {
+				if (module.pose_configs.gripper_position[point] == 1) {
+					ROS_INFO("Open Hand");
+				} else {
+					ROS_INFO("Close Hand");
+				}
+			} else {
+				ROS_INFO("Name: %s | Position: %.5f, %.5f, %.5f | Orientation: %.5f, %.5f, %.5f, %.5f | Configuration: %d, %d, %d, %d | External Axis: %.5f",
+					module.pose_names[point].c_str(),
+					module.pose_configs[point].pose.position.x, module.pose_configs[point].pose.position.y, module.pose_configs[point].pose.position.z, 
+					module.pose_configs[point].pose.orientation.w, module.pose_configs[point].pose.orientation.x, module.pose_configs[point].pose.orientation.y, module.pose_configs[point].pose.orientation.z, 
+					module.pose_configs[point].confdata[point][0], module.pose_configs[point].confdata[point][1], module.pose_configs[point].confdata[point][2], module.pose_configs[point].confdata[point][3], 
+					module.pose_configs[point].external_axis_position[point]);
+			}
+			previous_point_name = current_point_name;
+		}
+	}
+
+	ROS_INFO("Processing time: %.5f",toc());
+	return module;
+}
+
+poseConfig getRobtargetData(std::string robtarget, bool debug) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+	DATE CREATED: 2016-07-07
+
+	PURPOSE: The purpose of this function is to parse an inputted robtarget into the robtarget psoition, orientation, axis
+			 configuration, and external axis position. This is done by finding the first character in the rob target that
+			 is either a number or a negative. The end of the number is then found, which a substring can then be
+			 constructed and converted into a double. Below is an explaination of the unit conversion between ABB and ROS
+			 unit convention along with the ABB convention for a robtarget. This information is taken from the ABB RAPID
+			 Reference Manual.
+
+	INSTRUCTIONS: Input a robtarget and a poseConfig structure will be returned containing the position, orientation, axis
+				  configuration, and the external axis position (axis 7). If debug is set to true, the position,
+				  orientation, configuration data, and external axis position will be displayed for the privded robtarget.
+
+
+	-------------------- OTHER INFORMATION --------------------
+
+	ABB UNITS: milimeters and degrees
+	ROS UNITS: meters and radians
+
+	ABB ROBTARGET CONVENTION: [[position.x,position.y,position.z],[orientation.w,orientation.x,orientation.y,orientation.z],[cf1,cf4,cf6,cfx],[eax1,eax2,eax3,eax4,eax5,eax6]]
+		> cf1 represents the configuration data for axis 1
+		> cf4 represents the configuration data for axis 4
+		> cf6 represents the configuration data for axis 6
+		> cfx represents the configuration data for a combination of axis 5, 3, 2, and a compatibility bit
+		> eax1 represents the position of the first external axis (axis 7)
+		> eax2 to eax6 represents 5 other external axis values, but these are not used on YuMi and thus are all set to 9E+09. This data is ignored.
+*/
+	// INITIALIZE VARIABLES
+	const double PI = 3.1415927;
+	const double mm2m = 1.0/1000.0;
+	const double deg2rad = PI / 180;
+	std::string robtarget_search = "0123456789E.-+";
+
+	poseConfig pose_config;
+
+	bool pose_pulled = 0;
+	std::size_t start_char = 2;
+	std::size_t end_char = 0;
+	std::size_t E_location;
+	int element = 0;
+
+	// PARSE ROBTARGET
+	while (!(pose_pulled)) {
+		element++;
+
+		end_char = robtarget.find_first_not_of(robtarget_search, start_char);
+		std::string current_val_string = robtarget.substr(start_char, (end_char-start_char));
+
+		double current_val;
+		E_location = current_val_string.find_first_of("E");
+		if (E_location != -1) {
+			double exponent = std::stod(current_val_string.substr(E_location+1, current_val_string.length()-1-E_location), nullptr);
+			current_val = std::stod(current_val_string.substr(0,E_location), nullptr) * pow(10.0, exponent);
+		} else {
+			current_val = std::stod(current_val_string, nullptr);
+		}
+
+		if (element == 1) { pose_config.pose.position.x = current_val * mm2m; }
+		else if (element == 2) { pose_config.pose.position.y = current_val * mm2m; }
+		else if (element == 3) { pose_config.pose.position.z = current_val * mm2m; }
+		else if (element == 4) { pose_config.pose.orientation.w = current_val; }
+		else if (element == 5) { pose_config.pose.orientation.x = current_val; }
+		else if (element == 6) { pose_config.pose.orientation.y = current_val; }
+		else if (element == 7) { pose_config.pose.orientation.z = current_val; }
+		else if (element == 8) { pose_config.confdata.push_back((int)current_val); }
+		else if (element == 9) { pose_config.confdata.push_back((int)current_val); }
+		else if (element == 10) { pose_config.confdata.push_back((int)current_val); }
+		else if (element == 11) { pose_config.confdata.push_back((int)current_val); }
+		else if (element == 12) { pose_config.external_axis_position = current_val * deg2rad; }
+		else if (element >= 13) { break; }
+
+		start_char = robtarget.find_first_of(robtarget_search, end_char);
+	}
+
+	if (debug) {
+		ROS_INFO("Position: %.5f, %.5f, %.5f | Orientation: %.5f, %.5f, %.5f, %.5f | Configuration: %d, %d, %d, %d | External Axis: %.5f",
+			pose_config.pose.position.x, pose_config.pose.position.y, pose_config.pose.position.z, 
+			pose_config.pose.orientation.w, pose_config.pose.orientation.x, pose_config.pose.orientation.y, pose_config.pose.orientation.z);
+			pose_config.confdata[0], pose_config.confdata[1], pose_config.confdata[2], pose_config.confdata[3]);
+			external_axis_position);
+	}
+
+	return pose_config;
+}
+
+trajectoryPoses combineModules(RAPIDModuleData&, RAPIDModuleData&, bool debug = false);
+
+trajectoryPoses combineModules(RAPIDModuleData& module_1, RAPIDModuleData& module_2, bool debug) {
+/*  PROGRAMMER: Frederick Wachter
+    DATE CREATED: 2016-07-25 
+
+    PURPOSE: The purpose of this function is to combine two RAPID module data structure into a pose trajectory. This function
+   			 will only work properly or will produce and error if the two modules were meant to work together. These modules
+   			 will be combined in a way that all MoveSync motions will be lined up. If any of the arms is moving independently
+   			 (including closing and opening the grippers), the other arm will wait at it's current position until the next 
+   			 MoveSync task is reached. This function assumes that grippers are on each arm.
+
+    EXPLAINATION: This function requires two different modules to be supplied where one is meant for the left arm and the 
+    			  other is meant for the right arm. The designated move groups for each module should have already been
+    			  stored into the RAPID module structure from a previous function. If debug is set to true, the provided 
+    			  module names will be outputted to the user, and the pose names for each arm will be displayed as the final 
+    			  pose trajectory is being constructed by attempting to synconize motions from each module.
+
+
+	-------------------- OTHER INFORMATION --------------------
+
+    ASSUMPTIONS: Assuming grippers are being used on each arms when creating the RAPID modules.
+*/
+    ROS_INFO(">--------------------");
+
+   	// INITIALIZE VARIABLES
+   	trajectoryPoses pose_trajectory;
+	pose_trajectory.groupName     = "both_arms";
+	pose_trajectory.intendedGroup = "both_arms";
+
+	std::vector<poseConfig> pose_configs_1, pose_configs_2;
+	int index_1(0), index_2(0), index(0);
+
+	// NOTIFY THE USER THE FUNCTION IS ABOUT TO START
+	ROS_INFO("Combining modules.");
+
+	if (debug) {
+		ROS_INFO("Module 1 | Name: %s | Move group: %s", module_1.module_name.c_str(), module_1.group_name.c_str());
+		ROS_INFO("Module 2 | Name: %s | Move group: %s", module_2.module_name.c_str(), module_2.group_name.c_str());
+	}
+
+	// CONSTRUCT TRAJECTORY WITH SYNCRONIZED MOTION BETWEEN ARMS
+	int max_points = max(module_1.totalPoints, module_2.totalPoints);
+	while (true) {
+
+		if ((index_1 == module_1.totalPoints) && (index_2 == module_2.totalPoints)) {
+			break;
+		} else if (index_1 == module_1.totalPoints) {
+			index_1--;
+		} else if (index_2 == module_2.totalPoints) {
+			index_2--;
+		} else if (module_1.pose_names[index_1].compare(module_2.pose_names[index_2]) != 0) {
+			if ((module_1.pose_names[index_1].compare(0, 1, "p") == 0) && (module_2.pose_names[index_2].compare(0, 1, "p") != 0)) {
+			/* If the first module is going to a non-syncronized point (designated by p#) and the second module is going to a syncronized point */
+				if (module_2.pose_names[index_2].compare(module_2.pose_names[index_2-1]) != 0) {
+				/* If the current point doesn't involve a gripper open or gripper close command for the second module */
+					index_2--;
+				}
+			} else if ((module_1.pose_names[index_1].compare(0, 1, "p") != 0) && (module_2.pose_names[index_2].compare(0, 1, "p") == 0)) {
+			/* If the second module is going to a non-syncronized point (designated by p#) and the first module is going to a syncronized point */
+				if (module_1.pose_names[index_1].compare(module_1.pose_names[index_1-1]) != 0) {
+				/* If the current point doesn't involve a gripper open or gripper close command for the first module */
+					index_1--;
+				}
+			} else if (module_1.pose_names[index_1].compare(module_1.pose_names[index_1-1]) == 0) {
+			/* If the first module is closing or opening a gripper */
+				index_2--;
+			} else if (module_2.pose_names[index_2].compare(module_2.pose_names[index_2-1]) == 0) {
+			/* If the second module is closing or opening a gripper */
+				index_1--;
+			} else if ((module_1.pose_names[index_1].compare(0, 1, "s") == 0) && (module_2.pose_names[index_2].compare(0, 1, "s") == 0)) {
+				ROS_ERROR("From: combineModules(module_1, module_2, debug)");
+				ROS_ERROR("Cannot combine provided modules. The MoveSync target names do not match up.");
+				ROS_WARN("Line %d of module 1 main function and line %d of module 2 main function.", index_1+1, index_2+1);
+				ROS_WARN("Module 1: %s", module_1.module_name.c_str());
+				ROS_WARN("Module 2: %s", module_2.module_name.c_str());
+			}
+		} 
+
+		pose_configs_1.push_back(module_1.pose_configs[index_1]);
+		pose_configs_2.push_back(module_2.pose_configs[index_2]);
+
+		index_1++;
+		index_2++;
+		index++;
+
+		if (debug) {
+			ROS_INFO("Line: %d | Module 1 point: %s | Module 2 point: %s", index, module_1.pose_names[index_1-1], module_2.pose_names[index_2-1]);
+		}
+	}
+
+	// STORE CONSTRUCTED TRAJECTORIES TO CORRECT ARM
+	if (module_1.group_name.compare("left_arm") == 0) {
+		pose_trajectory.pose_configs_left = pose_configs_1;
+		pose_trajectory.usingGripper_left = true;
+
+		pose_trajectory.pose_configs_right = pose_configs_2;
+		pose_trajectory.usingGripper_right = true;
+	} else {
+		pose_trajectory.pose_configs_left = pose_configs_2;
+		pose_trajectory.usingGripper_left = true;
+
+		pose_trajectory.pose_configs_right = pose_configs_1;
+		pose_trajectory.usingGripper_right = true;
+	}
+
+	return pose_trajectory;
+}
+
+/* ------------------------------------------------------------ */
+/* ------------------------------------------------------------ */
+
+
+
+/* ============================================================
+   -------------------- FINISHED FUNCTIONS --------------------
+   ============================================================ */
+
+
+
+
+
+
+
+
+moveit_msgs::Constraints setAxisConfigurations(planningInterface::MoveGroup& group, poseConfig& pose_config, bool debug) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-07-26
+*/
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
