@@ -109,6 +109,8 @@ trajectoryPoses combineModules(RAPIDModuleData&, RAPIDModuleData&, bool debug = 
 trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData&, bool debug = false);
 
 /* Pose Trajectory to Joint Trajectory Functions */
+trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveGroup&, trajectoryPoses&, kinematics::KinematicsBasePtr&, kinematics::KinematicsBasePtr&, bool debug = false);
+bool convertPoseConfigToJointTrajectory(trajectoryJoints&, kinematics::KinematicsBasePtr&, std::vector<poseConfig>&, std::vector<double>, bool debug = false);
 
 // MAIN FUNCTION
 int main(int argc, char **argv) {
@@ -138,8 +140,9 @@ int main(int argc, char **argv) {
     right_arm.setPoseReferenceFrame(pose_reference_frame);
     both_arms.setPoseReferenceFrame(pose_reference_frame);
 
-    left_arm.setEndEffectorLink(end_effector_left);
-    right_arm.setEndEffectorLink(end_effector_right);
+    // MOVE ARMS TO READY POSITION
+    both_arms.setNamedTarget("ready");
+    both_arms.move();
 
     // INITIALIZE IK SERVICES FOR EACH ARM
     boost::shared_ptr<pluginlib::ClassLoader<kinematics::KinematicsBase>> kinematics_loader;
@@ -157,13 +160,17 @@ int main(int argc, char **argv) {
     }
 
     bool success_ik_left, success_ik_right; 
-    success_ik_left  = ik_left->initialize("/robot_description", "left_arm", left_arm.getPoseReferenceFrame(), left_arm.getEndEffectorLink(), 0.001);
-    success_ik_right = ik_right->initialize("/robot_description", "right_arm", right_arm.getPoseReferenceFrame(), right_arm.getEndEffectorLink(), 0.001);
+    success_ik_left  = ik_left->initialize("/robot_description", "left_arm_ik", pose_reference_frame, end_effector_left, 0.001);
+    success_ik_right = ik_right->initialize("/robot_description", "right_arm_ik", pose_reference_frame, end_effector_right, 0.001);
+    // success_ik_left  = ik_left->initialize("/robot_description", "left_arm", pose_reference_frame, left_arm.getEndEffectorLink(), 0.001);
+    // success_ik_right = ik_right->initialize("/robot_description", "right_arm", pose_reference_frame, right_arm.getEndEffectorLink(), 0.001);
 
     if ((success_ik_left) && (success_ik_right)) {
         ROS_INFO("Successfully initialized IK services for the left and right arm.");
     } else {
-        if (!(success_ik_left)) {
+        if ((!success_ik_left) && (!success_ik_right)) {
+            ROS_ERROR("Failed to initialize IK for left and right arm.");
+        } else if (!success_ik_left) {
             ROS_ERROR("Failed to initialize IK for left arm.");
         } else {
             ROS_ERROR("Failed to initialize IK for right arm.");
@@ -174,7 +181,111 @@ int main(int argc, char **argv) {
 
     RAPIDModuleData module_left  = getYuMiLeadThroughData("Left_ASL_Demo", left_arm, debug);
     RAPIDModuleData module_right = getYuMiLeadThroughData("Right_ASL_Demo", right_arm, debug);
+
     trajectoryPoses pose_trajectory = combineModules(module_left, module_right, debug);
+    trajectoryJoints joint_trajectory = convertPoseTrajectoryToJointTrajectory(both_arms, pose_trajectory, ik_left, ik_right, debug);
+
+
+    // geometry_msgs::Pose poser;
+    // poser.position.x = 0.353766;
+    // poser.position.y = -0.116135;
+    // poser.position.z = 0.26376;
+    // poser.orientation.x = 0.0420612;
+    // poser.orientation.y = 0.862708;
+    // poser.orientation.z = 0.421826;
+    // poser.orientation.w = 0.275734;
+
+    // // INITIALIZE VARIABLES
+    // const double PI = 3.14159;
+    // const double TOLERANCE = 0.01;
+    // const std::vector<int> confdata_joints = { 0, 4, 6 };
+
+    // double timeout = 10.0;
+    // std::vector<double> seed = right_arm.getCurrentJointValues();
+    // std::vector<double> consistency; // tolerance from seed
+    // std::vector<double> solution;
+    // std::vector<double> previous_solution = seed;
+    // moveit_msgs::MoveItErrorCodes error_code;
+
+    // bool gripper_attached = false;
+    // bool success;
+
+    // std::vector<poseConfig> pose_configs;
+    // pose_configs = pose_trajectory.pose_configs_right;
+    // trajectoryJoints joint_trajectory;
+    // pose_configs[0].pose = poser;
+
+    // seed[2] = pose_configs[0].external_axis_position;
+
+    // if (seed.size() == 8) {
+    //     gripper_attached = true;
+    // }
+
+    // // TRANSFER DATA TO JOINT TRAJECTORY STRUCTURE
+    // joint_trajectory.total_joints = seed.size();
+
+    // // DETERMINE CONSISTANCY VARIABLE SIZE BASED ON GRIPPER ATTACHED
+    // if (gripper_attached) {
+    //     consistency = {PI/4, PI, PI/32, PI, PI/4, PI, PI/4, PI};
+    // } else {
+    //     consistency = {PI/4, PI, PI/32, PI, PI/4, PI, PI/4};
+    // }
+
+    // int pose = 0;
+
+    // // SEED AXIS CONFIGURATIONS
+    // for (int config = 0; config < confdata_joints.size(); config++) {
+    //     seed[confdata_joints[config]] = (pose_configs[pose].confdata[config] * PI/2) + PI/4;
+    // }
+
+    // if (debug) {
+    //     ROS_INFO("_____ (debug) IK Inputs for Index %d _____", pose+1);
+    //     ROS_INFO(" *Note: for orientation, the w value is provided first*");
+    //     ROS_INFO("Pose        | Position: [%.5f, %.5f, %.5f] | Orientation: [%.5f, %.5f, %.5f, %.5f]", 
+    //         pose_configs[pose].pose.position.x, pose_configs[pose].pose.position.y, pose_configs[pose].pose.position.z,
+    //         pose_configs[pose].pose.orientation.w, pose_configs[pose].pose.orientation.x, pose_configs[pose].pose.orientation.y, pose_configs[pose].pose.orientation.z);
+    //     ROS_INFO("Config Data | Values: [%d, %d, %d, %d]", pose_configs[pose].confdata[0], pose_configs[pose].confdata[1], pose_configs[pose].confdata[2], pose_configs[pose].confdata[3]);
+    //     if (gripper_attached) {
+    //         ROS_INFO("Seed        | Joint values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", seed[0], seed[1], seed[2], seed[3], seed[4], seed[5], seed[6], seed[7]);
+    //         ROS_INFO("Consistency | Values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", consistency[0], consistency[1], consistency[2], consistency[3], consistency[4], 
+    //             consistency[5], consistency[6], consistency[7]);
+    //     } else {
+    //         ROS_INFO("Seed        | Joint values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", seed[0], seed[1], seed[2], seed[3], seed[4], seed[5], seed[6]);
+    //         ROS_INFO("Consistency | Values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", consistency[0], consistency[1], consistency[2], consistency[3], 
+    //             consistency[4], consistency[5], consistency[6]);
+    //     }
+    // }
+
+    // // COMPUTE IK
+    // success = ik_right->searchPositionIK(pose_configs[pose].pose, seed, timeout, consistency, solution, error_code);
+
+    // if (debug) {
+    //     ROS_INFO("____ (debug) Joint Value Solution for Index %d _____", pose+1);
+    //     if (error_code.val != 1) {
+    //         ROS_INFO("Solution not found.");
+    //     } else {
+    //         for (int joint = 0; joint < solution.size(); joint++) {
+    //             ROS_INFO("Joint value: %.5f", solution[joint]);
+    //         }
+    //     }
+    // }
+
+    // if (success) {
+    //     ROS_INFO("(Index %d) IK calculation was successful.", pose+1);
+    //     joint_trajectory.joints.push_back(solution);
+    // } else {
+    //     ROS_WARN("IK calculation failed for index %d. Error code: %d", pose+1, error_code.val);
+
+    //     if (debug) {
+    //         ROS_WARN("(debug) Skipping trajectory point.");
+    //         solution = previous_solution;
+    //     } else {
+    //         ROS_WARN("Exiting function.");
+    //         return false;
+    //     }
+    // }
+
+
 }
 
 /* ============================================================
@@ -472,7 +583,7 @@ RAPIDModuleData getYuMiLeadThroughData(std::string file_name, planningInterface:
     bool robtarget_end = 0;
     bool success = true;
 
-    std::string input_file = yumi_scripts_directory + "demo/" + file_name + ".mod";
+    std::string input_file = yumi_scripts_directory + "paths/" + file_name + ".mod";
 
     // CHECK IF GROUP ATTACHED TO PROVIDED GROUP
     if (group.getActiveJoints().back().compare(0, 7, "gripper") == 0) {
@@ -648,10 +759,10 @@ RAPIDModuleData getYuMiLeadThroughData(std::string file_name, planningInterface:
         for (int point = 0; point < module.total_points; point++) {
             current_point_name = module.pose_names[point].c_str();
             if (previous_point_name.compare(current_point_name) == 0) {
-                if (module.pose_configs[point].gripper_position == 1) {
-                    ROS_INFO("Open Hand");
+                if (module.pose_configs[point].gripper_position == gripper_open_position) {
+                    ROS_INFO("(debug) Open Hand");
                 } else {
-                    ROS_INFO("Close Hand");
+                    ROS_INFO("(debug) Close Hand");
                 }
             } else {
                 ROS_INFO("(debug) Name: %s | Position: %.5f, %.5f, %.5f | Orientation: %.5f, %.5f, %.5f, %.5f | Configuration: %d, %d, %d, %d | External Axis: %.5f", 
@@ -790,6 +901,7 @@ trajectoryPoses combineModules(RAPIDModuleData& module_1, RAPIDModuleData& modul
 
     std::vector<poseConfig> pose_configs_1, pose_configs_2;
     int index_1(0), index_2(0), index(0);
+    bool success = true;
 
     // NOTIFY THE USER THE FUNCTION IS ABOUT TO START
     ROS_INFO("Combining modules.");
@@ -836,6 +948,8 @@ trajectoryPoses combineModules(RAPIDModuleData& module_1, RAPIDModuleData& modul
                 ROS_WARN("Line %d of module 1 main function and line %d of module 2 main function.", index_1+1, index_2+1);
                 ROS_WARN("Module 1: %s", module_1.module_name.c_str());
                 ROS_WARN("Module 2: %s", module_2.module_name.c_str());
+                success = false;
+                break;
             }
         } 
 
@@ -852,28 +966,36 @@ trajectoryPoses combineModules(RAPIDModuleData& module_1, RAPIDModuleData& modul
     ROS_INFO("Modules combined.");
 
     // STORE CONSTRUCTED TRAJECTORIES TO CORRECT ARM
-    if (module_1.group_name.compare("left_arm") == 0) {
-        pose_trajectory.pose_configs_left = pose_configs_1;
-        pose_trajectory.gripper_attached_left = module_1.gripper_attached;
+    if (success) {
+        if (module_1.group_name.compare("left_arm") == 0) {
+            pose_trajectory.pose_configs_left = pose_configs_1;
+            pose_trajectory.gripper_attached_left = module_1.gripper_attached;
 
-        pose_trajectory.pose_configs_right = pose_configs_2;
-        pose_trajectory.gripper_attached_right = module_2.gripper_attached;
+            pose_trajectory.pose_configs_right = pose_configs_2;
+            pose_trajectory.gripper_attached_right = module_2.gripper_attached;
+        } else {
+            pose_trajectory.pose_configs_left = pose_configs_2;
+            pose_trajectory.gripper_attached_left = module_2.gripper_attached;
+
+            pose_trajectory.pose_configs_right = pose_configs_1;
+            pose_trajectory.gripper_attached_right = module_1.gripper_attached;
+        }
+
+        ROS_INFO("Processing time: %.5f",toc());
+        return pose_trajectory;
     } else {
-        pose_trajectory.pose_configs_left = pose_configs_2;
-        pose_trajectory.gripper_attached_left = module_2.gripper_attached;
-
-        pose_trajectory.pose_configs_right = pose_configs_1;
-        pose_trajectory.gripper_attached_right = module_1.gripper_attached;
+        ROS_WARN("Returning empty pose trajectory.");
+        ROS_INFO("Processing time: %.5f",toc());
+        trajectoryPoses empty_trajectory;
+        return empty_trajectory;
     }
-
-    ROS_INFO("Processing time: %.5f",toc());
-    return pose_trajectory;
 }
 
 /* ------------------------------------------------------------ */
+/* -------------------- UNTESTED FUNCTIONS -------------------- */
 /* ------------------------------------------------------------ */
 
-trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module, bool debug) {
+trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module, bool debug) { // NEEDS TO BE TESTED
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-07-28
 
@@ -914,36 +1036,263 @@ trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module, bool debu
    ============================================================ */
 
 
-trajectoryJoints convertPoseConfigToJointTrajectory(kinematics::KinematicsBasePtr& ik, std::vector<poseConfig>& pose_configs, std::vector<double> initial_seed, bool gripper_attached, bool debug) {
+trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveGroup& group, trajectoryPoses& pose_trajectory, kinematics::KinematicsBasePtr& ik_left, kinematics::KinematicsBasePtr& ik_right, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
-    DATE CREATED: 2016-07-28
+    DATE CREATED: 2016-07-29
+
+    If the correct group and pose trajectory were provided to this function to indicate that the data is meant for 
+           the left arm, then proceed to converting from the pose trajectory to joint trajectory for the left arm. If debug
+           mode was set to false, then if any of the pose to joints conversion fails, the conversion function will stop
+           executing and return a success of false. This function will then notify the user that the conversion failed and
+           will return an empty joint trajectory. If debug is set to true, then the point that failed conversion will be 
+           skipped and the conversion will continue with the next point. If the conversion was successful for all points,
+           unless debug was set to true as explained above, then the correct gripper positions will be added to the joint
+           trajectory and the structure for the joint trajectory will be returned.
+
+    ASSUMPTIONS: If current joint values vector contains 7 values then there is not a gripper is attached, but if it 
+                 contains 8 values then a gripper is attached. Also assumes that there are at least 7 joints for the 
+                 desired group.
 */
     ROS_INFO(">--------------------");
 
     // INITIALIZE VARIABLES
+    trajectoryJoints joint_trajectory_left, joint_trajectory_right, joint_trajectory;
+    bool success_left, success_right, success = true, wrong_group_provided = false;
+
+    // CONVERT POSE TRAJECTORY TO JOINT TRAJECTORY
+    if (pose_trajectory.group_name.compare("left_arm") == 0) {
+    /* If the provided pose trajectory is intended for the left arm */
+        if (group.getName().compare("left_arm") == 0) {
+        /* If the provided group is also for manipulating the left arm*/
+            if (debug) { ROS_INFO("Converting pose trajectory to joint trajectory for the left arm."); }
+
+            std::vector<double> joint_values_left = group.getCurrentJointValues();
+
+            if (debug) {
+                ROS_INFO("_____ (debug) Left Arm Initial Joint Values _____");
+                for (int joint = 0; joint < joint_values_left.size(); joint++) {
+                    ROS_INFO("Joint value: %.5f", joint_values_left[joint]);
+                }
+            }
+
+            success_left = convertPoseConfigToJointTrajectory(joint_trajectory_left, ik_left, pose_trajectory.pose_configs_left, joint_values_left, debug);
+            return joint_trajectory_left;
+
+            if (success_right) {
+                if (pose_trajectory.gripper_attached_left) {
+                    for (int point = 0; point < joint_trajectory_left.total_points; point++) {
+                    /* Override gripper positions producesd from the IK with the gripper data from the pose trajectory structure */
+                        joint_trajectory_left.joints[point][7] = pose_trajectory.pose_configs_left[point].gripper_position;
+                    }
+                }
+                joint_trajectory_left.group_name = joint_trajectory_left.intended_group = "left_arm";
+
+                return joint_trajectory_right;
+            } else {
+                ROS_ERROR("From: convertPoseTrajectoryToJointTrajectory(group, pose_trajectory, ik_left, ik_right, debug)");
+                ROS_ERROR("Conversion from pose trajectory to joint trajectory was not successful for the left arm.");
+                success = false;
+            }
+        } else {
+            wrong_group_provided = true;
+            success = false;
+        }
+    } else if (pose_trajectory.group_name.compare("right_arm") == 0) {
+    /* If the provided pose trajectory is intended for the right arm */
+        if (group.getName().compare("right_arm") == 0) {
+        /* If the provided group is also for manipulating the right arm*/
+            if (debug) { ROS_INFO("Converting pose trajectory to joint trajectory for the right arm."); }
+
+            std::vector<double> joint_values_right = group.getCurrentJointValues();
+
+            if (debug) {
+                ROS_INFO("_____ (debug) Right Arm Initial Joint Values _____");
+                for (int joint = 0; joint < joint_values_right.size(); joint++) {
+                    ROS_INFO("Joint value: %.5f", joint_values_right[joint]);
+                }
+            }
+
+            success_right = convertPoseConfigToJointTrajectory(joint_trajectory_right, ik_right, pose_trajectory.pose_configs_right, joint_values_right, debug);
+
+            if (success_right) {
+                if (pose_trajectory.gripper_attached_right) {
+                    for (int point = 0; point < joint_trajectory_right.total_points; point++) {
+                    /* Override gripper positions producesd from the IK with the gripper data from the pose trajectory structure */
+                        joint_trajectory_right.joints[point][7] = pose_trajectory.pose_configs_right[point].gripper_position;
+                    }
+                }
+                joint_trajectory_right.group_name = joint_trajectory_right.intended_group = "right_arm";
+
+                return joint_trajectory_right;
+            } else {
+                ROS_ERROR("From: convertPoseTrajectoryToJointTrajectory(group, pose_trajectory, ik_left, ik_right, debug)");
+                ROS_ERROR("Conversion from pose trajectory to joint trajectory was not successful for the right arm.");
+                success = false;
+            }
+        } else {
+            wrong_group_provided = true;
+            success = false;
+        }
+    } else if (pose_trajectory.group_name.compare("both_arms") == 0) {
+    /* If the provided pose trajectory is intended for both arms */
+        if (group.getName().compare("both_arms") == 0) {
+        /* If the provided group is also for manipulating both arms*/
+            if (debug) { ROS_INFO("Converting pose trajectory to joint trajectory for both arms."); }
+
+            std::vector<std::string> joint_names = group.getActiveJoints();
+            std::vector<double>     joint_values = group.getCurrentJointValues();
+
+            int right_arm_first_joint_index;
+            for (int joint = 7; joint < joint_names.size(); joint++) {
+                if (joint_names[joint].compare("yumi_joint_1_r") == 0) {
+                    right_arm_first_joint_index = joint;
+                    break;
+                }
+            }
+
+            std::vector<double> joint_values_left(&joint_values[0], &joint_values[right_arm_first_joint_index-1]);
+            std::vector<double> joint_values_right(&joint_values[right_arm_first_joint_index], &joint_values[joint_values.size()-1]);
+
+            if (debug) {
+                ROS_INFO("_____ (debug) Both Arms Initial Joint Values _____");
+                for (int joint = 0; joint < joint_values.size(); joint++) {
+                    ROS_INFO("Joint value: %.5f", joint_values[joint]);
+                }
+                ROS_INFO("_____ (debug) Left Arm Initial Joint Values _____");
+                for (int joint = 0; joint < joint_values_left.size(); joint++) {
+                    ROS_INFO("Joint value: %.5f", joint_values_left[joint]);
+                }
+                ROS_INFO("_____ (debug) Right Arm Initial Joint Values _____");
+                for (int joint = 0; joint < joint_values_right.size(); joint++) {
+                    ROS_INFO("Joint value: %.5f", joint_values_right[joint]);
+                }
+            }
+
+            if (debug) {
+                ROS_INFO("....................");
+                ROS_INFO("Solving IK for left arm");
+            }
+            success_left  = convertPoseConfigToJointTrajectory(joint_trajectory_left, ik_left, pose_trajectory.pose_configs_left, joint_values_left, debug);
+            if (debug) {
+                ROS_INFO("....................");
+                ROS_INFO("Solving IK for right arm");
+            }
+            success_right = convertPoseConfigToJointTrajectory(joint_trajectory_right, ik_right, pose_trajectory.pose_configs_right, joint_values_right, debug);
+
+            if (joint_trajectory_left.total_points != joint_trajectory_right.total_points) {
+                ROS_ERROR("From: convertPoseTrajectoryToJointTrajectory(group, pose_trajectory, ik_left, ik_right, debug)");
+                ROS_ERROR("The total trajectory points from the provided pose trajectories for the right and left arm do not match up.");
+                ROS_WARN("Left pose trajectory size: %d | Right pose trajectory size: %d", joint_trajectory_left.total_points, joint_trajectory_right.total_points);
+                ROS_INFO("....................");
+                success_left = success_right = success = false;
+            }
+
+            if (((success_left) && (success_right)) && joint_trajectory_left.total_points > 0) {
+                joint_trajectory.total_joints = joint_trajectory_left.total_joints + joint_trajectory_right.total_joints;
+                joint_trajectory.total_points = joint_trajectory_left.total_points;
+
+                for (int point = 0; point < joint_trajectory_right.total_points; point++) {
+                /* Combine joint trajectories and override gripper positions producesd from the IK with the gripper data from the pose trajectory structure */
+                    for (int joint = 0; joint < joint_trajectory.total_joints; joint++) {
+                        if (joint < joint_trajectory_left.total_joints) { joint_values[joint] = joint_trajectory_left.joints[point][joint]; }
+                        else { joint_values[joint] = joint_trajectory_right.joints[point][joint-joint_trajectory_left.total_joints]; }
+                    }
+                    joint_trajectory.joints.push_back(joint_values);
+
+                    if (pose_trajectory.gripper_attached_left) {
+                        joint_trajectory.joints[point][7] = pose_trajectory.pose_configs_left[point].gripper_position;
+                        /* Gripper position for the left arm is index 7 since: 7 (joints left arm) + 1 (gripper left_arm) - 1 (index starts from 0) = 7 */
+                        if (pose_trajectory.gripper_attached_right) {
+                            joint_trajectory.joints[point][15] = pose_trajectory.pose_configs_right[point].gripper_position;
+                            /* Gripper position for the right arm is index 15 since the left arm has a gripper meaning: 7 (joints left arm) + 1 (gripper left_arm) + 7 (joints right_arm) + 1 (gripper right_arm) - 1 (index starts from 0) = 15 */
+                        }
+                    } else if (pose_trajectory.gripper_attached_right) {
+                    /* If there is no gripper attached to the left arm but there is a gripper attached to the right arm */
+                        joint_trajectory.joints[point][14] = pose_trajectory.pose_configs_right[point].gripper_position;
+                        /* Gripper position for the right arm is index 14 since the left arm does not have a gripper meaning: 7 (joints left arm) + 7 (joints right_arm) + 1 (gripper right_arm) - 1 (index starts from 0) = 14 */
+                    }
+                }
+                joint_trajectory.group_name = joint_trajectory.intended_group = "both_arms";
+
+                return joint_trajectory;
+            } else {
+                if (success) {
+                /* If this line has not already been displayed previously */
+                    ROS_ERROR("From: convertPoseTrajectoryToJointTrajectory(group, pose_trajectory, ik_left, ik_right, debug)");
+                }
+                if ((!success_left) && (!success_right)) {
+                    ROS_ERROR("Conversion from pose trajectory to joint trajectory was not successful for both arms.");
+                } else if (!success_left) {
+                    ROS_ERROR("Conversion from pose trajectory to joint trajectory was not successful for the left arm.");
+                } else if (!success_right) {
+                    ROS_ERROR("Conversion from pose trajectory to joint trajectory was not successful for the right arm.");
+                }
+
+                if ((joint_trajectory.total_points == 0) && (success)) {
+                    ROS_ERROR("The joint trajectory is empty. Not able to combine empty trajectories.");
+                }
+
+                success = false;
+            }
+        } else {
+            wrong_group_provided = true;
+            success = false;
+        }
+    }
+
+    if (!success) {
+        if (wrong_group_provided) {
+            ROS_ERROR("From: convertPoseTrajectoryToJointTrajectory(group, pose_trajectory, ik_left, ik_right, debug)");
+            ROS_ERROR("Provided group does not match with the group that the provided pose_trajectory was intended for.");
+            ROS_WARN("Expected group: %s", pose_trajectory.group_name.c_str());
+            ROS_WARN("Provided group: %s", group.getName().c_str());
+        }
+
+        ROS_WARN("Returning empty joint trajectory.");
+        trajectoryJoints empty_trajectory;
+        return empty_trajectory;
+    }
+}
+
+bool convertPoseConfigToJointTrajectory(trajectoryJoints& joint_trajectory, kinematics::KinematicsBasePtr& ik, std::vector<poseConfig>& pose_configs, std::vector<double> initial_seed, bool debug) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-07-28
+
+
+    ASSUMPTIONS: If the initial_seed contains 7 values then there is not a gripper is attached, but if it contains 8 values 
+                 then a gripper is attached. Also assumes that there are at least 7 joints for the desired group.
+*/
+    ROS_INFO("....................");
+
+    // INITIALIZE VARIABLES
     const double PI = 3.14159;
-    const double TOLERANCE = 0.01;
-    const std::vector<int> config_joints = { 0, 4, 6 };
+    const std::vector<int> confdata_joints = { 0, 4, 6 };
 
-    trajectoryJoints joint_trajectory;
-
-    double timeout = 5.0;
+    double timeout = 1.0;
     std::vector<double> seed;
-    std::vector<double> consistency;
+    std::vector<double> consistency; // tolerance from seed
     std::vector<double> solution;
-    std::vector<double> previous_solution;
+    std::vector<double> previous_solution = initial_seed;
     moveit_msgs::MoveItErrorCodes error_code;
+
+    bool gripper_attached = false;
+    bool success;
+
+    if (initial_seed.size() == 8) {
+        gripper_attached = true;
+    }
 
     // TRANSFER DATA TO JOINT TRAJECTORY STRUCTURE
     joint_trajectory.total_joints = initial_seed.size();
-    joint_trajectory.total_points = pose_configs.size();
 
     // DETERMINE CONSISTANCY VARIABLE SIZE BASED ON GRIPPER ATTACHED
     if (gripper_attached) {
-        consistency = {PI/4+TOLERANCE, PI+TOLERANCE, PI/32+TOLERANCE, PI, PI/4+TOLERANCE, PI+TOLERANCE, PI/4+TOLERANCE, 0.002};
+        consistency = {PI/4, PI, PI/32, PI, PI/4, PI, PI/4, PI};
     } else {
-        consistency = {PI/4+TOLERANCE, PI+TOLERANCE, PI/32+TOLERANCE, PI, PI/4+TOLERANCE, PI+TOLERANCE, PI/4+TOLERANCE};
+        consistency = {PI/4, PI, PI/32, PI, PI/4, PI, PI/4};
     }
+
+    tic();
 
     // PERFORM IK
     for (int pose = 0; pose < pose_configs.size(); pose++) {
@@ -954,64 +1303,62 @@ trajectoryJoints convertPoseConfigToJointTrajectory(kinematics::KinematicsBasePt
 
         // SEED AXIS CONFIGURATIONS
         for (int config = 0; config < confdata_joints.size(); config++) {
-            seed = (pose_configs[pose].confdata[config] * PI/2) + PI/4;
+            seed[confdata_joints[config]] = (pose_configs[pose].confdata[config] * PI/2) + PI/4;
+        }
+        seed[2] = pose_configs[pose].external_axis_position;
+
+        if (debug) {
+            ROS_INFO("_____ (debug) IK Inputs for Index %d _____", pose+1);
+            ROS_INFO(" *Note: for orientation, the w value is provided first*");
+            ROS_INFO("Pose        | Position: [%.5f, %.5f, %.5f] | Orientation: [%.5f, %.5f, %.5f, %.5f]", 
+                pose_configs[pose].pose.position.x, pose_configs[pose].pose.position.y, pose_configs[pose].pose.position.z,
+                pose_configs[pose].pose.orientation.w, pose_configs[pose].pose.orientation.x, pose_configs[pose].pose.orientation.y, pose_configs[pose].pose.orientation.z);
+            ROS_INFO("Config Data | Values: [%d, %d, %d, %d]", pose_configs[pose].confdata[0], pose_configs[pose].confdata[1], pose_configs[pose].confdata[2], pose_configs[pose].confdata[3]);
+            if (gripper_attached) {
+                ROS_INFO("Seed        | Joint values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", seed[0], seed[1], seed[2], seed[3], seed[4], seed[5], seed[6], seed[7]);
+                ROS_INFO("Consistency | Values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", consistency[0], consistency[1], consistency[2], consistency[3], consistency[4], 
+                    consistency[5], consistency[6], consistency[7]);
+            } else {
+                ROS_INFO("Seed        | Joint values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", seed[0], seed[1], seed[2], seed[3], seed[4], seed[5], seed[6]);
+                ROS_INFO("Consistency | Values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", consistency[0], consistency[1], consistency[2], consistency[3], 
+                    consistency[4], consistency[5], consistency[6]);
+            }
         }
 
         // COMPUTE IK
-        success = ik->searchPositionIK(pose, seed, timout, consistency, solution, error_code);
+        success = ik->searchPositionIK(pose_configs[pose].pose, seed, timeout, consistency, solution, error_code);
+
+        if (debug) {
+            ROS_INFO("____ (debug) Joint Value Solution for Index %d _____", pose+1);
+            if (error_code.val != 1) {
+                ROS_INFO("Solution not found.");
+            } else {
+                for (int joint = 0; joint < solution.size(); joint++) {
+                    ROS_INFO("Joint value: %.5f", solution[joint]);
+                }
+            }
+        }
 
         if (success) {
             ROS_INFO("(Index %d) IK calculation was successful.", pose+1);
+            joint_trajectory.joints.push_back(solution);
         } else {
-            ROS_WARN("IK calculation failed. Error code: %d", error_code.val);
+            ROS_WARN("IK calculation failed for index %d. Error code: %d", pose+1, error_code.val);
+
             if (debug) {
                 ROS_WARN("(debug) Skipping trajectory point.");
                 solution = previous_solution;
             } else {
                 ROS_WARN("Exiting function.");
-                trajectoryJoints empty_trajectory;
-                return empty_trajectory;
-            }
-        }
-
-        if (debug) {
-            ROS_INFO("____ (debug) Joint Value Solution for Index %d _____", pose+1);
-            if (solution.size() == 0) {
-                ROS_INFO("(debug) Solution empty.");
-            } else {
-                for (int joint = 0; joint < solution.size(); joint++) {
-                    ROS_INFO("(debug) Joint value: %.5f", solution[joint]);
-                }
+                return false;
             }
         }
 
         previous_solution = solution;
     }
 
-    return joint_trajectory;
+    joint_trajectory.total_points = joint_trajectory.joints.size();
+
+    ROS_INFO("Processing time: %.5f",toc());
+    return true;
 }
-
-struct poseConfig {
-    geometry_msgs::Pose pose;
-    double gripper_position;
-    std::vector<int> confdata;
-    double external_axis_position;
-};
-
-struct trajectoryPoses {
-    std::string group_name;
-    std::string intended_group;
-    std::vector<poseConfig> pose_configs_left;
-    std::vector<poseConfig> pose_configs_right;
-    bool gripper_attached_left  = false;
-    bool gripper_attached_right = false; 
-    int total_points;
-};
-
-struct trajectoryJoints {
-    std::string group_name;
-    std::string intended_group;
-    int total_joints;
-    std::vector<std::vector<double>> joints;
-    int total_points;
-};

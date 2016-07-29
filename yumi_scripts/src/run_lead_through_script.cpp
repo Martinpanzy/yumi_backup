@@ -167,34 +167,34 @@ int main(int argc,char **argv) {
 	// move_groups[1] = &right_arm;
 	// move_groups[2] = &both_arms;
 
-	int total_allowed_arguments = 8;
-	while (true) {
-		std::vector<std::string> inputs(total_allowed_arguments,"");
+	// int total_allowed_arguments = 8;
+	// while (true) {
+	// 	std::vector<std::string> inputs(total_allowed_arguments,"");
 
-		std::string input;
-		getline(std::cin, input);
-		std::istringstream input_stream(input);
+	// 	std::string input;
+	// 	getline(std::cin, input);
+	// 	std::istringstream input_stream(input);
 
-		int argument = 0;
-		while ((input_stream >> inputs[argument]) && (argument < total_allowed_arguments)) {
-			ROS_INFO("Argument %d: %s", argument+1, inputs[argument].c_str());
-			argument++;
-		}
+	// 	int argument = 0;
+	// 	while ((input_stream >> inputs[argument]) && (argument < total_allowed_arguments)) {
+	// 		ROS_INFO("Argument %d: %s", argument+1, inputs[argument].c_str());
+	// 		argument++;
+	// 	}
 
-		if (inputs[0].compare("exit") == 0) {
-			break;
-		} else if (inputs[0].compare("help") == 0) {
-			ROS_INFO("List of allowed arguments:");
-			ROS_INFO("module <file_name> <move_group> <execute> <save>");
-			ROS_INFO("module <file_name_1> <move_group_1> two_arms <file_name_2> <move_group_2> <execute> <save>");
-			ROS_INFO("file <file_name> <move_group> <execute> <save>");
-			ROS_INFO(" ");
-			ROS_INFO("File names should NOT include file extensions (*.txt, *.mod, etc.)");
-			ROS_INFO("<execute> and <save> must be either \"true\" or \"false\".");
-			ROS_INFO("  - They indicate if the trajectories should be executed and/or saved respectively.");
-			ROS_INFO("To exit the program, type: \"exit\"");
-		} 
-	}
+	// 	if (inputs[0].compare("exit") == 0) {
+	// 		break;
+	// 	} else if (inputs[0].compare("help") == 0) {
+	// 		ROS_INFO("List of allowed arguments:");
+	// 		ROS_INFO("module <file_name> <move_group> <execute> <save>");
+	// 		ROS_INFO("module <file_name_1> <move_group_1> two_arms <file_name_2> <move_group_2> <execute> <save>");
+	// 		ROS_INFO("file <file_name> <move_group> <execute> <save>");
+	// 		ROS_INFO(" ");
+	// 		ROS_INFO("File names should NOT include file extensions (*.txt, *.mod, etc.)");
+	// 		ROS_INFO("<execute> and <save> must be either \"true\" or \"false\".");
+	// 		ROS_INFO("  - They indicate if the trajectories should be executed and/or saved respectively.");
+	// 		ROS_INFO("To exit the program, type: \"exit\"");
+	// 	} 
+	// }
 
 
 	// // both_arms.startStateMonitor();
@@ -204,79 +204,80 @@ int main(int argc,char **argv) {
 	// displayJointValues(right_arm);
 	// sleep(0.5);
 
-	ros::ServiceClient service_client = node_handle.serviceClient<moveit_msgs::GetPositionIK>("compute_ik");
+	// ros::ServiceClient service_client = node_handle.serviceClient<moveit_msgs::GetPositionIK>("compute_ik");
 
-	std::string file_name = argv[1];
+	//std::string file_name = argv[1];
 
-	//kdl_kinematics_plugin::KDLKinematicsPlugin *ik_right = new kdl_kinematics_plugin::KDLKinematicsPlugin;
+	// kdl_kinematics_plugin::KDLKinematicsPlugin *ik_right = new kdl_kinematics_plugin::KDLKinematicsPlugin;
 
-	// boost::shared_ptr<pluginlib::ClassLoader<kinematics::KinematicsBase>> kinematics_loader;
-	// kinematics::KinematicsBasePtr ik_right;
 
-	// kinematics_loader.reset(new pluginlib::ClassLoader<kinematics::KinematicsBase>("moveit_core", "kinematics::KinematicsBase"));
+	boost::shared_ptr<pluginlib::ClassLoader<kinematics::KinematicsBase>> kinematics_loader;
+	kinematics::KinematicsBasePtr ik_right;
 
- //    // instantiate our plugin
- //    std::string plugin_name = "kdl_kinematics_plugin/KDLKinematicsPlugin";
- //    try
- //    {
- //      ik_right = kinematics_loader->createInstance(plugin_name);
- //    }
- //    catch(pluginlib::PluginlibException& ex)//handle the class failing to load
- //    {
- //      ROS_ERROR("The plugin failed to load. Error: %s", ex.what());
- //      return false;
- //    }
+	kinematics_loader.reset(new pluginlib::ClassLoader<kinematics::KinematicsBase>("moveit_core", "kinematics::KinematicsBase"));
 
-	// bool success; 
-	// success = ik_right->initialize("/robot_description", "right_arm", right_arm.getPoseReferenceFrame(), right_arm.getEndEffectorLink(), 0.001);
-	// ROS_INFO("IK initialize status: %s", success?"success":"failed");
+    // instantiate our plugin
+    std::string plugin_name = "kdl_kinematics_plugin/KDLKinematicsPlugin";
+    try
+    {
+      ik_right = kinematics_loader->createInstance(plugin_name);
+    }
+    catch(pluginlib::PluginlibException& ex)//handle the class failing to load
+    {
+      ROS_ERROR("The plugin failed to load. Error: %s", ex.what());
+      return false;
+    }
 
-	// trajectoryJoints jointTrajectory;
-	// trajectoryPoses poseTrajectory;
+	bool success; 
+	success = ik_right->initialize("/robot_description", "right_arm", right_arm.getPoseReferenceFrame(), right_arm.getEndEffectorLink(), 0.001);
+	ROS_INFO("IK initialize status: %s", success?"success":"failed");
 
-	// std::string dataType = getFileDataType(inputFile);
-	// if (dataType.compare("joints") == 0) {
-	// 	jointTrajectory = getTrajectoryJoints(right_arm, inputFile);
-	// } else if (dataType.compare("poses") == 0) {
-	// 	poseTrajectory = getTrajectoryPoses(right_arm, inputFile);
-	// }
+	trajectoryJoints jointTrajectory;
+	trajectoryPoses poseTrajectory;
 
-	// const double PI = 3.1416;
-	// std::vector<double> seed;
-	// std::vector<double> consistency(8);
-	// std::vector<double> solution;
-	// moveit_msgs::MoveItErrorCodes error_code;
+	std::string dataType = getFileDataType(inputFile);
+	if (dataType.compare("joints") == 0) {
+		jointTrajectory = getTrajectoryJoints(right_arm, inputFile);
+	} else if (dataType.compare("poses") == 0) {
+		poseTrajectory = getTrajectoryPoses(right_arm, inputFile);
+	}
 
-	// for (int joint = 0; joint < consistency.size(); joint++) {
-	// 	if ((joint == 0) || (joint == 4) || (joint == 6)) {
-	// 		consistency[joint] = PI/4;
-	// 	} else if (joint == 2) {
-	// 		consistency[joint] = PI/32;
-	// 	} else {
-	// 		consistency[joint] = PI;
-	// 	}
-	// }
+	const double PI = 3.1416;
+	std::vector<double> seed;
+	std::vector<double> consistency(8, 0.0);
+	std::vector<double> solution;
+	moveit_msgs::MoveItErrorCodes error_code;
 
-	// std::vector<std::vector<int>> confdata;
-	// std::vector<double> joint_7_positions;
+	for (int joint = 0; joint < consistency.size(); joint++) {
+		if ((joint == 0) || (joint == 4) || (joint == 6)) {
+			consistency[joint] = PI/4;
+		} else if (joint == 2) {
+			consistency[joint] = PI/32;
+		} else {
+			consistency[joint] = PI;
+		}
+	}
 
-	// std::vector<int> confdata_entry(3);
-	// confdata_entry[0] = 0;
-	// confdata_entry[1] = -2;
-	// confdata_entry[2] = -1;
-	// confdata.push_back(confdata_entry);
-	// joint_7_positions.push_back(-1.2217);
+	std::vector<std::vector<int>> confdata;
+	std::vector<double> joint_7_positions;
 
-	// setAxisConfigurations(right_arm, confdata[0], joint_7_positions[0], seed, true);
+	std::vector<int> confdata_entry(3);
+	confdata_entry[0] = 0;
+	confdata_entry[1] = -2;
+	confdata_entry[2] = -1;
+	confdata.push_back(confdata_entry);
+	joint_7_positions.push_back(-1.2217);
 
-	// success = ik_right->searchPositionIK(poseTrajectory.pose_right[0], seed, 5.0, consistency, solution, error_code); // 5.0, consistency, 
-	// ROS_INFO("IK calculation status: %s", success?"success":"failed");
+	setAxisConfigurations(right_arm, confdata[0], joint_7_positions[0], seed, true);
 
-	// for (int joint = 0; joint < solution.size(); joint++) {
-	// 	ROS_INFO("Joint value: %.4f", solution[joint]);
-	// }
+	success = ik_right->searchPositionIK(poseTrajectory.pose_right[0], seed, 5.0, consistency, solution, error_code); // 5.0, consistency, 
+	ROS_INFO("IK calculation status: %s", success?"success":"failed");
 
-	// gotoJoints(right_arm, solution);
+	for (int joint = 0; joint < solution.size(); joint++) {
+		ROS_INFO("Joint value: %.4f", solution[joint]);
+	}
+
+	gotoJoints(right_arm, solution);
 
 
 	// geometry_msgs::PoseStamped pose_stamped;

@@ -147,7 +147,7 @@ int main(int argc,char **argv) {
 		std::ifstream file_left(file_left_path);
 		std::ifstream file_right(file_right_path);
 		if ((file_left.good()) || (file_right.good())) {
-			ROS_ERROR("Output file name already exists. Please use another name or delete the existing file.");
+			ROS_ERROR("One of the output file names already exists. Please use another name or delete the existing file.");
 			ROS_WARN("Left arm output file:  %s", file_left_path.c_str());
 			ROS_WARN("Right arm output file: %s", file_right_path.c_str());
 			return 1;
@@ -170,18 +170,19 @@ int main(int argc,char **argv) {
 	ROS_INFO("Program ready to accept commands. Run the following command to store position.");
 	ROS_INFO("yumi_store_point $command");
 	ROS_INFO(" ");
-	ROS_INFO("_____ LIST OF RECOGNIZED COMMANDS _____")
+	ROS_INFO("_____ LIST OF RECOGNIZED COMMANDS _____");
 	if (desired_group == 3) {
 		ROS_INFO("To only store the left arm position, replace $command with: left_only");
 		ROS_INFO("To only store the right arm position, replace $command with: right_only");
 	}
 	ROS_INFO("To store the last trajectory point, replace $command with: finish");
 	ROS_INFO("To close/open a gripper, use the following command: <open/close>_$arm");
-	ROS_INFO(" NOTE:");
+	ROS_INFO(" ");
+	ROS_INFO("_____ NOTE _____");
 	ROS_INFO("  - Choose either open or close, example of valid command: open_left");
 	ROS_INFO("  - Replace $arm with the desired arm, can be either: left or right");
 	ROS_INFO("  - Moving the gripper for one arm will not store the position for the other arm");
-	ROS_INFO("  - The gripper must be closed using TeachPendant, for more info please look at wiki page")
+	ROS_INFO("  - The gripper must be closed using TeachPendant, for more info please look at wiki page");
 	ROS_INFO("        Wiki page: https://github.com/ethz-asl/yumi/wiki");
 	
 	// GET POSES
@@ -224,6 +225,11 @@ int main(int argc,char **argv) {
 				} else {
 					if (poses_left.gripper_attached) {
 						poses_left.pose_names.push_back("OpenHand;");
+
+						poseConfig empty_pose;
+						poses_left.pose_configs.push_back(empty_pose);
+						/* Add an empty pose to have the pose names and poses have the same index */
+
 						gripper_movement = true;
 					} else {
 						ROS_WARN("A gripper is not attached to the left arm.");
@@ -238,6 +244,11 @@ int main(int argc,char **argv) {
 				} else {
 					if (poses_right.gripper_attached) {
 						poses_right.pose_names.push_back("OpenHand;");
+
+						poseConfig empty_pose;
+						poses_right.pose_configs.push_back(empty_pose);
+						/* Add an empty pose to have the pose names and poses have the same index */
+
 						gripper_movement = true;
 					} else {
 						ROS_WARN("A gripper is not attached to the right arm.");
@@ -252,6 +263,11 @@ int main(int argc,char **argv) {
 				} else {
 					if (poses_left.gripper_attached) {
 						poses_left.pose_names.push_back("CloseHand;");
+
+						poseConfig empty_pose;
+						poses_left.pose_configs.push_back(empty_pose);
+						/* Add an empty pose to have the pose names and poses have the same index */
+
 						gripper_movement = true;
 					} else {
 						ROS_WARN("A gripper is not attached to the left arm.");
@@ -266,6 +282,11 @@ int main(int argc,char **argv) {
 				} else {
 					if (poses_right.gripper_attached) {
 						poses_right.pose_names.push_back("CloseHand;");
+
+						poseConfig empty_pose;
+						poses_right.pose_configs.push_back(empty_pose);
+						/* Add an empty pose to have the pose names and poses have the same index */
+
 						gripper_movement = true;
 					} else {
 						ROS_WARN("A gripper is not attached to the right arm.");
@@ -320,22 +341,22 @@ int main(int argc,char **argv) {
 			// CHECK FOR LAST TRAJECTORY POINT
 			if (command.compare("finish") == 0) {
 			/* If the last trajectory points has been stored, indicated by the command "finish" */
-				ROS_INFO("(Pose index: %d) Last trajectory point received.");
+				ROS_INFO("(Pose index left: %d | Pose index right: %d) Last trajectory point received.", (point_right_movesync+point_right_move)-2, (point_left_movesync+point_left_move)-2);
 				break;
 			}
 
 			// RESET FLAGS AND/OR NOTIFY USER OF ANY ISSUES/TYPE OF DATA STORED
 			if (skip_command) {
-				ROS_INFO("(Pose index: %d) Pose not stored due to warning.");
+				ROS_INFO("(Pose index: %d) Pose not stored due to warning.", pose_index);
 				skip_command = false;
 			} else {
 				if (gripper_movement) {
-					ROS_INFO("(Pose index: %d) Gripper command received and stored.", pose_index);
+					ROS_INFO("Gripper command received and stored. Command: %s", command.c_str());
 					gripper_movement = false;
 				} else {
-					ROS_INFO("(Pose index: %d) Pose stored.", pose_index);
+					ROS_INFO("(Pose index left: %d | Pose index right: %d) Pose stored.", (point_right_movesync+point_right_move)-2, (point_left_movesync+point_left_move)-2);
+					pose_index++;
 				}
-				pose_index++;
 			}
 			
 			new_command = 0;
@@ -344,10 +365,12 @@ int main(int argc,char **argv) {
 	}
 
 	// WRITE DATA TO FILE
-	ROS_INFO(">--------------------");
-	if (desired_group == 1) { writeToFile(output_file_name, poses_left, debug); }
-	else if (desired_group == 2) { writeToFile(output_file_name, poses_right, debug); }
-	else if (desired_group == 3) { writeToFile(output_file_name, poses_left, poses_right, debug); }
+	if (ok()) {
+		ROS_INFO(">--------------------");
+		if (desired_group == 1) { writeToFile(output_file_name, poses_left, debug); }
+		else if (desired_group == 2) { writeToFile(output_file_name, poses_right, debug); }
+		else if (desired_group == 3) { writeToFile(output_file_name, poses_left, poses_right, debug); }
+	}
 
 	ROS_INFO("Finished file writing. Terminating program.");
 	return 0;
@@ -425,7 +448,7 @@ poseConfig getAxisConfigurations(planningInterface::MoveGroup& group, bool debug
     if (group_name.compare("both_arms") == 0) {
         if (!debug) { ROS_INFO(">--------------------"); }
         ROS_ERROR("From: getAxisConfigurations(group, debug)");
-        ROS_ERROR("Cannot get axis configurations for both arms. Please run this function for each arm.");
+        ROS_ERROR("Cannot get axis configurations for both arms at the same time. Please run this function for each arm individually.");
         poseConfig empty_pose_config;
         return empty_pose_config;
     } else if ((group_name.compare("left_arm") != 0) && (group_name.compare("right_arm") != 0)) {
@@ -451,7 +474,7 @@ poseConfig getAxisConfigurations(planningInterface::MoveGroup& group, bool debug
 
     if (debug) {
         ROS_INFO("_____ (debug) Current joint positions _____");
-        for (int joint = 0; joint < joint_values.size(); joint++) { ROS_INFO("%.5f", joint_values[joint]); } 
+        for (int joint = 0; joint < joint_values.size(); joint++) { ROS_INFO("Joint values: %.5f", joint_values[joint]); } 
     }
 
     // GET AXIS CONFIGURATIONS
@@ -539,11 +562,9 @@ void writeToFile(std::string output_file_name, leadThroughPoses& poses, bool deb
 	output_file << "LOCAL CONST string YuMi_App_Program_Version:=\"1.0.1\"; !Do not edit or remove this line!" << std::endl;
 	
 	// ADD ROBTARGETS
-	if (debug) { ROS_INFO("(debug) Adding robtargets to file"); }
-    for (int pose = poses.pose_configs.size()-1; pose >= 0; pose--) {
-    	if ((poses.pose_names[pose].compare("CloseHand;") == 0) || (poses.pose_names[pose].compare("OpenHand;") == 0)) {
-    		output_file << poses.pose_names[pose] << std::endl;
-    	} else {
+	if (debug) { ROS_INFO("_____ (debug) Adding robtargets to file _____"); }
+    for (int pose = poses.pose_names.size()-1; pose >= 0; pose--) {
+    	if ((poses.pose_names[pose].compare(0, 1, "C") != 0) && (poses.pose_names[pose].compare(0, 1, "O") != 0)) {
     		output_file << robtarget_prefix << getRobtargetOutputLine(poses.pose_names[pose], poses.pose_configs[pose], debug) << std::endl;
     	}
     }
@@ -551,11 +572,14 @@ void writeToFile(std::string output_file_name, leadThroughPoses& poses, bool deb
     output_file << "PROC main()" << std::endl;
 
     // ADD MAIN FUNCTION
-    if (debug) { ROS_INFO("(debug) Adding main function to file"); }
+    if (debug) { ROS_INFO("_____ (debug) Adding main function to file _____"); }
     for (int line = 0; line < poses.pose_names.size(); line++) {
     	if (poses.pose_names[line].compare(0, 1, "p") == 0) {
     		output_file << "something " << poses.pose_names[line] << ";" << std::endl;
+
     		if (debug) { ROS_INFO("(debug) something %s;", poses.pose_names[line].c_str()); }
+    	} else if ((poses.pose_names[line].compare(0, 1, "C") == 0) || (poses.pose_names[line].compare(0, 1, "O") == 0)) {
+    		output_file << poses.pose_names[line] << std::endl;
     	} else {
     		output_file << "MoveSync " << poses.pose_names[line] << ";" << std::endl;
     		if (debug) { ROS_INFO("(debug) MoveSync %s;", poses.pose_names[line].c_str()); }

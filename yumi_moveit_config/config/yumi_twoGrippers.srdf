@@ -30,6 +30,13 @@
     <!---- First Modified: 2016-05-20 ----->
     <!--=================================-->
 
+    <group name="left_arm_ik">
+      <chain base_link="yumi_body" tip_link="yumi_link_7_l"/>
+    </group>
+    <group name="right_arm_ik">
+      <chain base_link="yumi_body" tip_link="yumi_link_7_r"/>
+    </group>
+
     <group name="left_arm">
       <joint name="yumi_joint_1_l" />
       <joint name="yumi_joint_2_l" />
