@@ -134,10 +134,10 @@ int main(int argc, char **argv) {
 
     // INITIALIZE VARIABLES
     bool debug = true;
-    std::string end_effector_left    = "yumi_link_7_l";
-    std::string end_effector_right   = "yumi_link_7_r";
-    // std::string end_effector_left    = "gripper_l_tcp";
-    // std::string end_effector_right   = "gripper_r_tcp";
+    // std::string end_effector_left    = "yumi_link_7_l";
+    // std::string end_effector_right   = "yumi_link_7_r";
+    std::string end_effector_left    = "gripper_l_tcp";
+    std::string end_effector_right   = "gripper_r_tcp";
     std::string pose_reference_frame = "yumi_body";
 
     // INITIALIZE MOVE GROUPS FOR THE LEFT ARM, RIGHT ARM, AND BOTH ARMS
@@ -194,7 +194,7 @@ int main(int argc, char **argv) {
     std::string left_file(""), right_file(""), rosbag_file(""), module_folder("paths"), rosbag_folder("bags"), module_file_type(".mod"), rosbag_file_type(".bag");
     int system_return, total_allowed_arguments(9);
     bool bounds(true), planner_successfully_created(false);
-    planner plans;
+    planner plans, empty_plans;
 
     system_return = std::system("clear"); // clear the screen
     ROS_INFO("Ready to take inputs. For a list of recognized inputs, enter \"help\"");
@@ -327,6 +327,8 @@ int main(int argc, char **argv) {
 
         } else if (inputs[0].compare("run") == 0) {
             if ((left_file.compare("") != 0) && (right_file.compare("") != 0)) {
+                plans = empty_plans;
+                
                 RAPIDModuleData module_left  = getYuMiLeadThroughData(left_file, left_arm, debug);
                 RAPIDModuleData module_right = getYuMiLeadThroughData(right_file, right_arm, debug);
                 trajectoryPoses pose_trajectory = combineModules(module_left, module_right, debug);
@@ -1649,7 +1651,7 @@ bool convertPoseConfigToJointTrajectory(trajectoryJoints& joint_trajectory, kine
             ROS_INFO("____ (debug) Joint Value Solution for Index %d _____", pose+1);
             if (error_code.val != 1) {
                 previous_solution_failed = true;
-                ROS_INFO("Solution not found. Error code: %d", error_code.val);
+                ROS_WARN("Solution not found. Error code: %d", error_code.val);
             } else {
                 previous_solution_unbounded = previous_solution_failed = false;
 
@@ -1681,7 +1683,7 @@ bool convertPoseConfigToJointTrajectory(trajectoryJoints& joint_trajectory, kine
 
                     ROS_INFO("____ (debug) Joint Value Solution for Index %d _____", pose+1);
                     if (error_code.val != 1) {
-                        ROS_INFO("Solution not found. Error code: %d", error_code.val);
+                        ROS_WARN("Solution not found. Error code: %d", error_code.val);
                     } else {
                         previous_solution_unbounded = true;
                         previous_solution_failed    = false;
