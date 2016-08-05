@@ -60,7 +60,7 @@ int main(int argc,char **argv) {
 	int desired_group = -1;
 	int pose_index = 1;
 
-	bool debug = false;
+	bool debug = true;
 	bool left_arm_only  = false;
 	bool right_arm_only = false;
 	bool skip_command     = false;
@@ -112,9 +112,9 @@ int main(int argc,char **argv) {
 	NodeHandle node_handle;
 
 	// DEFINE MOVE GROUPS
-	planningInterface::MoveGroup left_arm("left_arm");
+	planningInterface::MoveGroup left_arm("left_arm_ik");
     left_arm.startStateMonitor();
-    planningInterface::MoveGroup right_arm("right_arm");
+    planningInterface::MoveGroup right_arm("right_arm_ik");
     right_arm.startStateMonitor();
 
     // SET MOVE GROUP REFRENCE FRAMES AND END EFFECTORS
@@ -338,6 +338,8 @@ int main(int argc,char **argv) {
 				if (debug) { ROS_INFO("(Pose index: %d) (debug) Stored point %s for right arm.", pose_index, point_name.c_str()); }
 			}
 
+			if (debug) { ROS_INFO("...................."); }
+
 			// CHECK FOR LAST TRAJECTORY POINT
 			if (command.compare("finish") == 0) {
 			/* If the last trajectory points has been stored, indicated by the command "finish" */
@@ -421,9 +423,9 @@ poseConfig getAxisConfigurations(planningInterface::MoveGroup& group, bool debug
 
     -------------------- OTHER INFORMATION --------------------
 
-    ABB AXIS CONFIGURATION CONVENTION: [axis_1_config, axis_4_config, axis_6_config, cfx]
-
     ABB YuMi AXIS NAMING CONVENTION (from YuMi base to end effector): [1, 2, 7, 3, 4, 5, 6]
+
+    ABB AXIS CONFIGURATION CONVENTION: [axis_1_config, axis_4_config, axis_6_config, cfx]
 
     CONFIGURATION SETS: -4 -> [-360, -270)   -3 -> [-270, -180)   -2 -> [-180, -90)   -1 -> [-90,   0)
                          0 -> [0,      90)    1 -> [  90,  180)    2 -> [180,  270)    3 -> [270, 360)
@@ -451,12 +453,12 @@ poseConfig getAxisConfigurations(planningInterface::MoveGroup& group, bool debug
         ROS_ERROR("Cannot get axis configurations for both arms at the same time. Please run this function for each arm individually.");
         poseConfig empty_pose_config;
         return empty_pose_config;
-    } else if ((group_name.compare("left_arm") != 0) && (group_name.compare("right_arm") != 0)) {
+    } else if ((group_name.compare(0, 8, "left_arm") != 0) && (group_name.compare(0, 9, "right_arm") != 0)) {
         if (!debug) { ROS_INFO(">--------------------"); }
         ROS_ERROR("From: getAxisConfigurations(group, debug)");
         ROS_ERROR("The provided group is not recognized by this function.");
         ROS_WARN("Provided group: %s", group_name.c_str());
-        ROS_WARN("Recognized groups: left_arm, right_arm");
+        ROS_WARN("Recognized groups: left_arm, right_arm, left_arm_ik, right_arm_ik");
         poseConfig empty_pose_config;
         return empty_pose_config;
     }
@@ -473,17 +475,19 @@ poseConfig getAxisConfigurations(planningInterface::MoveGroup& group, bool debug
     std::vector<double> joint_values = group.getCurrentJointValues();
 
     if (debug) {
-        ROS_INFO("_____ (debug) Current joint positions _____");
-        for (int joint = 0; joint < joint_values.size(); joint++) { ROS_INFO("Joint values: %.5f", joint_values[joint]); } 
+        ROS_INFO("_____ (debug) Current Joint Positions _____");
+        for (int joint = 0; joint < joint_values.size(); joint++) { 
+        	ROS_INFO("Joint index %d values: %.5f", joint+1, joint_values[joint]); 
+        } 
     }
 
     // GET AXIS CONFIGURATIONS
-    axis_1_config = std::floor((joint_values[0] * rad2deg) / 90.0); 
-    axis_4_config = std::floor((joint_values[4] * rad2deg) / 90.0);
-    axis_6_config = std::floor((joint_values[6] * rad2deg) / 90.0);
-    if (joint_values[5] < 0)    { cfx += 1000; }
-    if (joint_values[3] < PI/2) { cfx += 100;  }
-    if (joint_values[1] < 0)    { cfx += 10;   }
+    axis_1_config = std::floor(joint_values[0] / (PI/2.0)); 
+    axis_4_config = std::floor(joint_values[4] / (PI/2.0));
+    axis_6_config = std::floor(joint_values[6] / (PI/2.0));
+    if (joint_values[5] < 0)     { cfx += 1000; }
+    if (joint_values[3] < -PI/2) { cfx += 100;  }
+    if (joint_values[1] < 0)     { cfx += 10;   }
 
     pose_config.confdata.push_back(axis_1_config);
     pose_config.confdata.push_back(axis_4_config);
@@ -493,8 +497,8 @@ poseConfig getAxisConfigurations(planningInterface::MoveGroup& group, bool debug
     pose_config.external_axis_position = joint_values[2];
 
     if (debug) {
-        ROS_INFO("_____ (debug) Axis configuration for current joint positions _____");
-        ROS_INFO("Configuration: [%d, %d, %d, %d] | External Axis Position: [%0.5f]", 
+        ROS_INFO("_____ (debug) Axis Configuration for Current Joint Position _____");
+        ROS_INFO("Configuration: [%d, %d, %d, %d] | External Axis Position: [%.5f]", 
             pose_config.confdata[0], pose_config.confdata[1], pose_config.confdata[2], pose_config.confdata[3], 
             pose_config.external_axis_position);
     }
@@ -528,10 +532,11 @@ void writeToFile(std::string output_file_name, leadThroughPoses& poses, bool deb
         3) LOCAL VAR robtarget s1 := [[316.65,45.52,21.47],[0.0502929,0.702983,-0.635561,0.315196],[-1,0,-1,1010],[-169.577,9E+09,9E+09,9E+09,9E+09,9E+09]];
         4) PROC main()
         5) MoveSync s1;
-        6) OpenHand;
-        7) CloseHand;
-        8) ENDPROC
-        9) ENDMODULE
+        6) Move p1
+        7) OpenHand;
+        8) CloseHand;
+        9) ENDPROC
+       10) ENDMODULE
 
     ABB YuMi MODULE CONVENTIONS:
     	- First line is always the module name
@@ -539,6 +544,8 @@ void writeToFile(std::string output_file_name, leadThroughPoses& poses, bool deb
     	- Next set of lines define the robtargets in descending numerical order
     	- Line after the robtarget definitions is the start of the main function
     	- Next set of lines define the robot arm and gripper movements for the robot to move through
+    		- MoveSync indicates a synced movement with the other arm
+    		- Move indicates an independent movement from the other arm
     	- The last two lines indicate the end of the main function and end of the module
 
     GRIPPER COMMANDS: The gripper can either be set to open or close. When set to close, the gripper will close its hand until
@@ -562,7 +569,7 @@ void writeToFile(std::string output_file_name, leadThroughPoses& poses, bool deb
 	output_file << "LOCAL CONST string YuMi_App_Program_Version:=\"1.0.1\"; !Do not edit or remove this line!" << std::endl;
 	
 	// ADD ROBTARGETS
-	if (debug) { ROS_INFO("_____ (debug) Adding robtargets to file _____"); }
+	if (debug) { ROS_INFO("_____ (debug) Adding Robtargets to File _____"); }
     for (int pose = poses.pose_names.size()-1; pose >= 0; pose--) {
     	if ((poses.pose_names[pose].compare(0, 1, "C") != 0) && (poses.pose_names[pose].compare(0, 1, "O") != 0)) {
     		output_file << robtarget_prefix << getRobtargetOutputLine(poses.pose_names[pose], poses.pose_configs[pose], debug) << std::endl;
@@ -572,12 +579,12 @@ void writeToFile(std::string output_file_name, leadThroughPoses& poses, bool deb
     output_file << "PROC main()" << std::endl;
 
     // ADD MAIN FUNCTION
-    if (debug) { ROS_INFO("_____ (debug) Adding main function to file _____"); }
+    if (debug) { ROS_INFO("_____ (debug) Adding Main Function to File _____"); }
     for (int line = 0; line < poses.pose_names.size(); line++) {
     	if (poses.pose_names[line].compare(0, 1, "p") == 0) {
-    		output_file << "something " << poses.pose_names[line] << ";" << std::endl;
+    		output_file << "Move " << poses.pose_names[line] << ";" << std::endl;
 
-    		if (debug) { ROS_INFO("(debug) something %s;", poses.pose_names[line].c_str()); }
+    		if (debug) { ROS_INFO("(debug) Move %s;", poses.pose_names[line].c_str()); }
     	} else if ((poses.pose_names[line].compare(0, 1, "C") == 0) || (poses.pose_names[line].compare(0, 1, "O") == 0)) {
     		output_file << poses.pose_names[line] << std::endl;
     	} else {
@@ -612,13 +619,13 @@ void writeToFile(std::string output_file_name, leadThroughPoses& poses_left, lea
 
     // WRITE TO FILE LEFT ARM
     if (debug) {
-    	ROS_INFO("_____ (debug) Writing left arm file _____");
+    	ROS_INFO("_____ (debug) Writing Left Arm File _____");
     }
     writeToFile(output_file_name_left, poses_left, debug);
 
     // WRITE TO FILE RIGHT ARM
     if (debug) {
-    	ROS_INFO("_____ (debug) Writing right arm file _____");
+    	ROS_INFO("_____ (debug) Writing Right Arm File _____");
     }
     writeToFile(output_file_name_right, poses_right, debug);
 }

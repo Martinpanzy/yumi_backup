@@ -1,10 +1,11 @@
 // INCLUDES
-#include <sstream>
 #include <fstream>
-#include <string>
-#include <stack>
+#include <cmath>
 #include <ctime>
 #include <math.h>
+#include <sstream>
+#include <stack>
+#include <string>
 
 #include <boost/foreach.hpp>
 #include <geometry_msgs/Pose.h>
@@ -39,6 +40,7 @@ namespace planningInterface = moveit::planning_interface;
 const double gripper_open_position = 0.024; // gripper open position (m)
 const double gripper_closed_position = 0.0; // gripper closed position (m)
 const std::string yumi_scripts_directory = "/home/yumi/yumi_ws/src/yumi/yumi_scripts/"; // full path to folder where trajectory text files should be stored
+const std::string yumi_rosbag_topic_name = "yumi";
 
 // STRUCTURES
 struct poseConfig {
@@ -76,10 +78,9 @@ struct trajectoryJoints {
 };
 
 struct planner {
-    std::string groupName; // include group name
-    std::vector<planningInterface::MoveGroup::Plan> plans; // include vector to retrieve planned paths for trajectory points
-    int totalPlans; // include count of total plans
-    bool success; // include boolean to retrieve whether the planner was successful or not
+    std::string group_name;
+    std::vector<planningInterface::MoveGroup::Plan> plans;
+    int total_plans;
 };
 
 // BASIC FUNCTIONS
@@ -97,6 +98,11 @@ double toc() { // similar to MATLAB version of toc
 }
 
 // FUNCTION PROTOTYPES
+/* File Checking and ROS Bag Functions */
+bool fileExists(std::string, std::string, std::string);
+void savePlanner(std::string, planner&);
+planner retrievePlanner(std::string);
+
 /* Configuration Functions */
 poseConfig getCurrentPoseConfig(planningInterface::MoveGroup&, bool debug = false);
 poseConfig getAxisConfigurations(planningInterface::MoveGroup&, bool debug = false);
@@ -106,15 +112,20 @@ poseConfig getAxisConfigurations(std::vector<double>, bool debug = false);
 RAPIDModuleData getYuMiLeadThroughData(std::string, planningInterface::MoveGroup&, bool debug = false);
 poseConfig getRobtargetData(std::string, bool debug = false);
 trajectoryPoses combineModules(RAPIDModuleData&, RAPIDModuleData&, bool debug = false);
-trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData&, bool debug = false);
 
-/* Pose Trajectory to Joint Trajectory Functions */
-trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveGroup&, trajectoryPoses&, kinematics::KinematicsBasePtr&, kinematics::KinematicsBasePtr&, bool debug = false);
-bool convertPoseConfigToJointTrajectory(trajectoryJoints&, kinematics::KinematicsBasePtr&, std::vector<poseConfig>&, std::vector<double>, bool debug = false);
+/* Conversion Functions */
+trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData&, bool debug = false);
+trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveGroup&, trajectoryPoses&, kinematics::KinematicsBasePtr&, kinematics::KinematicsBasePtr&, const bool, bool debug = false);
+bool convertPoseConfigToJointTrajectory(trajectoryJoints&, kinematics::KinematicsBasePtr&, std::vector<poseConfig>&, const bool, bool debug = false);
+bool parseCFX(int&, int&, int&, int&, bool debug = false);
+bool isClose(poseConfig&, poseConfig&, bool debug = false);
+
+/* Plan and Execution Functions */
+bool generatePlans(planner&, planningInterface::MoveGroup&, trajectoryJoints&, bool debug = false);
+bool executePlans(planningInterface::MoveGroup&, planner&, bool debug = false);
 
 // MAIN FUNCTION
 int main(int argc, char **argv) {
-
     ros::init (argc, argv, "test");
     ros::NodeHandle node_handle;
 
@@ -125,6 +136,8 @@ int main(int argc, char **argv) {
     bool debug = true;
     std::string end_effector_left    = "yumi_link_7_l";
     std::string end_effector_right   = "yumi_link_7_r";
+    // std::string end_effector_left    = "gripper_l_tcp";
+    // std::string end_effector_right   = "gripper_r_tcp";
     std::string pose_reference_frame = "yumi_body";
 
     // INITIALIZE MOVE GROUPS FOR THE LEFT ARM, RIGHT ARM, AND BOTH ARMS
@@ -162,8 +175,6 @@ int main(int argc, char **argv) {
     bool success_ik_left, success_ik_right; 
     success_ik_left  = ik_left->initialize("/robot_description", "left_arm_ik", pose_reference_frame, end_effector_left, 0.001);
     success_ik_right = ik_right->initialize("/robot_description", "right_arm_ik", pose_reference_frame, end_effector_right, 0.001);
-    // success_ik_left  = ik_left->initialize("/robot_description", "left_arm", pose_reference_frame, left_arm.getEndEffectorLink(), 0.001);
-    // success_ik_right = ik_right->initialize("/robot_description", "right_arm", pose_reference_frame, right_arm.getEndEffectorLink(), 0.001);
 
     if ((success_ik_left) && (success_ik_right)) {
         ROS_INFO("Successfully initialized IK services for the left and right arm.");
@@ -179,118 +190,259 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    RAPIDModuleData module_left  = getYuMiLeadThroughData("Left_ASL_Demo", left_arm, debug);
-    RAPIDModuleData module_right = getYuMiLeadThroughData("Right_ASL_Demo", right_arm, debug);
+    // WAIT FOR COMMANDS FROM USER
+    std::string left_file(""), right_file(""), rosbag_file(""), module_folder("paths"), rosbag_folder("bags"), module_file_type(".mod"), rosbag_file_type(".bag");
+    int system_return, total_allowed_arguments(9);
+    bool bounds(true), planner_successfully_created(false);
+    planner plans;
 
-    trajectoryPoses pose_trajectory = combineModules(module_left, module_right, debug);
-    trajectoryJoints joint_trajectory = convertPoseTrajectoryToJointTrajectory(both_arms, pose_trajectory, ik_left, ik_right, debug);
+    system_return = std::system("clear"); // clear the screen
+    ROS_INFO("Ready to take inputs. For a list of recognized inputs, enter \"help\"");
 
+    while (ok()) {
+        std::vector<std::string> inputs(total_allowed_arguments,"");
 
-    // geometry_msgs::Pose poser;
-    // poser.position.x = 0.353766;
-    // poser.position.y = -0.116135;
-    // poser.position.z = 0.26376;
-    // poser.orientation.x = 0.0420612;
-    // poser.orientation.y = 0.862708;
-    // poser.orientation.z = 0.421826;
-    // poser.orientation.w = 0.275734;
+        std::string input;
+        getline(std::cin, input);
+        std::istringstream input_stream(input);
 
-    // // INITIALIZE VARIABLES
-    // const double PI = 3.14159;
-    // const double TOLERANCE = 0.01;
-    // const std::vector<int> confdata_joints = { 0, 4, 6 };
+        int argument = 0;
+        while ((input_stream >> inputs[argument]) && (argument < total_allowed_arguments)) {
+            // ROS_INFO("Argument %d: %s", argument+1, inputs[argument].c_str());
+            argument++;
+        }
 
-    // double timeout = 10.0;
-    // std::vector<double> seed = right_arm.getCurrentJointValues();
-    // std::vector<double> consistency; // tolerance from seed
-    // std::vector<double> solution;
-    // std::vector<double> previous_solution = seed;
-    // moveit_msgs::MoveItErrorCodes error_code;
+        if (inputs[0].compare("exit") == 0) {
+            break;
 
-    // bool gripper_attached = false;
-    // bool success;
+        } else if (inputs[0].compare("help") == 0) {
+            ROS_INFO("_____ List of Allowed Arguments _____");
+            ROS_INFO("module <left/right> $file_name");
+            ROS_INFO("module both $left_file_name $right_file_name");
+            ROS_INFO("rosbag <run/save> $file_name");
+            ROS_INFO("debug <on/off>");
+            ROS_INFO("bounds <on/off>");
+            ROS_INFO("state");
+            ROS_INFO("exit");
+            ROS_INFO("----------------------------------------");
+            ROS_INFO("File names should NOT include file extensions (*.txt, *.mod, etc.)");
 
-    // std::vector<poseConfig> pose_configs;
-    // pose_configs = pose_trajectory.pose_configs_right;
-    // trajectoryJoints joint_trajectory;
-    // pose_configs[0].pose = poser;
+        } else if (inputs[0].compare("debug") == 0) {
+            if (inputs[1].compare("on") == 0) {
+                debug = true;
+            } else if (inputs[1].compare("off") == 0) {
+                debug = false;
+            } else {
+                ROS_ERROR("Argument not recognized.");
+                ROS_WARN("Provided argument: %s", inputs[1].c_str());
+                ROS_WARN("Expected argument(s): on, off");
+            }
 
-    // seed[2] = pose_configs[0].external_axis_position;
+            ROS_INFO("Debug mode: %s", debug?"on":"off");
 
-    // if (seed.size() == 8) {
-    //     gripper_attached = true;
-    // }
+        } else if (inputs[0].compare("bounds") == 0) {
+            if (inputs[1].compare("on") == 0) {
+                bounds = true;
+            } else if (inputs[1].compare("off") == 0) {
+                bounds = false;
+            } else {
+                ROS_ERROR("Argument not recognized.");
+                ROS_WARN("Provided argument: %s", inputs[1].c_str());
+                ROS_WARN("Expected argument(s): on, off");
+            }
 
-    // // TRANSFER DATA TO JOINT TRAJECTORY STRUCTURE
-    // joint_trajectory.total_joints = seed.size();
+            ROS_INFO("Bounded IK solutions: %s", bounds?"on":"off");
+        } else if (inputs[0].compare("state") == 0) {
+            ROS_INFO("Debug mode: %s", debug?"on":"off");
+            ROS_INFO("Bounded IK solutions: %s", bounds?"on":"off");
+            if (left_file.compare("") != 0) { ROS_INFO("Left arm file name: %s", left_file.c_str()); }
+            if (right_file.compare("") != 0) { ROS_INFO("Right arm file name: %s", right_file.c_str()); }
+            ROS_INFO("Planner ready to be saved: %s", planner_successfully_created?"yes":"no");
 
-    // // DETERMINE CONSISTANCY VARIABLE SIZE BASED ON GRIPPER ATTACHED
-    // if (gripper_attached) {
-    //     consistency = {PI/4, PI, PI/32, PI, PI/4, PI, PI/4, PI};
-    // } else {
-    //     consistency = {PI/4, PI, PI/32, PI, PI/4, PI, PI/4};
-    // }
+        } else if (inputs[0].compare("clear") == 0) {
+            system_return = std::system("clear");
 
-    // int pose = 0;
+        } else if (inputs[0].compare("module") == 0) {
+            if (inputs[1].compare("left") == 0) {
+                if (fileExists(inputs[2], module_folder, module_file_type)) {
+                    left_file  = inputs[2];
+                    ROS_INFO("Left arm file name: %s", left_file.c_str());
+                } else {    
+                    ROS_ERROR("File could not be found, please check inputted file name.");
+                }
+            } else if (inputs[1].compare("right") == 0) {
+                if (fileExists(inputs[2], module_folder, module_file_type)) {
+                    right_file = inputs[2];
+                    ROS_INFO("Right arm file name: %s", right_file.c_str());
+                } else {    
+                    ROS_ERROR("File could not be found, please check inputted file name.");
+                }
+            } else if (inputs[1].compare("both") == 0) {
+                if ((fileExists(inputs[2], module_folder, module_file_type)) && (fileExists(inputs[3], module_folder, module_file_type))) {
+                    left_file  = inputs[2];
+                    right_file = inputs[3];
+                    ROS_INFO("File Names | Right arm: %s | Left arm: %s", left_file.c_str(), right_file.c_str());
+                } else {    
+                    ROS_ERROR("File(s) could not be found, please check inputted file name.");
+                }
+            } else {
+                ROS_ERROR("Argument not recognized.");
+                ROS_WARN("Provided argument: %s", inputs[1].c_str());
+                ROS_WARN("Expected argument(s): left, right, both");
+            }
 
-    // // SEED AXIS CONFIGURATIONS
-    // for (int config = 0; config < confdata_joints.size(); config++) {
-    //     seed[confdata_joints[config]] = (pose_configs[pose].confdata[config] * PI/2) + PI/4;
-    // }
+        } else if (inputs[0].compare("rosbag") == 0) {
+            if (inputs[1].compare("run") == 0) {
+                if (fileExists(inputs[2], rosbag_folder, rosbag_file_type)) {
+                    planner_successfully_created = false;
 
-    // if (debug) {
-    //     ROS_INFO("_____ (debug) IK Inputs for Index %d _____", pose+1);
-    //     ROS_INFO(" *Note: for orientation, the w value is provided first*");
-    //     ROS_INFO("Pose        | Position: [%.5f, %.5f, %.5f] | Orientation: [%.5f, %.5f, %.5f, %.5f]", 
-    //         pose_configs[pose].pose.position.x, pose_configs[pose].pose.position.y, pose_configs[pose].pose.position.z,
-    //         pose_configs[pose].pose.orientation.w, pose_configs[pose].pose.orientation.x, pose_configs[pose].pose.orientation.y, pose_configs[pose].pose.orientation.z);
-    //     ROS_INFO("Config Data | Values: [%d, %d, %d, %d]", pose_configs[pose].confdata[0], pose_configs[pose].confdata[1], pose_configs[pose].confdata[2], pose_configs[pose].confdata[3]);
-    //     if (gripper_attached) {
-    //         ROS_INFO("Seed        | Joint values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", seed[0], seed[1], seed[2], seed[3], seed[4], seed[5], seed[6], seed[7]);
-    //         ROS_INFO("Consistency | Values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", consistency[0], consistency[1], consistency[2], consistency[3], consistency[4], 
-    //             consistency[5], consistency[6], consistency[7]);
-    //     } else {
-    //         ROS_INFO("Seed        | Joint values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", seed[0], seed[1], seed[2], seed[3], seed[4], seed[5], seed[6]);
-    //         ROS_INFO("Consistency | Values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", consistency[0], consistency[1], consistency[2], consistency[3], 
-    //             consistency[4], consistency[5], consistency[6]);
-    //     }
-    // }
+                    rosbag_file = inputs[2];
+                    planner plans = retrievePlanner(rosbag_file);
 
-    // // COMPUTE IK
-    // success = ik_right->searchPositionIK(pose_configs[pose].pose, seed, timeout, consistency, solution, error_code);
+                    if (plans.group_name.compare("left_arm") == 0) { executePlans(left_arm, plans, debug); }
+                    else if (plans.group_name.compare("right_arm") == 0) { executePlans(right_arm, plans, debug); }
+                    else if (plans.group_name.compare("both_arms") == 0) { executePlans(both_arms, plans, debug); }    
+                } else {    
+                    ROS_ERROR("File could not be found, please check inputted file name.");
+                }
+            } else if (inputs[1].compare("save") == 0) {
+                if (!fileExists(inputs[2], rosbag_folder, rosbag_file_type)) {
+                    if (planner_successfully_created) {
+                        planner_successfully_created = false;
 
-    // if (debug) {
-    //     ROS_INFO("____ (debug) Joint Value Solution for Index %d _____", pose+1);
-    //     if (error_code.val != 1) {
-    //         ROS_INFO("Solution not found.");
-    //     } else {
-    //         for (int joint = 0; joint < solution.size(); joint++) {
-    //             ROS_INFO("Joint value: %.5f", solution[joint]);
-    //         }
-    //     }
-    // }
+                        rosbag_file = inputs[2];
+                        savePlanner(rosbag_file, plans);
+                    } else {
+                        ROS_ERROR("Not able to save planner since it was not successfully created.");
+                        ROS_WARN("Please rerun the modules and ensure the planner is successfully created.");
+                    }
+                } else {    
+                    ROS_ERROR("File already exists. Please delete exiting file or provide a different file name.");
+                }
+            } else {
+                ROS_ERROR("Argument not recognized.");
+                ROS_WARN("Provided argument: %s", inputs[1].c_str());
+                ROS_WARN("Expected argument(s): run, save");
+            }
 
-    // if (success) {
-    //     ROS_INFO("(Index %d) IK calculation was successful.", pose+1);
-    //     joint_trajectory.joints.push_back(solution);
-    // } else {
-    //     ROS_WARN("IK calculation failed for index %d. Error code: %d", pose+1, error_code.val);
+        } else if (inputs[0].compare("run") == 0) {
+            if ((left_file.compare("") != 0) && (right_file.compare("") != 0)) {
+                RAPIDModuleData module_left  = getYuMiLeadThroughData(left_file, left_arm, debug);
+                RAPIDModuleData module_right = getYuMiLeadThroughData(right_file, right_arm, debug);
+                trajectoryPoses pose_trajectory = combineModules(module_left, module_right, debug);
 
-    //     if (debug) {
-    //         ROS_WARN("(debug) Skipping trajectory point.");
-    //         solution = previous_solution;
-    //     } else {
-    //         ROS_WARN("Exiting function.");
-    //         return false;
-    //     }
-    // }
+                trajectoryJoints joint_trajectory = convertPoseTrajectoryToJointTrajectory(both_arms, pose_trajectory, ik_left, ik_right, bounds, debug);
+                planner_successfully_created = generatePlans(plans, both_arms, joint_trajectory, debug);
+                if (planner_successfully_created) { executePlans(both_arms, plans, debug); }
+            } else {
+                ROS_ERROR("One or both of the file names is/are empty. Please ensure the file names are set for each arm.");
+            }
 
+        } else {
+            ROS_ERROR("First argument not recognized.");
+        }
+    }
 
 }
 
 /* ============================================================
    -------------------- FINISHED FUNCTIONS --------------------
    ============================================================ */
+
+bool fileExists(std::string file_name, std::string folder_name, std::string file_type) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-08-05
+
+    PURPOSE: Determine if the provided file name exists in the provided folder within the
+             yumi_scripts ROS package. The function returns true if the file exists and 
+             false if the file does not exist.
+
+    INSTRUCTIONS: Input the file name and the folder that contains the file. The inputted
+                  folder must be located within the yumi_scripts ROS package. The function
+                  returns true if the file exists and false if the file does not exist.
+*/
+    // INITIALIZE VARIABLES
+    std::string file_path = yumi_scripts_directory + folder_name + "/" + file_name + file_type;
+    std::ifstream file(file_path);
+
+    // CHECK IF FILE EXISTS
+    if (file.good()) {
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void savePlanner(std::string bag_name, planner& plans) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-08-05
+*/  
+    // INITIALIZE VARIABLES
+    std::string bag_path = yumi_scripts_directory + "bags/" + bag_name + ".bag";
+    yumi_scripts::PrePlan pre_plan_msg;
+
+    // CREATE ROSBAG
+    rosbag::Bag bag(bag_path, rosbag::bagmode::Write);
+
+    // CONSTRUCT PLANNER MESSAGE
+    pre_plan_msg.group_name         = plans.group_name;
+    pre_plan_msg.start_state        = plans.plans[0].start_state_;
+    pre_plan_msg.total_trajectories = plans.total_plans;
+    for (int plan = 0; plan < plans.total_plans; plan++) {
+        pre_plan_msg.trajectory.push_back(plans.plans[plan].trajectory_);
+    }
+
+    // WRITE TO BAG
+    bag.write(yumi_rosbag_topic_name, ros::Time::now(), pre_plan_msg);
+    bag.close();
+
+    ROS_INFO("Planner successfully saved for group %s.", plans.group_name.c_str());
+    ROS_INFO("Bag location: %s", bag_path.c_str());
+}
+
+planner retrievePlanner(std::string bag_name) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-08-05
+*/  
+    // INITIALIZE VARIABLES
+    std::string bag_path = yumi_scripts_directory + "bags/" + bag_name + ".bag";
+    yumi_scripts::PrePlan::ConstPtr pre_plan_msg;
+
+    std::vector<moveit_msgs::RobotTrajectory> trajectories;
+    planningInterface::MoveGroup::Plan current_plan;
+    planner plans;
+
+    // GET BAG
+    rosbag::Bag bag(bag_path, rosbag::bagmode::Read);
+    rosbag::View view(bag, rosbag::TopicQuery(yumi_rosbag_topic_name));
+
+    // GET BAG ELEMENTS
+    BOOST_FOREACH(rosbag::MessageInstance const m, view) {
+        pre_plan_msg = m.instantiate<yumi_scripts::PrePlan>();
+    }
+
+    // TRANSFER MESSAGE TO PLANNER STRUCTURE
+    plans.group_name  = pre_plan_msg->group_name;
+    plans.total_plans = pre_plan_msg->total_trajectories;
+    trajectories      = pre_plan_msg->trajectory;
+
+    for (int plan = 0; plan < plans.total_plans; plan++) {
+        current_plan.trajectory_ = trajectories[plan];
+        plans.plans.push_back(current_plan);
+    }
+    plans.plans[0].start_state_ = pre_plan_msg->start_state;
+
+    // CLOSE BAG
+    bag.close();
+
+    ROS_INFO("Planner successfully retrieved for group %s.", plans.group_name.c_str());
+
+    return plans;
+}
+
+/* ------------------------------------------------------------ */
+/* --------------- AXIS CONFIGURATION FUNCTIONS --------------- */
+/* ------------------------------------------------------------ */
 
 poseConfig getCurrentPoseConfig(planningInterface::MoveGroup& group, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
@@ -342,9 +494,9 @@ poseConfig getAxisConfigurations(planningInterface::MoveGroup& group, bool debug
 
     -------------------- OTHER INFORMATION --------------------
 
-    ABB AXIS CONFIGURATION CONVENTION: [axis_1_config, axis_4_config, axis_6_config, cfx]
-
     ABB YuMi AXIS NAMING CONVENTION (from YuMi base to end effector): [1, 2, 7, 3, 4, 5, 6]
+
+    ABB AXIS CONFIGURATION CONVENTION: [axis_1_config, axis_4_config, axis_6_config, cfx]
 
     CONFIGURATION SETS: -4 -> [-360, -270)   -3 -> [-270, -180)   -2 -> [-180, -90)   -1 -> [-90,   0)
                          0 -> [0,      90)    1 -> [  90,  180)    2 -> [180,  270)    3 -> [270, 360)
@@ -358,9 +510,9 @@ poseConfig getAxisConfigurations(planningInterface::MoveGroup& group, bool debug
         - C represents configuration for axis 2 and can be either (1) or (0)
             > (0) if axis 2 position >= 0 degrees, (1) if axis 2 position < 0 degrees
         - D represents the compatability bit, particulary used for linear movements
-            > This value is not used and is always set to (0)
+            > This value is not used for the IK solver
 
-    EXTERNAL AXIS POSITION CONVENTION: [axis_7_position]
+    EXTERNAL AXIS POSITION CONVENTION: [arm_angle]
 */
     if (debug) { ROS_INFO("...................."); }
 
@@ -441,9 +593,9 @@ poseConfig getAxisConfigurations(std::vector<double> joint_values, bool debug) {
 
     -------------------- OTHER INFORMATION --------------------
 
-    ABB AXIS CONFIGURATION CONVENTION: [axis_1_config, axis_4_config, axis_6_config, cfx]
-
     ABB YuMi AXIS NAMING CONVENTION (from YuMi base to end effector): [1, 2, 7, 3, 4, 5, 6]
+
+    ABB AXIS CONFIGURATION CONVENTION: [axis_1_config, axis_4_config, axis_6_config, cfx]
 
     CONFIGURATION SETS: -4 -> [-360, -270)   -3 -> [-270, -180)   -2 -> [-180, -90)   -1 -> [-90,   0)
                          0 -> [   0,   90)    1 -> [  90,  180)    2 -> [ 180, 270)    3 -> [270, 360)
@@ -457,9 +609,9 @@ poseConfig getAxisConfigurations(std::vector<double> joint_values, bool debug) {
         - C represents configuration for axis 2 and can be either (1) or (0)
             > (0) if axis 2 position >= 0 degrees, (1) if axis 2 position < 0 degrees
         - D represents the compatability bit, particulary used for linear movements
-            > This value is not used and is always set to (0)
+            > This value is not used for the IK solver
 
-    EXTERNAL AXIS POSITION CONVENTION: [axis_7_position]
+    EXTERNAL AXIS POSITION CONVENTION: [arm_angle]
 */
     if (debug) { ROS_INFO(">--------------------"); }
 
@@ -477,9 +629,9 @@ poseConfig getAxisConfigurations(std::vector<double> joint_values, bool debug) {
     }
 
     // GET AXIS CONFIGURATIONS
-    axis_1_config = floor((joint_values[0] * rad2deg) / 90.0); 
-    axis_4_config = floor((joint_values[4] * rad2deg) / 90.0);
-    axis_6_config = floor((joint_values[6] * rad2deg) / 90.0);
+    axis_1_config = std::floor(joint_values[0] / (PI/2.0)); 
+    axis_4_config = std::floor(joint_values[4] / (PI/2.0));
+    axis_6_config = std::floor(joint_values[6] / (PI/2.0));
     if (joint_values[5] < 0)    { cfx += 1000; }
     if (joint_values[3] < PI/2) { cfx += 100;  }
     if (joint_values[1] < 0)    { cfx += 10;   }
@@ -502,6 +654,7 @@ poseConfig getAxisConfigurations(std::vector<double> joint_values, bool debug) {
 }
 
 /* ------------------------------------------------------------ */
+/* ------------ YUMI MODULE MANIPULATION FUNCTIONS ------------ */
 /* ------------------------------------------------------------ */
 
 RAPIDModuleData getYuMiLeadThroughData(std::string file_name, planningInterface::MoveGroup& group, bool debug) {
@@ -513,7 +666,7 @@ RAPIDModuleData getYuMiLeadThroughData(std::string file_name, planningInterface:
              simple RAPID module and program flow explaination is below along with a good convention to follow when creating these
              modules.
 
-    EXPLAINATION: The RAPID module file name should be provided without extentions (.txt, etc.) or file path (/home/user). This 
+    INSTRUCTIONS: The RAPID module file name should be provided without extentions (.txt, etc.) or file path (/home/user). This 
                   function will search for that file within the yummi_scripts package in a folder called "demo". Make sure the 
                   RAPID module is located within that folder. The move group for this file should also be provided in case that
                   the first command within the RAPID module is OpenHand or CloseHand. In this case, the current pose of the robot
@@ -880,7 +1033,7 @@ trajectoryPoses combineModules(RAPIDModuleData& module_1, RAPIDModuleData& modul
              (including closing and opening the grippers), the other arm will wait at it's current position until the next 
              MoveSync task is reached. This function assumes that grippers are on each arm.
 
-    EXPLAINATION: This function requires two different modules to be supplied where one is meant for the left arm and the 
+    INSTRUCTIONS: This function requires two different modules to be supplied where one is meant for the left arm and the 
                   other is meant for the right arm. The designated move groups for each module should have already been
                   stored into the RAPID module structure from a previous function. If debug is set to true, the provided 
                   module names will be outputted to the user, and the pose names for each arm will be displayed as the final 
@@ -992,10 +1145,10 @@ trajectoryPoses combineModules(RAPIDModuleData& module_1, RAPIDModuleData& modul
 }
 
 /* ------------------------------------------------------------ */
-/* -------------------- UNTESTED FUNCTIONS -------------------- */
+/* ------------------- CONVERSION FUNCTIONS ------------------- */
 /* ------------------------------------------------------------ */
 
-trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module, bool debug) { // NEEDS TO BE TESTED
+trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-07-28
 
@@ -1031,27 +1184,45 @@ trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module, bool debu
     return pose_trajectory;
 }
 
-/* ============================================================
-   -------------------- FINISHED FUNCTIONS --------------------
-   ============================================================ */
-
-
-trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveGroup& group, trajectoryPoses& pose_trajectory, kinematics::KinematicsBasePtr& ik_left, kinematics::KinematicsBasePtr& ik_right, bool debug) {
+trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveGroup& group, trajectoryPoses& pose_trajectory, kinematics::KinematicsBasePtr& ik_left, kinematics::KinematicsBasePtr& ik_right, const bool BOUNDED_SOLUTION, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-07-29
 
-    If the correct group and pose trajectory were provided to this function to indicate that the data is meant for 
-           the left arm, then proceed to converting from the pose trajectory to joint trajectory for the left arm. If debug
-           mode was set to false, then if any of the pose to joints conversion fails, the conversion function will stop
-           executing and return a success of false. This function will then notify the user that the conversion failed and
-           will return an empty joint trajectory. If debug is set to true, then the point that failed conversion will be 
-           skipped and the conversion will continue with the next point. If the conversion was successful for all points,
-           unless debug was set to true as explained above, then the correct gripper positions will be added to the joint
-           trajectory and the structure for the joint trajectory will be returned.
+    PURPOSE: The purpose of this function is to convert pose trajectories into joint trajectories using the IK
+             services for each arm that are supplied to this function. Unless debug mode has been set to true,
+             if any of the trajectory points don't produce a valid IK solution, then this function will return 
+             an empty joint trajectory and notify the user of the error. The program flow for this function is
+             shown below.
 
-    ASSUMPTIONS: If current joint values vector contains 7 values then there is not a gripper is attached, but if it 
-                 contains 8 values then a gripper is attached. Also assumes that there are at least 7 joints for the 
-                 desired group.
+    INSTRUCTIONS: Input the group that is associate for the provided pose trajectory, and input pointers to the
+                  kinematic services for each arm. If debug mode is set to true, then the inputs to the IK serivce
+                  for each pose to joint trajectory point conversion will be displayed to the user, along with the
+                  solution for each IK service call, and each point in the newly constructed joint trajectory. The
+                  move group provided to this function must be the same move group the pose trajectory was intended
+                  for or this function will notify the user and exit.
+
+
+    -------------------- OTHER INFORMATION --------------------
+
+    PROGRAM FLOW:
+        Left or right arm only:
+            - Get the current joint values excluding the gripper position
+            - Convert all the pose trajectories into joint trajectories
+            - IF successful
+                - Add the gripper position for each trajectory point if there is a gripper attached
+                - Return the constructed joint trajectory
+            - ELSE
+                - Notify the user exit the function
+
+        Both arms:
+            - Get the current joints values for each arm and exclude the gripper positions
+            - Convert all the pose trajectories for the left and right arm into joint trajectories
+            - IF successful
+                - Combine the joint trajectories for each arm into one joint trajectory
+                - Add the gripper positions for each arm at each trajectory point if either arm has a gripper
+                - Return the constructed joint trajectory
+            - ELSE
+                - Notify the user and exit the function
 */
     ROS_INFO(">--------------------");
 
@@ -1064,30 +1235,54 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
     /* If the provided pose trajectory is intended for the left arm */
         if (group.getName().compare("left_arm") == 0) {
         /* If the provided group is also for manipulating the left arm*/
-            if (debug) { ROS_INFO("Converting pose trajectory to joint trajectory for the left arm."); }
+            ROS_INFO("Converting pose trajectory to joint trajectory for the left arm.");
 
-            std::vector<double> joint_values_left = group.getCurrentJointValues();
+            std::vector<std::string> joint_names = group.getActiveJoints();
+            std::vector<double>     joint_values = group.getCurrentJointValues();
 
             if (debug) {
-                ROS_INFO("_____ (debug) Left Arm Initial Joint Values _____");
-                for (int joint = 0; joint < joint_values_left.size(); joint++) {
-                    ROS_INFO("Joint value: %.5f", joint_values_left[joint]);
+                ROS_INFO("....................");
+                ROS_INFO("(debug) Solving IK for left arm");
+                if (BOUNDED_SOLUTION) {
+                    ROS_INFO("(debug) Forcing bounded solutions to IK solver.");
+                } else {
+                    ROS_INFO("(debug) Not bounding solutions to IK solver");
                 }
             }
+            success_left = convertPoseConfigToJointTrajectory(joint_trajectory_left, ik_left, pose_trajectory.pose_configs_left, BOUNDED_SOLUTION, debug);
+            
 
-            success_left = convertPoseConfigToJointTrajectory(joint_trajectory_left, ik_left, pose_trajectory.pose_configs_left, joint_values_left, debug);
-            return joint_trajectory_left;
+            if (success_left) {
+                ROS_INFO("Successfully converted pose trajectory to joint trajectory for left arm.");
+                ROS_INFO("Adding gripper values to trajectory if neccessary.");
 
-            if (success_right) {
+                joint_trajectory_left.total_joints = joint_values.size();
+
                 if (pose_trajectory.gripper_attached_left) {
                     for (int point = 0; point < joint_trajectory_left.total_points; point++) {
                     /* Override gripper positions producesd from the IK with the gripper data from the pose trajectory structure */
-                        joint_trajectory_left.joints[point][7] = pose_trajectory.pose_configs_left[point].gripper_position;
+                        joint_trajectory_left.joints[point].push_back(pose_trajectory.pose_configs_left[point].gripper_position);
+
+                        if (debug) {
+                            ROS_INFO("_____ (debug) Joint Trajectory Point %d Joint Values _____", point+1);
+                            for (int joint = 0; joint < joint_trajectory_left.total_joints; joint++) {
+                                ROS_INFO("%s joint value: %.5f", joint_names[joint].c_str(), joint_trajectory_left.joints[point][joint]);
+                            }
+                        }
+                    }
+                } else {
+                    for (int point = 0; point < joint_trajectory_left.total_points; point++) {
+                        ROS_INFO("_____ (debug) Joint Trajectory Point %d Joint Values _____", point+1);
+                        for (int joint = 0; joint < joint_trajectory_left.total_joints; joint++) {
+                            ROS_INFO("%s joint value: %.5f", joint_names[joint].c_str(), joint_trajectory_left.joints[point][joint]);
+                        }
                     }
                 }
                 joint_trajectory_left.group_name = joint_trajectory_left.intended_group = "left_arm";
 
-                return joint_trajectory_right;
+                ROS_INFO("Pose trajectory to joint trajectory completed.");
+
+                return joint_trajectory_left;
             } else {
                 ROS_ERROR("From: convertPoseTrajectoryToJointTrajectory(group, pose_trajectory, ik_left, ik_right, debug)");
                 ROS_ERROR("Conversion from pose trajectory to joint trajectory was not successful for the left arm.");
@@ -1101,27 +1296,51 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
     /* If the provided pose trajectory is intended for the right arm */
         if (group.getName().compare("right_arm") == 0) {
         /* If the provided group is also for manipulating the right arm*/
-            if (debug) { ROS_INFO("Converting pose trajectory to joint trajectory for the right arm."); }
+            ROS_INFO("Converting pose trajectory to joint trajectory for the right arm.");
 
-            std::vector<double> joint_values_right = group.getCurrentJointValues();
+            std::vector<std::string> joint_names = group.getActiveJoints();
+            std::vector<double>     joint_values = group.getCurrentJointValues();
 
             if (debug) {
-                ROS_INFO("_____ (debug) Right Arm Initial Joint Values _____");
-                for (int joint = 0; joint < joint_values_right.size(); joint++) {
-                    ROS_INFO("Joint value: %.5f", joint_values_right[joint]);
+                ROS_INFO("....................");
+                ROS_INFO("(debug) Solving IK for right arm");
+                if (BOUNDED_SOLUTION) {
+                    ROS_INFO("(debug) Forcing bounded solutions to IK solver.");
+                } else {
+                    ROS_INFO("(debug) Not bounding solutions to IK solver");
                 }
             }
-
-            success_right = convertPoseConfigToJointTrajectory(joint_trajectory_right, ik_right, pose_trajectory.pose_configs_right, joint_values_right, debug);
+            success_right = convertPoseConfigToJointTrajectory(joint_trajectory_right, ik_right, pose_trajectory.pose_configs_right, BOUNDED_SOLUTION, debug);
 
             if (success_right) {
+                ROS_INFO("Successfully converted pose trajectory to joint trajectory for right arm.");
+                ROS_INFO("Adding gripper values to trajectory if neccessary.");
+
+                joint_trajectory_right.total_joints = joint_values.size();
+
                 if (pose_trajectory.gripper_attached_right) {
                     for (int point = 0; point < joint_trajectory_right.total_points; point++) {
                     /* Override gripper positions producesd from the IK with the gripper data from the pose trajectory structure */
-                        joint_trajectory_right.joints[point][7] = pose_trajectory.pose_configs_right[point].gripper_position;
+                        joint_trajectory_right.joints[point].push_back(pose_trajectory.pose_configs_right[point].gripper_position);
+
+                        if (debug) {
+                            ROS_INFO("_____ (debug) Joint Trajectory Point %d Joint Values _____", point+1);
+                            for (int joint = 0; joint < joint_trajectory_right.total_joints; joint++) {
+                                ROS_INFO("%s joint value: %.5f", joint_names[joint].c_str(), joint_trajectory_right.joints[point][joint]);
+                            }
+                        }
+                    }
+                } else {
+                    for (int point = 0; point < joint_trajectory_right.total_points; point++) {
+                        ROS_INFO("_____ (debug) Joint Trajectory Point %d Joint Values _____", point+1);
+                        for (int joint = 0; joint < joint_trajectory_right.total_joints; joint++) {
+                            ROS_INFO("%s joint value: %.5f", joint_names[joint].c_str(), joint_trajectory_right.joints[point][joint]);
+                        }
                     }
                 }
                 joint_trajectory_right.group_name = joint_trajectory_right.intended_group = "right_arm";
+
+                ROS_INFO("Pose trajectory to joint trajectory completed.");
 
                 return joint_trajectory_right;
             } else {
@@ -1137,65 +1356,57 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
     /* If the provided pose trajectory is intended for both arms */
         if (group.getName().compare("both_arms") == 0) {
         /* If the provided group is also for manipulating both arms*/
-            if (debug) { ROS_INFO("Converting pose trajectory to joint trajectory for both arms."); }
+            ROS_INFO("Converting pose trajectory to joint trajectory for both arms.");
 
             std::vector<std::string> joint_names = group.getActiveJoints();
             std::vector<double>     joint_values = group.getCurrentJointValues();
 
-            int right_arm_first_joint_index;
-            for (int joint = 7; joint < joint_names.size(); joint++) {
-                if (joint_names[joint].compare("yumi_joint_1_r") == 0) {
-                    right_arm_first_joint_index = joint;
-                    break;
-                }
-            }
-
-            std::vector<double> joint_values_left(&joint_values[0], &joint_values[right_arm_first_joint_index-1]);
-            std::vector<double> joint_values_right(&joint_values[right_arm_first_joint_index], &joint_values[joint_values.size()-1]);
-
-            if (debug) {
-                ROS_INFO("_____ (debug) Both Arms Initial Joint Values _____");
-                for (int joint = 0; joint < joint_values.size(); joint++) {
-                    ROS_INFO("Joint value: %.5f", joint_values[joint]);
-                }
-                ROS_INFO("_____ (debug) Left Arm Initial Joint Values _____");
-                for (int joint = 0; joint < joint_values_left.size(); joint++) {
-                    ROS_INFO("Joint value: %.5f", joint_values_left[joint]);
-                }
-                ROS_INFO("_____ (debug) Right Arm Initial Joint Values _____");
-                for (int joint = 0; joint < joint_values_right.size(); joint++) {
-                    ROS_INFO("Joint value: %.5f", joint_values_right[joint]);
-                }
-            }
-
             if (debug) {
                 ROS_INFO("....................");
-                ROS_INFO("Solving IK for left arm");
+                ROS_INFO("(debug) Solving IK for left arm");
+                if (BOUNDED_SOLUTION) {
+                    ROS_INFO("(debug) Forcing bounded solutions to IK solver.");
+                } else {
+                    ROS_INFO("(debug) Not bounding solutions to IK solver");
+                }
             }
-            success_left  = convertPoseConfigToJointTrajectory(joint_trajectory_left, ik_left, pose_trajectory.pose_configs_left, joint_values_left, debug);
+            success_left  = convertPoseConfigToJointTrajectory(joint_trajectory_left, ik_left, pose_trajectory.pose_configs_left, BOUNDED_SOLUTION, debug);
             if (debug) {
                 ROS_INFO("....................");
-                ROS_INFO("Solving IK for right arm");
+                ROS_INFO("(debug) Solving IK for right arm");
+                if (BOUNDED_SOLUTION) {
+                    ROS_INFO("(debug) Forcing bounded solutions to IK solver.");
+                } else {
+                    ROS_INFO("(debug) Not bounding solutions to IK solver");
+                }
             }
-            success_right = convertPoseConfigToJointTrajectory(joint_trajectory_right, ik_right, pose_trajectory.pose_configs_right, joint_values_right, debug);
+            success_right = convertPoseConfigToJointTrajectory(joint_trajectory_right, ik_right, pose_trajectory.pose_configs_right, BOUNDED_SOLUTION, debug);
 
             if (joint_trajectory_left.total_points != joint_trajectory_right.total_points) {
                 ROS_ERROR("From: convertPoseTrajectoryToJointTrajectory(group, pose_trajectory, ik_left, ik_right, debug)");
                 ROS_ERROR("The total trajectory points from the provided pose trajectories for the right and left arm do not match up.");
-                ROS_WARN("Left pose trajectory size: %d | Right pose trajectory size: %d", joint_trajectory_left.total_points, joint_trajectory_right.total_points);
+                ROS_WARN("Left joint trajectory size: %d | Right joint trajectory size: %d", joint_trajectory_left.total_points, joint_trajectory_right.total_points);
                 ROS_INFO("....................");
                 success_left = success_right = success = false;
             }
 
             if (((success_left) && (success_right)) && joint_trajectory_left.total_points > 0) {
-                joint_trajectory.total_joints = joint_trajectory_left.total_joints + joint_trajectory_right.total_joints;
+                if (debug) {  ROS_INFO("...................."); }
+                ROS_INFO("Conversion from pose trajectory to joint trajectory successful."); 
+                ROS_INFO("Combining joint trajectories for the left and right arm.");
+
+                joint_trajectory.total_joints = joint_values.size();
                 joint_trajectory.total_points = joint_trajectory_left.total_points;
 
                 for (int point = 0; point < joint_trajectory_right.total_points; point++) {
                 /* Combine joint trajectories and override gripper positions producesd from the IK with the gripper data from the pose trajectory structure */
                     for (int joint = 0; joint < joint_trajectory.total_joints; joint++) {
-                        if (joint < joint_trajectory_left.total_joints) { joint_values[joint] = joint_trajectory_left.joints[point][joint]; }
-                        else { joint_values[joint] = joint_trajectory_right.joints[point][joint-joint_trajectory_left.total_joints]; }
+                        if (joint < joint_trajectory_left.total_joints) {
+                            joint_values[joint] = joint_trajectory_left.joints[point][joint];
+                        } else if (joint >= (joint_trajectory_left.total_joints + pose_trajectory.gripper_attached_left) ) { 
+                        /* If a gripper is attached to the left arm, skip joint value 8 (index 7) since that is reserved for the left gripper value */
+                            joint_values[joint] = joint_trajectory_right.joints[point][joint-(joint_trajectory_left.total_joints+pose_trajectory.gripper_attached_left)];
+                        }
                     }
                     joint_trajectory.joints.push_back(joint_values);
 
@@ -1204,15 +1415,25 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
                         /* Gripper position for the left arm is index 7 since: 7 (joints left arm) + 1 (gripper left_arm) - 1 (index starts from 0) = 7 */
                         if (pose_trajectory.gripper_attached_right) {
                             joint_trajectory.joints[point][15] = pose_trajectory.pose_configs_right[point].gripper_position;
-                            /* Gripper position for the right arm is index 15 since the left arm has a gripper meaning: 7 (joints left arm) + 1 (gripper left_arm) + 7 (joints right_arm) + 1 (gripper right_arm) - 1 (index starts from 0) = 15 */
+                            /* Gripper position for the right arm is index 15 since the left arm has a gripper meaning: 7 (joints left arm) + 1 (gripper left arm) + 7 (joints right arm) + 1 (gripper right arm) - 1 (index starts from 0) = 15 */
                         }
                     } else if (pose_trajectory.gripper_attached_right) {
                     /* If there is no gripper attached to the left arm but there is a gripper attached to the right arm */
                         joint_trajectory.joints[point][14] = pose_trajectory.pose_configs_right[point].gripper_position;
-                        /* Gripper position for the right arm is index 14 since the left arm does not have a gripper meaning: 7 (joints left arm) + 7 (joints right_arm) + 1 (gripper right_arm) - 1 (index starts from 0) = 14 */
+                        /* Gripper position for the right arm is index 14 since the left arm does not have a gripper meaning: 7 (joints left arm) + 7 (joints right arm) + 1 (gripper right arm) - 1 (index starts from 0) = 14 */
+                    }
+
+                    if (debug) {
+                        ROS_INFO("_____ (debug) Joint Trajectory Point %d Joint Values _____", point+1);
+                        for (int joint = 0; joint < joint_values.size(); joint++) {
+                            ROS_INFO("%s joint value: %.5f", joint_names[joint].c_str(), joint_values[joint]);
+                        }
                     }
                 }
                 joint_trajectory.group_name = joint_trajectory.intended_group = "both_arms";
+
+                if (debug) { ROS_INFO("...................."); }
+                ROS_INFO("Pose trajectory to joint trajectory completed."); 
 
                 return joint_trajectory;
             } else {
@@ -1254,58 +1475,144 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
     }
 }
 
-bool convertPoseConfigToJointTrajectory(trajectoryJoints& joint_trajectory, kinematics::KinematicsBasePtr& ik, std::vector<poseConfig>& pose_configs, std::vector<double> initial_seed, bool debug) {
+bool convertPoseConfigToJointTrajectory(trajectoryJoints& joint_trajectory, kinematics::KinematicsBasePtr& ik, std::vector<poseConfig>& pose_configs, const bool BOUNDED_SOLUTION, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-07-28
 
+    PURPOSE: The purpose of this function is to call the inverse kinematics service to conver from coordinate space to
+             joint space. This is done by bounding the solution based on the configuration data and external axis
+             position stored within the pose_configs parameter. In the case that debug mode has been set to true, then
+             if an IK for a given point fails, the function will try finding a solution without bounds. If a solution is
+             found, then that solution is stored. Otherwise the funciton will skip that trajectory point and move onto 
+             the next trajectory point. If debug was not set to true and the IK service failed for any of the trajectory 
+             points, then this function will return indicated the pose to joint conversion failed. For each iteration 
+             of the IK service loop, the seed will be updated with the most recent successful solutions generated from 
+             the IK service.
 
-    ASSUMPTIONS: If the initial_seed contains 7 values then there is not a gripper is attached, but if it contains 8 values 
-                 then a gripper is attached. Also assumes that there are at least 7 joints for the desired group.
+    INSTRUCTIONS: This function required an input of a joint trajectory in which this function will add the solutions
+                  from the IK service, and will return a boolean to indicate of the conversion was successful or not. 
+                  The inputted IK service pointer is expected to be the intended for the same group as the pose_configs.
+                  If debug is set to true, the user will be notified of all contraints and values supplied to the IK 
+                  service for each trajectory point, and in the case that the IK service fails, the current trajectory
+                  point will be skipped and the function will preceed on to the next trajectory point. If debug is set
+                  to false, then the function will stop executing whenever the IK solver failed for a trjaectory point.
+                  The BOUNDED_SOLUTION input variable can be used if the user would not like to bound the solution
+                  according to the axis configurations.
+
+
+    -------------------- OTHER INFORMATION --------------------
+
+    ASSUMPTIONS: The gripper position is not included in the initial_seed parameter regardless of whether a gripper is
+                 attached to the desired group or not. In that case, the initial_seed is expected to have a size of 7
+                 for the 7 revolute joints on each arm of the YuMi. The IK solver is also expected to be for the same 
+                 move group that the pose_configs variable was intended for. 
+
+    CONSISTENCY: The consistency parameter passed into the function provides the bounds for the solution based on the
+                 respective seed value. For example, if the consistency value and respective seed value were 2 and 4
+                 for a given joint, then the minimum and maximum values that can be returned from the IK service are
+                 2 and 6 respectively.
+
+    ABB YuMi AXIS NAMING CONVENTION (from YuMi base to end effector): [1, 2, 7, 3, 4, 5, 6]
+
+    ABB AXIS CONFIGURATION CONVENTION: [axis_1_config, axis_4_config, axis_6_config, cfx]
+
+    CONFIGURATION SETS: -4 -> [-360, -270)   -3 -> [-270, -180)   -2 -> [-180, -90)   -1 -> [-90,   0)
+                         0 -> [0,      90)    1 -> [  90,  180)    2 -> [180,  270)    3 -> [270, 360)
+        - The configuration values above are for joints 1, 4, and 6
+
+    CONFIGURATION EQUATION FOR SEED: (config * PI/2) + PI/4 (radians) or (config * 90) + 45 (degrees)
+        - The above equation is used to convert a configuration value for an axis into a seed position. The seed 
+          position is located in the center of the quadrant according the the ABB convention for configuration 
+          values as shown above in CONFIGURATION SETS. The bounds for the IK solver (if used) is then set for PI/4
+          or 45 degrees to go from the max of the quadrant to the minimum of the quadrant
+
+    CFX: ABCD
+        - A represents configuration for axis 5 and can be either (1) or (0)
+            > (0) if axis 5 position >= 0 degrees, (1) if axis 5 position < 0 degrees
+        - B represents configuration for axis 3 and can be either (1) or (0)
+            > (0) if axis 3 position >= -90 degrees, (1) if axis 3 position < -90 degrees
+        - C represents configuration for axis 2 and can be either (1) or (0)
+            > (0) if axis 2 position >= 0 degrees, (1) if axis 2 position < 0 degrees
+        - D represents the compatability bit, particulary used for linear movements
+            > This value is not used for the IK solver
+
+    EXTERNAL AXIS POSITION CONVENTION: [arm_angle]
 */
     ROS_INFO("....................");
 
     // INITIALIZE VARIABLES
     const double PI = 3.14159;
-    const std::vector<int> confdata_joints = { 0, 4, 6 };
+    const double TOLERANCE = PI/72.0; // 2.5 degrees tolerance
+    const std::vector<int> confdata_axis_146 = { 0, 4, 6 }; // index for axis 1, 4, and 6
+    const int total_joints = 7;
+    int cfx, axis_2_config(0), axis_3_config(0), axis_5_config(0);
 
-    double timeout = 1.0;
-    std::vector<double> seed;
-    std::vector<double> consistency; // tolerance from seed
+    double timeout = 1;
+    std::vector<double> seed(total_joints);
+    std::vector<double> consistency = {PI/4.0+TOLERANCE, PI+TOLERANCE, 2.0*PI, PI+TOLERANCE, PI/4.0+TOLERANCE, PI+TOLERANCE, PI/4.0+TOLERANCE}; // tolerance for seeded values (min: seed[i]-consistency[i] | max: seed[i]+consistency[i])
+    /* An addition tolerance of 2.5 degrees is added to each bound in the case that the solution is on some interval of PI/2 */
     std::vector<double> solution;
-    std::vector<double> previous_solution = initial_seed;
     moveit_msgs::MoveItErrorCodes error_code;
 
-    bool gripper_attached = false;
+    int solutions_stored = 0; // indicates how many IK solutions were found and it is not incremented if BOUNDED_SOLUTION is set to true and a solution was only found without bounds
+    int previous_axis_7_solution;
+    bool previous_solution_unbounded = false;
+    bool previous_solution_failed    = true; // initially set to true in order to ensure the first if statement in the for loop below is not executed
     bool success;
-
-    if (initial_seed.size() == 8) {
-        gripper_attached = true;
-    }
-
-    // TRANSFER DATA TO JOINT TRAJECTORY STRUCTURE
-    joint_trajectory.total_joints = initial_seed.size();
-
-    // DETERMINE CONSISTANCY VARIABLE SIZE BASED ON GRIPPER ATTACHED
-    if (gripper_attached) {
-        consistency = {PI/4, PI, PI/32, PI, PI/4, PI, PI/4, PI};
-    } else {
-        consistency = {PI/4, PI, PI/32, PI, PI/4, PI, PI/4};
-    }
 
     tic();
 
     // PERFORM IK
     for (int pose = 0; pose < pose_configs.size(); pose++) {
+        if (debug) { ROS_INFO("(debug) Performing IK calculation for index %d.", pose+1); }
 
-        // GET INITIAL SEED
-        if (pose == 0) { seed = initial_seed; } 
-        else { seed = solution; }
+        // CHECK IF CURRENT POSE CONFIGURATION IS SIMILAR ENOUGH TO THE PREVIOUS ONE
+        if (!previous_solution_failed) {
+        /* If the previous solution did not fail */
+            if (isClose(pose_configs[pose-1], pose_configs[pose], debug)) {
+            /* If the current pose configuration is close enough to the previous one, then use the previous solution */
+                ROS_INFO("(Index %d) Previous pose configuration similar to current pose configuration. Using previous solution.", pose+1);
+                joint_trajectory.joints.push_back(solution);
+                if ((BOUNDED_SOLUTION) && (!previous_solution_unbounded)) {
+                /* If solutions are to be bounded and the previous solution was not unbounded due to a 
+                   failed bounded solution. If debug mode is set to true and bounded solutions are set 
+                   to true, then if the IK fails for the bounded solution, IK is reattempted using an 
+                   unbounded solution. */
+                    solutions_stored++;
+                }
+                if (debug) { ROS_INFO("...................."); }
 
-        // SEED AXIS CONFIGURATIONS
-        for (int config = 0; config < confdata_joints.size(); config++) {
-            seed[confdata_joints[config]] = (pose_configs[pose].confdata[config] * PI/2) + PI/4;
+                continue;
+            }
         }
-        seed[2] = pose_configs[pose].external_axis_position;
+
+        // GET AXIS CONFIGURATIONS FOR AXIS 2, 3, and 5
+        cfx = pose_configs[pose].confdata.back();
+        axis_2_config = axis_3_config = axis_5_config = 0;
+        success = parseCFX(cfx, axis_2_config, axis_3_config, axis_5_config);
+
+        // ADJUST SEED BASED ON AXIS CONFIGURATIONS
+        for (int config = 0; config < confdata_axis_146.size(); config++) {
+            seed[confdata_axis_146[config]] = (pose_configs[pose].confdata[config] * PI/2) + PI/4;
+        }
+
+        if (axis_2_config) { seed[1] = -PI; }
+        else { seed[1] = PI; }
+        if (axis_5_config) { seed[5] = -PI; }
+        else { seed[5] = PI; }
+        if (axis_3_config) { 
+            seed[3] = ((5.0*PI)/4.0); // -225 degree seed
+            consistency[3] = ((3.0*PI)/4.0) + TOLERANCE; // 135 degree bound with 2.5 degree tolerance
+        } else { 
+            seed[3] = ((3.0*PI)/4.0); // 135 degree seed
+            consistency[3] = ((5.0*PI)/4.0) + TOLERANCE; // 225 degree bound with 2.5 degree tolerance
+        }
+
+        if (solutions_stored > 0) {
+            seed[2] = previous_axis_7_solution;
+        } else {
+            seed[2] = pose_configs[pose].external_axis_position;
+        }
 
         if (debug) {
             ROS_INFO("_____ (debug) IK Inputs for Index %d _____", pose+1);
@@ -1313,28 +1620,48 @@ bool convertPoseConfigToJointTrajectory(trajectoryJoints& joint_trajectory, kine
             ROS_INFO("Pose        | Position: [%.5f, %.5f, %.5f] | Orientation: [%.5f, %.5f, %.5f, %.5f]", 
                 pose_configs[pose].pose.position.x, pose_configs[pose].pose.position.y, pose_configs[pose].pose.position.z,
                 pose_configs[pose].pose.orientation.w, pose_configs[pose].pose.orientation.x, pose_configs[pose].pose.orientation.y, pose_configs[pose].pose.orientation.z);
-            ROS_INFO("Config Data | Values: [%d, %d, %d, %d]", pose_configs[pose].confdata[0], pose_configs[pose].confdata[1], pose_configs[pose].confdata[2], pose_configs[pose].confdata[3]);
-            if (gripper_attached) {
-                ROS_INFO("Seed        | Joint values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", seed[0], seed[1], seed[2], seed[3], seed[4], seed[5], seed[6], seed[7]);
-                ROS_INFO("Consistency | Values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", consistency[0], consistency[1], consistency[2], consistency[3], consistency[4], 
-                    consistency[5], consistency[6], consistency[7]);
-            } else {
-                ROS_INFO("Seed        | Joint values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", seed[0], seed[1], seed[2], seed[3], seed[4], seed[5], seed[6]);
+            ROS_INFO("Config Data | Values: [%d, %d, %d, %d] | External Axis: [%.5f]", pose_configs[pose].confdata[0], pose_configs[pose].confdata[1], pose_configs[pose].confdata[2], 
+                pose_configs[pose].confdata[3], pose_configs[pose].external_axis_position);
+            ROS_INFO("Seed        | Joint values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", seed[0], seed[1], seed[2], seed[3], seed[4], seed[5], seed[6]);
+            if (BOUNDED_SOLUTION) {
                 ROS_INFO("Consistency | Values: %.5f, %.5f, %.5f, %.5f, %.5f, %.5f, %.5f", consistency[0], consistency[1], consistency[2], consistency[3], 
                     consistency[4], consistency[5], consistency[6]);
+
+                ROS_INFO("_____ (debug) Solution Bounds for Index %d _____", pose+1);
+                ROS_INFO("Axis 1: %.5f to %.5f", seed[0]-consistency[0], seed[0]+consistency[0]);
+                ROS_INFO("Axis 2: %.5f to %.5f", seed[1]-consistency[1], seed[1]+consistency[1]);
+                ROS_INFO("Axis 7: %.5f to %.5f", seed[2]-consistency[2], seed[2]+consistency[2]);
+                ROS_INFO("Axis 3: %.5f to %.5f", seed[3]-consistency[3], seed[3]+consistency[3]);
+                ROS_INFO("Axis 4: %.5f to %.5f", seed[4]-consistency[4], seed[4]+consistency[4]);
+                ROS_INFO("Axis 5: %.5f to %.5f", seed[5]-consistency[5], seed[5]+consistency[5]);
+                ROS_INFO("Axis 6: %.5f to %.5f", seed[6]-consistency[6], seed[6]+consistency[6]);
             }
         }
 
         // COMPUTE IK
-        success = ik->searchPositionIK(pose_configs[pose].pose, seed, timeout, consistency, solution, error_code);
+        if (BOUNDED_SOLUTION) {
+            success = ik->searchPositionIK(pose_configs[pose].pose, (const std::vector<double>)seed, timeout, (const std::vector<double>)consistency, solution, error_code);
+        } else {
+            success = ik->searchPositionIK(pose_configs[pose].pose, (const std::vector<double>)seed, timeout, solution, error_code);
+        }
 
         if (debug) {
             ROS_INFO("____ (debug) Joint Value Solution for Index %d _____", pose+1);
             if (error_code.val != 1) {
-                ROS_INFO("Solution not found.");
+                previous_solution_failed = true;
+                ROS_INFO("Solution not found. Error code: %d", error_code.val);
             } else {
+                previous_solution_unbounded = previous_solution_failed = false;
+
+                int joint_7_index_adjust = 0;
                 for (int joint = 0; joint < solution.size(); joint++) {
-                    ROS_INFO("Joint value: %.5f", solution[joint]);
+                    if (joint == 2) {
+                    /* The position for joint 7 is the third value in the solution */
+                        ROS_INFO("Joint %d value: %.5f", 7, solution[joint]);
+                        joint_7_index_adjust = -1; // decement the displayed joint number for the remaining joints since the third value in the solution is joint 7
+                    } else {
+                        ROS_INFO("Joint %d value: %.5f", joint+1+joint_7_index_adjust, solution[joint]);
+                    }
                 }
             }
         }
@@ -1342,23 +1669,432 @@ bool convertPoseConfigToJointTrajectory(trajectoryJoints& joint_trajectory, kine
         if (success) {
             ROS_INFO("(Index %d) IK calculation was successful.", pose+1);
             joint_trajectory.joints.push_back(solution);
+            previous_axis_7_solution = solution[2];
+            solutions_stored++;
         } else {
-            ROS_WARN("IK calculation failed for index %d. Error code: %d", pose+1, error_code.val);
+            ROS_WARN("(Index %d) IK calculation failed.", pose+1);
 
             if (debug) {
-                ROS_WARN("(debug) Skipping trajectory point.");
-                solution = previous_solution;
+                if (BOUNDED_SOLUTION) {
+                    ROS_WARN("(debug) Trying again without solution bounds.");
+                    success = ik->searchPositionIK(pose_configs[pose].pose, (const std::vector<double>)seed, timeout, solution, error_code);
+
+                    ROS_INFO("____ (debug) Joint Value Solution for Index %d _____", pose+1);
+                    if (error_code.val != 1) {
+                        ROS_INFO("Solution not found. Error code: %d", error_code.val);
+                    } else {
+                        previous_solution_unbounded = true;
+                        previous_solution_failed    = false;
+
+                        int joint_7_index_adjust = 0;
+                        for (int joint = 0; joint < solution.size(); joint++) {
+                            if (joint == 2) {
+                            /* The position for joint 7 is the third value in the solution */
+                                ROS_INFO("Joint %d value: %.5f", 7, solution[joint]);
+                                joint_7_index_adjust = -1; // decement the displayed joint number for the remaining joints since the third value in the solution is joint 7
+                            } else {
+                                ROS_INFO("Joint %d value: %.5f", joint+1+joint_7_index_adjust, solution[joint]);
+                            }
+                        }
+                    }
+                } else {
+                    success = false;
+                }
+
+                if (success) {
+                    ROS_WARN("(debug) Solution found without bounds. Storing unbounded solution");
+                    joint_trajectory.joints.push_back(solution);
+                } else {
+                    ROS_WARN("(debug) Skipping trajectory point.");
+                }
             } else {
+                ROS_ERROR("From: convertPoseConfigToJointTrajectory(joint_trajectory, ik, pose_configs, BOUNDED_SOLUTION, debug)");
+                ROS_ERROR("Not able to find a solution for trajectory point %d.", pose+1);
                 ROS_WARN("Exiting function.");
                 return false;
             }
         }
 
-        previous_solution = solution;
+        if (debug) { ROS_INFO("...................."); }
     }
 
     joint_trajectory.total_points = joint_trajectory.joints.size();
+    joint_trajectory.total_joints = total_joints;
 
+    if ((debug) && (BOUNDED_SOLUTION)) {
+        ROS_INFO("Able to convert %d of %lu poses to joints with bounded solutions.", solutions_stored, pose_configs.size());
+        ROS_INFO("Able to convert %d of %lu poses to joints with unbounded/bounded solutions.", joint_trajectory.total_points, pose_configs.size());
+    } else {
+        ROS_INFO("Able to convert %d of %lu poses to joint trajectory points.", solutions_stored, pose_configs.size());
+    }
     ROS_INFO("Processing time: %.5f",toc());
     return true;
 }
+
+bool parseCFX(int& cfx, int& axis_2_config, int& axis_3_config, int& axis_5_config, bool debug) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-08-04
+
+    PURPOSE: The purpose of this function is to parse the CFX configuraiton value from the ABB
+             confdata convention in order to determine the configurations for axes 2, 3, and 5.
+             The ABB convention for confdata is shown below. These cafinguration values can be
+             either 1 or 0 indicating bounds of where the joint angle solution for the given
+             axis lies according to the cutoffs shown below.
+
+    INSTRUCTIONS: Supply the CFX value to this function, as well as variables for storing the
+                  config values for axis 2, 3, and 5. the config variables are passed by
+                  reference and this function will update their values according to the given
+                  CFX according to the cenvention showed below. If debug is set to true, then
+                  the configruation values will be displayed after parsing the CFX value.
+
+
+    -------------------- OTHER INFORMATION --------------------
+
+    ABB AXIS CONFIGURATION CONVENTION: [axis_1_config, axis_4_config, axis_6_config, cfx]
+
+    CFX: ABCD
+        - A represents configuration for axis 5 and can be either (1) or (0)
+            > (0) if axis 5 position >= 0 degrees, (1) if axis 5 position < 0 degrees
+        - B represents configuration for axis 3 and can be either (1) or (0)
+            > (0) if axis 3 position >= -90 degrees, (1) if axis 3 position < -90 degrees
+        - C represents configuration for axis 2 and can be either (1) or (0)
+            > (0) if axis 2 position >= 0 degrees, (1) if axis 2 position < 0 degrees
+        - D represents the compatability bit, particulary used for linear movements
+            > This value is not used for the IK solver
+
+    EXAMPLES:
+        - CFX Value: 0 (Note: leading zeros are removed)
+            - Axis 5 position: >= 0 degrees   -> 0
+            - Axis 3 position: >= -90 degress -> 0
+            - Axis 2 position: >= 0 degrees   -> 0
+            - Compatability bit: 0            -> 0
+        - CFX Value: 1010
+            - Axis 5 position: <  0 degrees   -> 1
+            - Axis 3 position: >= -90 degress -> 0
+            - Axis 2 position: <  0 degrees   -> 1
+            - Compatability bit: 0            -> 0
+        - CFX Value: 110
+            - Axis 5 position: >= 0 degrees   -> 0
+            - Axis 3 position: <  -90 degress -> 1
+            - Axis 2 position: <  0 degrees   -> 1
+            - Compatability bit: 0            -> 0
+*/
+    // INITIALIZE VARIABLES
+    int digits;
+
+    // DETERMINE TOTAL DIGITS IN CFX
+    if (cfx != 0) {
+        digits = floor(log10((double)cfx)) + 1;
+    } else {
+        digits = 1;
+    }
+
+    // GET CONFIGURATION DATA FOR AXIS 2, 3, and 5
+    if (digits > 1) {
+        if (digits == 4) {
+            axis_5_config = 1;
+            cfx -= 1000; // take out the axis_4_config value
+            if (cfx >= 100) {
+            /* If the third value from the right is a 1 */
+                axis_3_config = 1;
+                cfx -= 100; // take out the axis_3_config value
+            }
+            if (cfx >= 10) {
+            /* If the second value from the right is a 1 */
+                axis_2_config = 1;
+            }
+        } else if (digits == 3) {
+            axis_3_config = 1;
+            cfx -= 100; // take out the axis_3_config value
+            if (cfx >= 10) {
+            /* If the second value from the right is a 1 */
+                axis_2_config = 1;
+            }
+        } else if (digits == 2) {
+            axis_2_config = 1;
+        } else {
+            ROS_FATAL("From: parseCFX(cfx, axis_2_config, axis_3_config, axis_5_config)");
+            ROS_FATAL("CFX (4th axis config value) for current pose has more than the total expected digits.");
+            ROS_ERROR("Inputted file does not have the proper ABB convention.");
+            ROS_WARN("Max expected digits: 4");
+            ROS_WARN("Digits: %d", digits);
+            ROS_WARN("Exiting function.");
+            return false;
+        }
+    }
+
+    if (debug) {
+        ROS_INFO("CFX Value: %d", cfx);
+        ROS_INFO("Axis 5 Config: %d | Axis 3 Config: %d | Axis 2 Config: %d", axis_5_config, axis_3_config, axis_2_config);
+    }
+
+    return true;
+}
+
+bool isClose(poseConfig& pose_config_1, poseConfig& pose_config_2, bool debug) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-08-05
+
+    PURPOSE: The purpose of this function is to determine whether the two inputted pose configrations
+             are similar enough to be considered the same point. This is done by comparing first the
+             configuration data for axis 1 through 7, comparing the difference in position for x, y, 
+             and z, comparing the difference in orientation for w, x, y, and z, and finally comparing
+             the external axis values for each pose configuration. The positions, orientations, and 
+             external axis values are considered close enough based on the tolerances set at the
+             beginning of the function. If they are considered close enough based on the tolerances,
+             the function returns true, otherwise it returns false.
+
+    INSTRUCTIONS: Input two pose configurations and this function will return true if they are 
+                  considered close enough based on the tolerances set at the beginning of this function,
+                  otherwise the function returns false. If debug is set to true, then the tolerances,
+                  both poses, and each step in the tolerance tests are displayed to the user. A final
+                  output is displayed to the user saying whether the pose configurations were determined
+                  to be close enough or not based on the set tolerances. 
+*/
+    // INITIALIZE VARIABLES
+    const double TOL_POSITION = 0.002; // 2 mm tolerance for position
+    const double TOL_ORIENT   = 0.01; // 0.01 tolerance for orientation (quaternion) and about 0.5 degree tolerance for arm angle
+
+    double x_tol_position = std::abs(pose_config_1.pose.position.x - pose_config_2.pose.position.x);
+    double y_tol_position = std::abs(pose_config_1.pose.position.y - pose_config_2.pose.position.y);
+    double z_tol_position = std::abs(pose_config_1.pose.position.z - pose_config_2.pose.position.z);
+
+    double w_tol_orientation = std::abs(pose_config_1.pose.orientation.w - pose_config_2.pose.orientation.w);
+    double x_tol_orientation = std::abs(pose_config_1.pose.orientation.x - pose_config_2.pose.orientation.x);
+    double y_tol_orientation = std::abs(pose_config_1.pose.orientation.y - pose_config_2.pose.orientation.y);
+    double z_tol_orientation = std::abs(pose_config_1.pose.orientation.z - pose_config_2.pose.orientation.z);
+
+    double arm_angle_tol = abs(pose_config_1.external_axis_position - pose_config_2.external_axis_position);
+
+    bool similar = true;
+
+    if (debug) {
+        ROS_INFO("_____ (debug) Tolerances Allowed for Similarity Comparison _____");
+        ROS_INFO("   Position tolerance: %.5f", TOL_POSITION);
+        ROS_INFO("Orientation tolerance: %.5f", TOL_ORIENT);
+        ROS_INFO("  Arm angle tolerance: %.5f", TOL_ORIENT);
+
+        ROS_INFO("_____ (debug) Pose Configurations Being Compared _____");
+        ROS_INFO(" *Convention: [[position],[orientation (w is first)],[configuration_data],[arm_angle]]");
+        ROS_INFO("Pose 1: [[%.5f, %.5f, %.5f],[%.5f, %.5f, %.5f, %.5f],[%d, %d, %d, %d],[%.5f]]",
+            pose_config_1.pose.position.x, pose_config_1.pose.position.y, pose_config_1.pose.position.z,
+            pose_config_1.pose.orientation.w, pose_config_1.pose.orientation.x, pose_config_1.pose.orientation.y, pose_config_1.pose.orientation.z,
+            pose_config_1.confdata[0], pose_config_1.confdata[1], pose_config_1.confdata[2], pose_config_1.confdata[3],
+            pose_config_1.external_axis_position);
+        ROS_INFO("Pose 2: [[%.5f, %.5f, %.5f],[%.5f, %.5f, %.5f, %.5f],[%d, %d, %d, %d],[%.5f]]",
+            pose_config_2.pose.position.x, pose_config_2.pose.position.y, pose_config_2.pose.position.z,
+            pose_config_2.pose.orientation.w, pose_config_2.pose.orientation.x, pose_config_2.pose.orientation.y, pose_config_2.pose.orientation.z,
+            pose_config_2.confdata[0], pose_config_2.confdata[1], pose_config_2.confdata[2], pose_config_2.confdata[3],
+            pose_config_2.external_axis_position);
+    }
+
+    // DETERMINE IS POSE CONFIGURATIONS ARE CLOSE
+    if (debug) { ROS_INFO("_____ (debug) Tolerance Test Feedback _____"); }
+    if (pose_config_1.confdata == pose_config_2.confdata) {
+    /* If the previous and current pose configs have the same configuration data */
+        if (debug) { ROS_INFO("(debug) The pose configurations have the same axis configurations."); }
+        if ((x_tol_position < TOL_POSITION) && (y_tol_position < TOL_POSITION) && (z_tol_position < TOL_POSITION)) {
+        /* If the previous and current pose configs have similar position values */
+            if (debug) { ROS_INFO("(debug) The pose configurations have a similar position."); }
+            if ((w_tol_orientation < TOL_ORIENT) && (x_tol_orientation < TOL_ORIENT) && (y_tol_orientation < TOL_ORIENT) && (z_tol_orientation < TOL_ORIENT)) {
+            /* If the previous and current pose configs have similar orientation values */
+                if (debug) { ROS_INFO("(debug) The pose configurations have a similar orientation."); }
+                if (arm_angle_tol < TOL_ORIENT) {
+                /* If the previous and current pose configs have similar arm angles */
+                    if (debug) { ROS_INFO("(debug) The pose configurations have a similar arm angle."); }
+                } else {
+                    if (debug) { ROS_INFO("(debug) The pose configurations do not have a similar arm angle."); }
+                    similar = false;
+                }
+            } else {
+                if (debug) { ROS_INFO("(debug) The pose configurations do not have a similar orientation."); }
+                similar = false;
+            }
+        } else {
+            if (debug) { ROS_INFO("(debug) The pose configurations do not have a similar position."); }
+            similar = false;
+        }
+    } else {
+        if (debug) { ROS_INFO("(debug) The pose configurations do not have the same axis configurations."); }
+        similar = false;
+    }
+
+    if (debug) {
+        if (similar) { ROS_INFO("(debug) Pose configurations are considered to be the same position according to tolerances."); }
+        else { ROS_INFO("(debug) Pose configurations are not considered to be the same position according to tolerances."); }
+    }
+    
+    return similar;
+}
+
+/* ------------------------------------------------------------ */
+/* ------------- PLANNING AND EXECUTION FUNCTIONS ------------- */
+/* ------------------------------------------------------------ */
+bool generatePlans(planner& plans, planningInterface::MoveGroup& group, trajectoryJoints& joint_trajectory, bool debug) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-06-22
+
+    PURPOSE: The purpose of this function is to create a set of plans for given joint trajectory points.
+             This is done by first setting the robots start state to the current state. Creating a plan
+             for going for the start state to the first trajectory point, then set the first trajectory 
+             point as the start state and plan for moving from there to the second trajectory point. 
+             This happens for all trajectory points, and is then stored into a planner structure.
+
+    INSTRUCTIONS: Input an empty planner structure, joint trajectory, and it associated move group. If
+                  If debug mode is set to true, then if any plan fails the trajectory point that failed 
+                  will be skipped, and the new target will be set to the next trajectory point. If debug 
+                  mode is set to false, then if any plan fails the function will notify the user and exit 
+                  returning false.
+*/
+    ROS_INFO(">--------------------");
+
+    // CHECK INPUTS
+    if (joint_trajectory.group_name.compare(group.getName()) != 0) {
+        ROS_ERROR("From: planner generatePlans(group, joint_trajectory, debug)");
+        ROS_ERROR("Provided joint trajectory is not meant for the provided group.");
+        if (joint_trajectory.group_name.compare("") == 0) {
+            ROS_WARN("Group name for joint trajectory is empty.");
+            ROS_WARN("This is likely due to a failure when converting to a joint trajectory.");
+        }
+        ROS_WARN("Joint trajectory group: %s",joint_trajectory.group_name.c_str());
+        ROS_WARN("Provided group: %s",group.getName().c_str());
+        ROS_WARN("Plans were not able to be generated. Exiting function.");
+        return false;
+    }
+
+    // INITIALIZE VARIABLES
+    plans.group_name = joint_trajectory.group_name;
+    int plan_index = 0;
+    bool success = false;
+
+    planningInterface::MoveGroup::Plan current_plan;
+    planningInterface::MoveGroup::Plan last_successful_plan;
+
+    moveit::core::RobotState state(group.getRobotModel());
+
+    // NOTIFY USER FUNCTION IS ABOUT TO START
+    ROS_INFO("Creating plans for provided joint trajectory.");
+
+    // CREATE PLANS FOR JOINT TRAJECTORY
+    for (int plan = 0; plan < joint_trajectory.total_points; plan++) {
+        if (plan_index == 0) {
+            group.setStartStateToCurrentState();
+        } else {
+            if (!success) {
+                current_plan = last_successful_plan;
+            } else {
+                last_successful_plan = current_plan;
+            }
+            moveit::core::jointTrajPointToRobotState(plans.plans[plan_index-1].trajectory_.joint_trajectory, (plans.plans[plan_index-1].trajectory_.joint_trajectory.points.size()-1), state);
+            group.setStartState(state);
+            /* Set the start state for the next plan to the last point in the previous successful plan */
+        }
+
+        group.setJointValueTarget(joint_trajectory.joints[plan]);
+        planningInterface::MoveGroup::Plan currentPlan;
+        success = group.plan(currentPlan);
+
+        if (success) {
+            plan_index++;
+            plans.plans.push_back(currentPlan);
+
+            ROS_INFO("Plan created for trajectory point: %d of %d", plan+1, joint_trajectory.total_points);
+        } else {
+            ROS_WARN("Plan failed for trajectory point: %d of %d", plan+1, joint_trajectory.total_points);
+
+            if (debug) {
+                ROS_WARN("(debug) Skipping trajectory point and continuing planner.");
+            } else {
+                ROS_ERROR("From: planner generatePlans(group, joint_trajectory, debug)");
+                ROS_ERROR("Plan failed to be created for trajectory point %d.", plan+1);
+                ROS_WARN("Exiting function.");
+                return false;
+            }
+        }
+    }
+
+    plans.total_plans = plans.plans.size();
+    ROS_INFO("Finished planning. Total plans created: %d of %d", plans.total_plans, joint_trajectory.total_points);
+    
+    return true;
+}
+
+bool executePlans(planningInterface::MoveGroup& group, planner& plans, bool debug) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-06-22
+
+    PURPOSE: The purpose of this function is to execute all the plans in the provided planner structure.
+             The robot will first move to the first state state indicated in the first plan in the planner
+             structure. From there, each consecutive plan will be executed. If there is an error in 
+             execution, the function will notify the user and the function will be exited. If debug mode
+             is set to true, then the current plan will be skipped and the next plan will be executed.
+
+    INSTRUCTIONS: Input a planner structure and its ssociated move group. If debug is set to true, then
+                  if an execution of a plan fails, the plan will be skipped and the next one will be
+                  executed. If debug is set to false, then the function will notify the user when an
+                  execution of a plan fails, and the function will then be exited.
+*/
+    ROS_INFO(">--------------------");
+
+    // INITIALIZE VARIABLES
+    bool success;
+    int successful_executions = 0;
+
+    // CHECK INPUTS
+    if (plans.group_name.compare(group.getName()) != 0) {
+        ROS_ERROR("From: executePlans(group, plan, debug)");
+        ROS_ERROR("Provided planner is not meant for the provided group.");
+        ROS_WARN("Planner Group: %s",plans.group_name.c_str());
+        ROS_WARN("Provided Group: %s",group.getName().c_str());
+        ROS_WARN("Exiting function.");
+        return false;
+    }
+        
+    // NOTIFY USER FUNCTION IS ABOUT TO START
+    ROS_INFO("Executing provided planner structure for group %s.", group.getName().c_str());
+
+    // GO TO START STATE OF PLANNER STRUCTURE
+    group.setStartStateToCurrentState();
+    group.setJointValueTarget(plans.plans[0].start_state_.joint_state.position);
+    success = group.move();
+    if (!success) {
+        ROS_WARN("From: executePlans(group, plan, debug)");
+        ROS_WARN("Not able to go to the start state of the trajectory.");
+
+        if (debug) {
+            ROS_WARN("(debug) Skipping start state of trajectory.");
+        } else {
+            ROS_ERROR("Error with executing plans. Exiting function.");
+            return false;
+        }
+    }
+
+    // EXECUTE PLANS
+    for (int plan = 0; plan < plans.total_plans; plan++) {
+        success = group.execute(plans.plans[plan]);
+
+        if (success) {
+            ROS_INFO("Executed trajectory: %d", plan+1);
+            successful_executions++;
+        } else {
+            ROS_WARN("Failed to execute trajectory for plan: %d", plan+1);
+            
+            if (debug) {
+                ROS_WARN("(debug) Skipping plan, executing next plan.");
+            } else {
+                ROS_ERROR("Error with executing plans. Exiting function.");
+                return false;
+            }
+        }
+    }
+
+    ROS_INFO("Finished executing. Total plans executed: %d of %d", successful_executions, plans.total_plans);
+
+    return true;
+}
+
+/* ============================================================
+   -------------------- FINISHED FUNCTIONS --------------------
+   ============================================================ */
+
+

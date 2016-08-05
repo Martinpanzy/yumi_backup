@@ -73,7 +73,7 @@
     <!--       YUMI STAND        -->
     <!--                         -->
 
-    <joint name="stand_to_world" type="fixed">
+    <joint name="stand_to_yumi" type="fixed">
       <parent link="${stand_parent}"/>
       <child link="stand"/>
       <origin rpy="0 0 0" xyz="0 0 0"/>

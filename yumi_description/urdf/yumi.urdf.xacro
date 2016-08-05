@@ -56,12 +56,12 @@
 
   <!-- Define Macros for YuMi Import -->
   <xacro:yumi name="yumi" hardware_interface="${hardware_interface}" parent="workspace">
-	  <origin xyz="0 0 0.1" rpy="0 0 0"/> <!-- Bring bottom of YuMi to (x,y) plane -->
+	  <origin xyz="0 0 0" rpy="0 0 0"/> <!-- Bring bottom of YuMi to (x,y) plane -->
   </xacro:yumi>
 
   <!-- Define Macros for Workspace Import -->
   <xacro:workspace stand_parent="yumi_body" table_parent="workspace">
-    <origin rpy="0 0 0" xyz="0.334 -0.01 -0.013"/>
+    <origin rpy="0 0 0" xyz="0.334 -0.01 -0.113"/>
   </xacro:workspace>
 
   <!-- Define Macros for Right and Left Servo Gripper Import -->

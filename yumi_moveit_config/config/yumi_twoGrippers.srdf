@@ -31,10 +31,10 @@
     <!--=================================-->
 
     <group name="left_arm_ik">
-      <chain base_link="yumi_body" tip_link="yumi_link_7_l"/>
+      <chain base_link="yumi_body" tip_link="gripper_l_tcp"/>
     </group>
     <group name="right_arm_ik">
-      <chain base_link="yumi_body" tip_link="yumi_link_7_r"/>
+      <chain base_link="yumi_body" tip_link="gripper_r_tcp"/>
     </group>
 
     <group name="left_arm">
@@ -89,7 +89,7 @@
     <!-- CALC POSITION -->
     <!--               -->
 
-    <group_state name="calc" group="both_arms">
+    <group_state name="calib" group="both_arms">
       <joint name="yumi_joint_1_l" value="0"/>
       <joint name="yumi_joint_2_l" value="-2.2689"/>
       <joint name="yumi_joint_7_l" value="2.3562"/>
@@ -108,7 +108,7 @@
       <joint name="gripper_r_joint_r" value="0"/>
     </group_state>
 
-    <group_state name="calc" group="left_arm">
+    <group_state name="calib" group="left_arm">
       <joint name="yumi_joint_1_l" value="0"/>
       <joint name="yumi_joint_2_l" value="-2.2689"/>
       <joint name="yumi_joint_7_l" value="2.3562"/>
@@ -118,7 +118,7 @@
       <joint name="yumi_joint_6_l" value="0"/>
       <joint name="gripper_l_joint_r" value="0"/>
     </group_state>
-    <group_state name="calc" group="right_arm">
+    <group_state name="calib" group="right_arm">
       <joint name="yumi_joint_1_r" value="0"/>
       <joint name="yumi_joint_2_r" value="-2.2689"/>
       <joint name="yumi_joint_7_r" value="-2.3562"/>

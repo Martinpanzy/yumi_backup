@@ -119,6 +119,15 @@
       </collision>
     </link>
 
+    <joint name="${name}_tcp" type="fixed">
+      <parent link="${name}_base"/>
+      <child link="${name}_tcp"/>
+      <origin xyz="0 0 0.1337" rpy="0 0 0"/>
+      <axis xyz="0 0 1"/>
+    </joint>
+
+    <link name="${name}_tcp"/>
+
     <!--                              -->
     <!--   YuMi Gripper Extensions    -->
     <!--                              -->
