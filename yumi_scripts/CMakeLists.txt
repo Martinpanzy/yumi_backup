@@ -31,11 +31,11 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(test_script src/test.cpp)
-target_link_libraries(test_script ${catkin_LIBRARIES})
+add_executable(main_script src/main_script.cpp)
+target_link_libraries(main_script ${catkin_LIBRARIES})
 
-add_executable(test_lead_script src/test_lead_through.cpp)
-target_link_libraries(test_lead_script ${catkin_LIBRARIES})
+add_executable(lead_through src/lead_through.cpp)
+target_link_libraries(lead_through ${catkin_LIBRARIES})
 
 # Check c++11 / c++0x
 # REFERENCE: http://answers.ros.org/question/152276/is-there-a-way-to-enable-c11-support-for-catkin-packages/

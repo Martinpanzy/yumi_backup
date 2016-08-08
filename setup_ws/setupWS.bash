@@ -86,9 +86,12 @@ mkdir yumi_ws/src # create folder to contain all files in workspace
 
 #----- Add GitHub repo's neccessary to run YuMi files -----
 mv yumi yumi_ws/src # move already cloned YuMi repo into workspace
-git clone -b indigo-devel https://github.com/ros-industrial/abb.git yumi_ws/src/abb_driver # clone the GitHub repo for the ABB driver using the indigo-devel branch
-git clone -b indigo-devel  https://github.com/ros-industrial/industrial_core.git yumi_ws/src/industrial_driver # clone the GitHub repo for the ROS-Industrial driver using the indigo-devel branch
-git clone https://github.com/ethz-asl/rotors_simulator yumi_ws/src/rotors_simulator # add in robot simulator for access to vi sensor xacro file
+git clone -b indigo-devel https://github.com/ros-industrial/abb.git ~/yumi_ws/src/abb_driver # clone the GitHub repo for the ABB driver using the indigo-devel branch
+git clone -b indigo-devel  https://github.com/ros-industrial/industrial_core.git ~/yumi_ws/src/industrial_driver # clone the GitHub repo for the ROS-Industrial driver using the indigo-devel branch
+git clone https://github.com/ethz-asl/rotors_simulator ~/yumi_ws/src/rotors_simulator # add in robot simulator for access to vi sensor xacro file
+git clone -b feature/init_yaw https://github.com/ethz-asl/rovio ~/yumi_ws/src/rovio # add in rovio for running the VI sensor scripts
+git clone https://github.com/ethz-asl/libvisensor_devel ~/yumi_ws/src/libvisensor_devel # add in the libraries for the VI sensor
+git clone https://github.com/ethz-asl/visensor_node_devel ~/yumi_ws/src/visensor_node_devel # add in the VI node package
 
 shopt -s extglob # allow for !() command
 cd ~/yumi_ws/src/abb_driver && rm -R !(abb|abb_driver|README.md) # remove unneccessary files from the ABB driver to allow for faster catkin builds
@@ -125,7 +128,7 @@ esac
 if [ $addYuMiCommands -eq 1 ]; then # if the commands should be added
 	echo "Adding command line tools for YuMi... " # notify user that command line tools for YuMi are being added
 
-	bash ~/yumi_ws/src/yumi/setup_ws/setupWSVariables.bash ~/yumi_ws/src/yumi # run file to add command for YuMi
+	bash ~/yumi_ws/src/yumi/setup_ws/setupWSVariables.bash ~/yumi_ws/src/yumi # run file to add quick commands for YuMi
 	addBashrcHeader=0 # set flag to inficate a header has already been added to the bashrc file
 	addBashrcFooter=1 # set flag to add in footer to bashrc file
 fi 
