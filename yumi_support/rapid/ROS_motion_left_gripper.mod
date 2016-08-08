@@ -71,6 +71,8 @@ PROC main()
     VAR num previousGripperPos; ! store old gripper position locally
     LOCAL VAR speeddata move_speed := v500; ! local speed setting
 
+    clear_trajectory; ! ensure the trajectory is cleared from any previous trajectories received
+
     ! Syncronize Tasks
     IF (program_started = FALSE) THEN
         TPWrite task_name + ": Program ready to start.";
@@ -216,6 +218,15 @@ LOCAL PROC abort_trajectory()
     trajectory_size := 0;  ! "clear" local trajectory
     clear_path;
     ExitCycle;  ! restart program
+ENDPROC
+
+LOCAL PROC clear_trajectory()
+! PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+! DATE CREATED: 2016-08-08
+! PURPOSE: Clear any existing trajectory
+
+    trajectory_size := 0;
+    
 ENDPROC
 
 LOCAL PROC clear_path()

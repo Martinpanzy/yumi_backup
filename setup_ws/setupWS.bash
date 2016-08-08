@@ -61,7 +61,7 @@ if [ $existROS -eq 0 ]; then
 	sudo apt-get update # update potential install list
 
 	sudo apt-get install ros-indigo-desktop-full -y # install indigo desktop
-	sudo apt-get install python-catkin-tools # install catkin tools
+	sudo apt-get install python-catkin-tools -y # install catkin tools
 
 	sudo rosdep init # initialize ROS
 	rosdep update # update ROS dependencies
@@ -69,7 +69,7 @@ fi
 
 #----- Ensure that MoveIt! is Downloaded -----
 sudo apt-get install ros-indigo-moveit-full -y # install MoveIt!
-source /opt/ros/indigo/setup.bash # setup the environment
+source /opt/ros/indigo/setup.bash # source ROS indigo
 
 echo "Verified installs." # notify user that the installs have been verified
 

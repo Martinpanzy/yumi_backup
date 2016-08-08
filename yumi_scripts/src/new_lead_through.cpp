@@ -116,12 +116,17 @@ int main(int argc,char **argv) {
 	std::string end_effector_left    = "yumi_link_7_l";
 	std::string end_effector_right   = "yumi_link_7_r";
 	std::string pose_reference_frame = "yumi_body";
-
+	
 	left_arm.setPoseReferenceFrame(pose_reference_frame);
 	right_arm.setPoseReferenceFrame(pose_reference_frame);
 
 	left_arm.setEndEffectorLink(end_effector_left);
 	right_arm.setEndEffectorLink(end_effector_right);
+
+	if (debug) {
+		ROS_INFO("(debug) Left arm  | Pose reference frame: %s | End effector: %s", left_arm.getPoseReferenceFrame().c_str(), left_arm.getEndEffectorLink().c_str());
+		ROS_INFO("(debug) Right arm | Pose reference frame: %s | End effector: %s", right_arm.getPoseReferenceFrame().c_str(), right_arm.getEndEffectorLink().c_str());
+	}
 
 	// ADD leadThroughPoses DATA
 	poses_left.arm  = "left";
@@ -158,10 +163,9 @@ int main(int argc,char **argv) {
 	
 	// INITIATE TERMINAL INPUT FROM USER
 	const int MAX_ARGUMENTS = 1;
-	int system_return;
 
 	system_return = std::system("clear"); // clear the screen
-    ROS_INFO("Ready to take arguments. For a list of recognized arguments, enter \"help\"");
+    ROS_INFO("Ready to take inputs. For a list of recognized inputs, enter \"help\"");
 
 	while (ok()) {	
 	/*  PROGRAMMER: Frederick Wachter
@@ -172,42 +176,27 @@ int main(int argc,char **argv) {
 		std::vector<std::string> inputs(MAX_ARGUMENTS,"");
         int argument = 0;
 
-        getline(std::cin, command);
+        std::cin >> command;
 
-        if (command.compare("exit") == 0) {
+        if (inputs[0].compare("exit") == 0) {
         /* If the user would like to exit the program*/
             return 1;
 
-        } else if (command.compare("clear") == 0) {
+        } else if (inputs[0].compare("clear") == 0) {
         /* If the user would like to clear the terminal window screen */
             system_return = std::system("clear");
-            continue;
 
-        } else if (command.compare("state") == 0) {
+        } else if (inputs[0].compare("state") == 0) {
         /* If the user would like to know the state variables of the function (debug, bounds, etc.) */
             ROS_INFO("Debug mode: %s", debug?"on":"off");
-            continue;
 
-        } else if (command.compare(0, 5, "debug") == 0) {
+        } else if (inputs[0].compare("debug") == 0) {
         /* If the user would like to change whether the script is running in debug mode */
-        	if (command.length() == 5) {
-        	/* If the command just is "debug" */
-            	debug = !debug;
-            } else if (command.compare(6, 2, "on") == 0) {
-            /* If the user indicated if debug should be set to on */
-            	debug = true;
-            } else if (command.compare(6, 3, "off") == 0) {
-            /* If the user indicated if debug should be set to off */
-            	debug = false;
-            } else {
-            	ROS_ERROR("Argument not recognized.");
-            	continue;
-            }
+            debug = !debug;
 
             ROS_INFO("Debug mode: %s", debug?"on":"off");
-            continue;
 
-        } else if (command.compare("help") == 0) {
+        } else if (inputs[0].compare("help") == 0) {
         /* If the user would like a list of allowed arguments*/
         	ROS_INFO("_____ List of Allowed Arguments _____");
             ROS_INFO("      store: Store the position of the arm(s)");
@@ -225,36 +214,33 @@ int main(int argc,char **argv) {
             ROS_INFO("       exit: Exit the program without writing to file");
             ROS_INFO("----------------------------------------");
             ROS_INFO("Please read to the Wiki before using lead through: github.com/ethz-asl/yumi/wiki/YuMi-Lead-Through");
-            continue;
 
 		} else if (command.compare("left_only") == 0) {
 		/* If the user would like to only store the pose for the left arm */
 			if (desired_group == 1) {
-				ROS_WARN("Program was already set to only store the pose for the left arm.");
+				ROS_WARN("Program was already set to only store the pose for the left arm.", pose_index);
 			} else if (desired_group == 2) {
-				ROS_ERROR("The program was set to only store the pose for the right arm.");
+				ROS_ERROR("The program was set to only store the pose for the right arm.", pose_index);
 				skip_command = true;
 			} else {
-				left_arm_only  = true;
-				right_arm_only = false;
+				left_arm_only = true;
 			}
 
 		} else if (command.compare("right_only") == 0) {
 		/* If the user would like to only store the pose for the right arm */
 			if (desired_group == 2) {
-				ROS_WARN("Program was already set to only store the pose for the right arm.");
+				ROS_WARN("Program was already set to only store the pose for the right arm.", pose_index);
 			} else if (desired_group == 1) {
-				ROS_ERROR("The program was set to only store the pose for the left arm.");
+				ROS_ERROR("The program was set to only store the pose for the left arm.", pose_index);
 				skip_command = true;
 			} else {
-				right_arm_only = true;
-				left_arm_only  = false;
+				left_arm_only = true;
 			}
 
 		} else if (command.compare("open_left") == 0) {
 		/* If the user would like to indicate that the left gripper is to open */
 			if (desired_group == 2) {
-				ROS_ERROR("The program was set to only store the pose for the right arm.");
+				ROS_ERROR("The program was set to only store the pose for the right arm.", pose_index);
 				skip_command = true;
 			} else {
 				if (poses_left.gripper_attached) {
@@ -274,7 +260,7 @@ int main(int argc,char **argv) {
 		} else if (command.compare("open_right") == 0) {
 		/* If the user would like to indicate that the right gripper is to open */
 			if (desired_group == 1) {
-				ROS_ERROR("The program was set to only store the pose for the left arm.");
+				ROS_ERROR("The program was set to only store the pose for the left arm.", pose_index);
 				skip_command = true;
 			} else {
 				if (poses_right.gripper_attached) {
@@ -294,7 +280,7 @@ int main(int argc,char **argv) {
 		} else if (command.compare("close_left") == 0) {
 		/* If the user would like to indicate that the left gripper is to close */
 			if (desired_group == 2) {
-				ROS_ERROR("The program was set to only store the pose for the right arm.");
+				ROS_ERROR("The program was set to only store the pose for the right arm.", pose_index);
 				skip_command = true;
 			} else {
 				if (poses_left.gripper_attached) {
@@ -314,7 +300,7 @@ int main(int argc,char **argv) {
 		} else if (command.compare("close_right") == 0) {
 		/* If the user would like to indicate that the right gripper is to close */
 			if (desired_group == 1) {
-				ROS_ERROR("The program was set to only store the pose for the left arm.");
+				ROS_ERROR("The program was set to only store the pose for the left arm.", pose_index);
 				skip_command = true;
 			} else {
 				if (poses_right.gripper_attached) {
@@ -333,67 +319,64 @@ int main(int argc,char **argv) {
 
 		} else if (command.compare("store") == 0) {
 		/* If the user would like to store the current position of YuMi */
-			left_arm_only    = false;
-			right_arm_only   = false;
+			std::string point_name;
+			if ((desired_group == 1) || (desired_group == 3)) {
+			/* If the left arm point is to be stored, either the user is only intending to store the
+			   left arm values as indicated by the initial input, or the user initial input indicated
+			   that both arm positions should be stored, but only wants to store the pose of the right
+			   arm for the current arm position. */
+				poseConfig pose_config_left = getAxisConfigurations(left_arm, debug);
+				pose_config_left.pose = left_arm.getCurrentPose().pose;
+				poses_left.pose_configs.push_back(pose_config_left);
+
+				if (left_arm_only) {
+					point_name = "p" + std::to_string(point_left_move);
+					point_left_move++;
+				} else { 
+					point_name = "s" + std::to_string(point_left_movesync);
+					point_left_movesync++; 
+				}
+				poses_left.pose_names.push_back(point_name);
+
+				if (debug) { ROS_INFO("(Pose index left: %d) (debug) Stored point %s for left arm.", (point_left_movesync+point_left_move)-2, point_name.c_str()); }
+			}
+			if ((desired_group == 2) || (desired_group == 3)) {
+			/* If the left arm point is to be stored, either the user is only intending to store the
+			   left arm values as indicated by the initial input, or the user initial input indicated
+			   that both arm positions should be stored, but only wants to store the pose of the right
+			   arm for the current arm position. */
+				poseConfig pose_config_right = getAxisConfigurations(right_arm, debug);
+				pose_config_right.pose = right_arm.getCurrentPose().pose;
+				poses_right.pose_configs.push_back(pose_config_right);
+
+				if (right_arm_only) {
+					point_name = "p" + std::to_string(point_right_move);
+					point_right_move++;
+				} else { 
+					point_name = "s" + std::to_string(point_right_movesync);
+					point_right_movesync++; 
+				}
+				poses_right.pose_names.push_back(point_name);
+
+				if (debug) { ROS_INFO("(Pose index right: %d) (debug) Stored point %s for right arm.", (point_right_movesync+point_right_move)-2, point_name.c_str()); }
+			}
 
 		} else if (command.compare("finish") == 0) {
 		/* If there are no more trajectory points to store, indicated by the command "finish" */
-			ROS_INFO("Finish command received.");
+			ROS_INFO("Finish command received.", (point_left_movesync+point_left_move)-2, (point_right_movesync+point_right_move)-2);
 			break;
 
 		} else {
 		/* If the agument is not recognized */
-			ROS_ERROR("Argument not recognized.");
+            ROS_ERROR("Argument not recognized.");
             continue;
-		}
-
-		std::string point_name;
-		if (((desired_group == 1) || ((desired_group == 3) && (!right_arm_only))) && (!skip_command) && (!gripper_movement)) {
-		/* If the left arm point is to be stored, either the user is only intending to store the
-		   left arm values as indicated by the initial input, or the user initial input indicated
-		   that both arm positions should be stored, but only wants to store the pose of the right
-		   arm for the current arm position. */
-			poseConfig pose_config_left = getAxisConfigurations(left_arm, debug);
-			pose_config_left.pose = left_arm.getCurrentPose().pose;
-			poses_left.pose_configs.push_back(pose_config_left);
-
-			if (left_arm_only) {
-				point_name = "p" + std::to_string(point_left_move);
-				point_left_move++;
-			} else { 
-				point_name = "s" + std::to_string(point_left_movesync);
-				point_left_movesync++; 
-			}
-			poses_left.pose_names.push_back(point_name);
-
-			if (debug) { ROS_INFO("(Pose index left: %d) (debug) Stored point %s for left arm.", (point_left_movesync+point_left_move)-2, point_name.c_str()); }
-		}
-		if (((desired_group == 2) || ((desired_group == 3) && (!left_arm_only))) && (!skip_command) && (!gripper_movement)) {
-		/* If the left arm point is to be stored, either the user is only intending to store the
-		   left arm values as indicated by the initial input, or the user initial input indicated
-		   that both arm positions should be stored, but only wants to store the pose of the right
-		   arm for the current arm position. */
-			poseConfig pose_config_right = getAxisConfigurations(right_arm, debug);
-			pose_config_right.pose = right_arm.getCurrentPose().pose;
-			poses_right.pose_configs.push_back(pose_config_right);
-
-			if (right_arm_only) {
-				point_name = "p" + std::to_string(point_right_move);
-				point_right_move++;
-			} else { 
-				point_name = "s" + std::to_string(point_right_movesync);
-				point_right_movesync++; 
-			}
-			poses_right.pose_names.push_back(point_name);
-
-			if (debug) { ROS_INFO("(Pose index right: %d) (debug) Stored point %s for right arm.", (point_right_movesync+point_right_move)-2, point_name.c_str()); }
 		}
 
 		if (debug) { ROS_INFO("...................."); }
 
 		if (skip_command) {
 		/* If there was an error with the command supplied by the user */
-			ROS_WARN("YuMi position not stored due to error.");
+			ROS_WARN("YuMi position not stored due to error.", (point_left_movesync+point_left_move)-2, (point_right_movesync+point_right_move)-2);
 			skip_command = false;
 		} else {
 			if (gripper_movement) {

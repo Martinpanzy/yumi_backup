@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
     spinner.start();
 
     // INITIALIZE VARIABLES
-    bool debug = true;
+    bool debug = false;
     std::string end_effector_left    = "yumi_link_7_l";
     std::string end_effector_right   = "yumi_link_7_r";
     std::string pose_reference_frame = "yumi_body";
@@ -190,13 +190,15 @@ int main(int argc, char **argv) {
     }
 
     // WAIT FOR COMMANDS FROM USER
-    std::string left_file(""), right_file(""), rosbag_file(""), module_folder("paths"), rosbag_folder("bags"), module_file_type(".mod"), rosbag_file_type(".bag");
-    int system_return, total_allowed_arguments(9);
+    const int MAX_ARGUMENTS = 4;
+
+    int system_return;
     bool bounds(true), planner_successfully_created(false);
+    std::string left_file(""), right_file(""), rosbag_file(""), module_folder("paths"), rosbag_folder("bags"), module_file_type(".mod"), rosbag_file_type(".bag");
     planner plans, empty_plans;
 
     system_return = std::system("clear"); // clear the screen
-    ROS_INFO("Ready to take inputs. For a list of recognized inputs, enter \"help\"");
+    ROS_INFO("Ready to take arguments. For a list of recognized arguments, enter \"help\"");
 
     while (ok()) {
     /*  PROGRAMMER: Frederick Wachter
@@ -204,17 +206,22 @@ int main(int argc, char **argv) {
 
         DESCRIPTION: 
     */
-        std::vector<std::string> inputs(total_allowed_arguments,"");
+        std::vector<std::string> inputs(MAX_ARGUMENTS,"");
+        int argument = 0;
 
         std::string input;
         getline(std::cin, input);
         std::istringstream input_stream(input);
 
-        int argument = 0;
-
-        // GET USER ARGUMENTS
-        while ((input_stream >> inputs[argument]) && (argument < total_allowed_arguments)) {
+        while ((input_stream >> inputs[argument]) && (argument < MAX_ARGUMENTS)) {
+        /* Get all arguments supplied by the user on the command line */
             argument++;
+        }
+        if (argument == MAX_ARGUMENTS) {
+        /* If the user supplied more agurments than that max arguments allowed */
+            ROS_ERROR("The max amount of arguments allowed is %d", MAX_ARGUMENTS);
+            ROS_WARN("Please check inputted command and ensure it is in the list provided from typing \"help\".");
+            continue;
         }
 
         if (inputs[0].compare("exit") == 0) {
@@ -242,7 +249,7 @@ int main(int argc, char **argv) {
             ROS_INFO("exit");
             ROS_INFO("----------------------------------------");
             ROS_INFO("File names should NOT include file extensions (*.txt, *.mod, etc.)");
-            ROS_INFO("For more information, please refer to the Wiki: github.com/ethz-asl/yumi/wiki");
+            ROS_INFO("For more information, please refer to the Wiki: github.com/ethz-asl/yumi/wiki/YuMi-Main-Script");
 
         } else if (inputs[0].compare("debug") == 0) {
         /* If the user would like to modify if the functions will run in debug mode or not */
