@@ -201,10 +201,16 @@ int main(int argc, char **argv) {
     ROS_INFO("Ready to take arguments. For a list of recognized arguments, enter \"help\"");
 
     while (ok()) {
-    /*  PROGRAMMER: Frederick Wachter
+    /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
         DATE CREATED: 2016-08-04
 
-        DESCRIPTION: 
+        DESCRIPTION: This while loop waits for a command line input from the user and determines if the inputted argument is on
+                     of the regonized arguments. The recognized arguments include: exit, clear, help, debug, bounds, state, 
+                     module, rosbag, end_effector, run. If the provided argument is not recognized, then the user will be 
+                     notified and the script will wait for another input from the user. For more information on the recognized 
+                     commands, please refer to the wiki page shown below.
+
+        WIKI: github.com/ethz-asl/yumi/wiki/YuMi-Main-Script
     */
         std::vector<std::string> inputs(MAX_ARGUMENTS,"");
         int argument = 0;
@@ -755,7 +761,7 @@ poseConfig getAxisConfigurations(planningInterface::MoveGroup& group, bool debug
         - D represents the compatability bit, particulary used for linear movements
             > This value is not used for the IK solver
 
-    EXTERNAL AXIS POSITION CONVENTION: [arm_angle]
+    EXTERNAL AXIS POSITION CONVENTION: [arm_angle, 9E+09, 9E+09, 9E+09, 9E+09, 9E+09]
 */
     if (debug) { ROS_INFO("...................."); }
 
@@ -854,7 +860,7 @@ poseConfig getAxisConfigurations(std::vector<double> joint_values, bool debug) {
         - D represents the compatability bit, particulary used for linear movements
             > This value is not used for the IK solver
 
-    EXTERNAL AXIS POSITION CONVENTION: [arm_angle]
+    EXTERNAL AXIS POSITION CONVENTION: [arm_angle, 9E+09, 9E+09, 9E+09, 9E+09, 9E+09]
 */
     if (debug) { ROS_INFO(">--------------------"); }
 
@@ -1206,7 +1212,7 @@ poseConfig getRobtargetData(std::string robtarget, bool debug) {
         > cf4 represents the configuration data for axis 4
         > cf6 represents the configuration data for axis 6
         > cfx represents the configuration data for a combination of axis 5, 3, 2, and a compatibility bit
-        > eax1 represents the position of the first external axis (axis 7)
+        > eax1 represents the arm angle
         > eax2 to eax6 represents 5 other external axis values, but these are not used on YuMi and thus are all set to 9E+09. This data is ignored.
 */
     // INITIALIZE VARIABLES

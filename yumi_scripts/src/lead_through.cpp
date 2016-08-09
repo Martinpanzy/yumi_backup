@@ -123,14 +123,25 @@ int main(int argc,char **argv) {
 	left_arm.setEndEffectorLink(end_effector_left);
 	right_arm.setEndEffectorLink(end_effector_right);
 
+	if (debug) {
+		ROS_INFO("Left Arm  - Pose reference frame: %s | End effector link: %s", left_arm.getPoseReferenceFrame().c_str(), left_arm.getEndEffectorLink().c_str());
+		ROS_INFO("Right Arm - Pose reference frame: %s | End effector link: %s", right_arm.getPoseReferenceFrame().c_str(), right_arm.getEndEffectorLink().c_str());
+	}
+
 	// ADD leadThroughPoses DATA
 	poses_left.arm  = "left";
 	poses_right.arm = "right";
 	if (left_arm.getActiveJoints().back().compare(0, 7, "gripper") == 0) {
 		poses_left.gripper_attached = true;
+		if (debug) { ROS_INFO("A gripper is attached to the left arm."); }
+	} else if (debug) {
+		ROS_INFO("A gripper is not attached to the left arm.");
 	}
 	if (right_arm.getActiveJoints().back().compare(0, 7, "gripper") == 0) {
 		poses_right.gripper_attached = true;
+		if (debug) { ROS_INFO("A gripper is attached to the right arm."); }
+	} else if (debug) {
+		ROS_INFO("A gripper is not attached to the right arm.");
 	}
 
 	// CHECK IF DESIRED OUTPUT FILE ALREADY EXISTS
@@ -158,16 +169,25 @@ int main(int argc,char **argv) {
 	
 	// INITIATE TERMINAL INPUT FROM USER
 	const int MAX_ARGUMENTS = 1;
+
+	std::vector<std::string> previous_point_names;
+	std::string previous_point_arm;
 	int system_return;
 
 	system_return = std::system("clear"); // clear the screen
-    ROS_INFO("Ready to take arguments. For a list of recognized arguments, enter \"help\"");
+	ROS_INFO("Ready to take arguments. For a list of recognized arguments, enter \"help\"");
 
 	while (ok()) {	
-	/*  PROGRAMMER: Frederick Wachter
+	/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
         DATE CREATED: 2016-08-04
 
-        DESCRIPTION: 
+        DESCRIPTION: This while loop waits for a command line input from the user and determines if the inputted argument is on
+        			 of the regonized arguments. The recognized arguments include: exit, clear, state, debug, help, left_only, 
+        			 right_only, close_left, close_right, open_left, open_right, and store. If the provided argument is not
+        			 recognized, then the user will be notified and the script will wait for another input from the user. For
+        			 more information on the recognized commands, please refer to the wiki page shown below.
+
+       	WIKI: github.com/ethz-asl/yumi/wiki/YuMi-Lead-Through
     */
 		std::vector<std::string> inputs(MAX_ARGUMENTS,"");
         int argument = 0;
@@ -190,7 +210,7 @@ int main(int argc,char **argv) {
 
         } else if (command.compare(0, 5, "debug") == 0) {
         /* If the user would like to change whether the script is running in debug mode */
-        	if (command.length() == 5) {
+			if (command.length() == 5) {
         	/* If the command just is "debug" */
             	debug = !debug;
             } else if (command.compare(6, 2, "on") == 0) {
@@ -207,51 +227,56 @@ int main(int argc,char **argv) {
             ROS_INFO("Debug mode: %s", debug?"on":"off");
             continue;
 
-        } else if (command.compare("help") == 0) {
+		} else if (command.compare("help") == 0) {
         /* If the user would like a list of allowed arguments*/
-        	ROS_INFO("_____ List of Allowed Arguments _____");
-            ROS_INFO("      store: Store the position of the arm(s)");
-            ROS_INFO("  left_only: Only store the position of the left arm");
-            ROS_INFO(" right_only: Only store the position of the right arm");
-            ROS_INFO(" close_left: Gripper is to be in the closed position for the left arm");
-            ROS_INFO("close_right: Gripper is to be in the closed position for the right arm");
-            ROS_INFO("  open_left: Gripper is to be in the open position for the left arm");
-            ROS_INFO(" open_right: Gripper is to be in the open position for the right arm");
-            ROS_INFO("     finish: Finished storing points, write to file");
+			ROS_INFO("_____ List of Allowed Arguments _____");
+            ROS_INFO("                store: Store the position of the arm(s)");
+            ROS_INFO("           store left: Only store the position of the left arm");
+            ROS_INFO("          store right: Only store the position of the right arm");
+            ROS_INFO("           close left: Gripper is to be in the closed position for the left arm");
+            ROS_INFO("          close right: Gripper is to be in the closed position for the right arm");
+            ROS_INFO("            open left: Gripper is to be in the open position for the left arm");
+            ROS_INFO("           open right: Gripper is to be in the open position for the right arm");
+            ROS_INFO("               finish: Finished storing points, write to file");
+            ROS_INFO("          show points: Show all stored point names with lined up synchronized movements")
+            ROS_INFO("      delete previous: Delete the previously stored point");
+            ROS_INFO(" delete previous left: Delete the previously stored point for the left arm");
+            ROS_INFO("delete previous right: Delete the previously stored point for the right arm");
+            ROS_INFO("           delete all: Delete all points stored");
             ROS_INFO(" ");
-            ROS_INFO("      debug: Change whether script is run in debug mode or not");
-            ROS_INFO("      state: Check if the script is in debug mode or not");
-            ROS_INFO("      clear: Clear the terminal window");
-            ROS_INFO("       exit: Exit the program without writing to file");
+            ROS_INFO("                debug: Change whether script is run in debug mode or not");
+            ROS_INFO("                state: Check if the script is in debug mode or not");
+            ROS_INFO("                clear: Clear the terminal window");
+            ROS_INFO("                 exit: Exit the program without writing to file");
             ROS_INFO("----------------------------------------");
-            ROS_INFO("Please read to the Wiki before using lead through: github.com/ethz-asl/yumi/wiki/YuMi-Lead-Through");
+            ROS_INFO("For more information, please refer to the Wiki: github.com/ethz-asl/yumi/wiki/YuMi-Lead-Through");
             continue;
 
-		} else if (command.compare("left_only") == 0) {
+		} else if (command.compare("store left") == 0) {
 		/* If the user would like to only store the pose for the left arm */
 			if (desired_group == 1) {
 				ROS_WARN("Program was already set to only store the pose for the left arm.");
 			} else if (desired_group == 2) {
-				ROS_ERROR("The program was set to only store the pose for the right arm.");
+				ROS_ERROR("The program was set to only store the positions for the right arm.");
 				skip_command = true;
 			} else {
 				left_arm_only  = true;
 				right_arm_only = false;
 			}
 
-		} else if (command.compare("right_only") == 0) {
+		} else if (command.compare("store right") == 0) {
 		/* If the user would like to only store the pose for the right arm */
 			if (desired_group == 2) {
 				ROS_WARN("Program was already set to only store the pose for the right arm.");
 			} else if (desired_group == 1) {
-				ROS_ERROR("The program was set to only store the pose for the left arm.");
+				ROS_ERROR("The program was set to only store the positions for the left arm.");
 				skip_command = true;
 			} else {
 				right_arm_only = true;
 				left_arm_only  = false;
 			}
 
-		} else if (command.compare("open_left") == 0) {
+		} else if (command.compare("open left") == 0) {
 		/* If the user would like to indicate that the left gripper is to open */
 			if (desired_group == 2) {
 				ROS_ERROR("The program was set to only store the pose for the right arm.");
@@ -266,12 +291,12 @@ int main(int argc,char **argv) {
 
 					gripper_movement = true;
 				} else {
-					ROS_WARN("A gripper is not attached to the left arm.");
+					ROS_ERROR("A gripper is not attached to the left arm.");
 					skip_command = true;
 				}
 			}
 
-		} else if (command.compare("open_right") == 0) {
+		} else if (command.compare("open right") == 0) {
 		/* If the user would like to indicate that the right gripper is to open */
 			if (desired_group == 1) {
 				ROS_ERROR("The program was set to only store the pose for the left arm.");
@@ -286,12 +311,12 @@ int main(int argc,char **argv) {
 
 					gripper_movement = true;
 				} else {
-					ROS_WARN("A gripper is not attached to the right arm.");
+					ROS_ERROR("A gripper is not attached to the right arm.");
 					skip_command = true;
 				}
 			}
 
-		} else if (command.compare("close_left") == 0) {
+		} else if (command.compare("close left") == 0) {
 		/* If the user would like to indicate that the left gripper is to close */
 			if (desired_group == 2) {
 				ROS_ERROR("The program was set to only store the pose for the right arm.");
@@ -306,12 +331,12 @@ int main(int argc,char **argv) {
 
 					gripper_movement = true;
 				} else {
-					ROS_WARN("A gripper is not attached to the left arm.");
+					ROS_ERROR("A gripper is not attached to the left arm.");
 					skip_command = true;
 				}
 			}
 
-		} else if (command.compare("close_right") == 0) {
+		} else if (command.compare("close right") == 0) {
 		/* If the user would like to indicate that the right gripper is to close */
 			if (desired_group == 1) {
 				ROS_ERROR("The program was set to only store the pose for the left arm.");
@@ -326,7 +351,7 @@ int main(int argc,char **argv) {
 
 					gripper_movement = true;
 				} else {
-					ROS_WARN("A gripper is not attached to the right arm.");
+					ROS_ERROR("A gripper is not attached to the right arm.");
 					skip_command = true;
 				}
 			}
@@ -335,6 +360,485 @@ int main(int argc,char **argv) {
 		/* If the user would like to store the current position of YuMi */
 			left_arm_only    = false;
 			right_arm_only   = false;
+
+		} else if (command.compare(0, 15, "delete previous") == 0) {
+		/* If the user would like to delete the previous point stored or the previous point stored for a specified arm */
+			if (desired_group == 1) {
+			/* If this script is storing positions for the left arm */
+				if ((previous_point_names.size() > 0) && (poses_left.pose_names.size() > 0)) {
+				/* If there are points to delete for the left arm*/ 
+					if (command.compare("delete previous right") == 0) {
+					/* If the user would like to delete a previous point for an arm that was not set to store points */
+						ROS_ERROR("The program was set to only store the positions for the left arm.");
+					}
+
+					poses_left.pose_names.pop_back();
+					poses_left.pose_configs.pop_back();
+
+					point_left_move--;
+					previous_point_names.pop_back();
+
+					ROS_INFO("Deleted the last point for the left arm.");
+				} else {
+				/* If there are no points to delete*/
+					ROS_ERROR("There are not points to delete.");
+					continue;
+				}
+			} else if (desired_group == 2) {
+			/* If this script is storing positions for the right arm */
+				if ((previous_point_names.size() > 0) && (poses_right.pose_names.size() > 0)) {
+				/* If there are points to delete for the right arm*/
+					if (command.compare("delete previous left") == 0) {
+					/* If the user would like to delete a previous point for an arm that was not set to store points */
+						ROS_ERROR("The program was set to only store the positions for the right arm.");
+					}
+
+					poses_right.pose_names.pop_back();
+					poses_right.pose_configs.pop_back();
+
+					point_right_move--;
+					previous_point_names.pop_back();
+
+					ROS_INFO("Deleted the last point for the right arm.");
+				} else {
+				/* If there are no points to delete*/
+					ROS_ERROR("There are not points to delete.");
+					continue;
+				}
+			} else if (desired_group == 3) {
+			/* If this script is storing positions for both arms */
+				if (command.compare("delete previous left") == 0) {
+				/* If the user would like to delete the last point stored for the left arm */
+					if ((previous_point_names.size() > 0) && (poses_left.pose_names.size() > 0)) {
+					/* If there are points to delete for the left arm*/
+						if (poses_left.pose_names.back().compare(0, 1, "s") == 0) {
+						/* If the previous position stored for the left arm was supposed to be a synchronized movement with the right arm */
+							std::string response;
+							ROS_WARN("Previous position was meant to be a synchronized movement with the right arm");
+							ROS_INFO("Would you like to keep the position on the right arm? (yes/no/skip)");
+							getline(std::cin, response);
+
+							if (response.compare("yes") == 0) {
+							/* If the user would like to keep the position on the right arm that was synchronized with the last point name on the left arm */
+								std::string new_point_name;
+								std::string last_point_name_left = poses_left.pose_names.back();
+								for (int index = (poses_right.pose_names.size()-1); index >= 0; index--) {
+								/* Search through the poses names for the right arm to find the one that matches with the last point name on the left arm */
+									if (poses_right.pose_names[index].compare(last_point_name_left) == 0) {
+									/* If the current index of the point name for the right arm matches the last point name on the left arm, 
+									   then change the point name to indicate that the point is not a synchronized movement with the left arm
+									   anymore but rather is an independent movement */
+										new_point_name = "p" + std::to_string(point_right_move);
+										point_right_movesync--;
+										point_right_move++;
+
+										poses_right.pose_names[index] = new_point_name;
+										break;
+									}
+								}
+								
+								for (int index = (previous_point_names.size()-1); index >= 0; index--) {
+								/* Search through the previous point names list to find the one that matched with the last point name on the left arm */
+									if (previous_point_names[index].compare(last_point_name_left) == 0) {
+									/* If the current index of the previous point names matches the last point name on the left arm, then
+									   update the previous point name with the new point name indicating the right arm is an independent
+									   movement instead of a synchronized movement with the left arm */
+										previous_point_names[index] = new_point_name;
+										break;
+									}
+								}
+
+								poses_left.pose_names.pop_back();
+								poses_left.pose_configs.pop_back();
+								point_left_movesync--;
+
+								ROS_INFO("Deleted the last point for the left arm and renamed the synchronized point for the right arm.");
+							} else if (response.compare("no") == 0) {
+							/* If the user would not like to keep the position on the right arm that was synchronized with the last point name on the left arm */
+								std::string new_point_name;
+								std::string last_point_name_left = poses_left.pose_names.back();
+								for (int index = (poses_right.pose_names.size()-1); index >= 0; index--) {
+								/* Search through the poses names for the right arm to find the one that matches with the last point name on the left arm */
+									if (poses_right.pose_names[index].compare(last_point_name_left) == 0) {
+									/* If the current index of the point name for the right arm matches the last point name on the left arm */
+										if (index != (poses_right.pose_names.size()-1)) {
+										/* If the index is not the last point name for the right arm */
+											for (int position = index+1; position < poses_right.pose_names.size(); position++) {
+											/* Cycle through the point names for the right arm shifting the point names and pose configs that 
+											   come after the point to be removed point to overwrite the point name and config being removed */
+												poses_right.pose_names[position-1]   = poses_right.pose_names[position];
+												poses_right.pose_configs[position-1] = poses_right.pose_configs[position];
+											}
+										}
+										poses_right.pose_names.pop_back();
+										poses_right.pose_configs.pop_back();
+										break;
+									}
+								}
+
+								for (int index = (previous_point_names.size()-1); index >= 0; index--) {
+								/* Search through the previous point names list to find the one that matched with the last point name on the left arm */
+									if (previous_point_names[index].compare(last_point_name_left) == 0) {
+									/* If the current index of the previous point names matches the last point name on the left arm */
+										if (index != (previous_point_names.size()-1)) {
+										/* If the index is not the last point name for the previous point names list */
+											for (int position = index+1; position < previous_point_names.size(); position++) {
+											/* Cycle through the previous point names list shifting the previous point names that come after 
+											   the point to be removed point to overwrite the point name being removed */
+												previous_point_names[position-1] = previous_point_names[position];
+											}
+											
+										}
+										previous_point_names.pop_back();
+										break;
+									}
+								}
+
+								poses_left.pose_names.pop_back();
+								poses_left.pose_configs.pop_back();
+								point_left_movesync--;
+								point_right_movesync--;
+
+								ROS_INFO("Deleted the last point for the left arm and the synchronized point for the right arm.");
+							} else if (response.compare("skip") == 0) {
+							/* If the user would not like to delete the previous position */
+								ROS_INFO("Not deleting any positions.");
+								continue;
+							} else {
+							/* If the provided argument is not recognized */
+								ROS_ERROR("Argument not recognized. Not deleting any positions.");
+								continue;
+							}
+						} else {
+						/* If the previous position for the left arm is independent from the right arm (non-synchronized movement) */
+							std::string last_point_name_left = poses_left.pose_names.back();
+							for (int index = (previous_point_names.size()-1); index >= 0; index--) {
+							/* Search through the previous point names list to find the one that matched with the lat point name on the left arm */
+								if (previous_point_names[index].compare(last_point_name_left) == 0) {
+								/* If the current index of the previous point names matches the last point name on the left arm */
+									if (index != (previous_point_names.size()-1)) {
+									/* If the index is not the last point name for the previous point names list */
+										for (int position = index+1; position < previous_point_names.size(); position++) {
+										/* Cycle through the previous point names list shifting the previous point names that come after 
+										   the point to be removed point to overwrite the point name being removed */
+											previous_point_names[position-1] = previous_point_names[position];
+										}
+										
+									}
+									previous_point_names.pop_back();
+									break;
+								}
+							}
+
+							poses_left.pose_names.pop_back();
+							poses_left.pose_configs.pop_back();
+							point_left_move--;
+
+							ROS_INFO("Deleted the last point for the left arm.");
+						}
+					} else {
+					/* If there are no points to delete*/
+						ROS_ERROR("There are not points to delete.");
+					}
+				} else if (command.compare("delete previous right") == 0) {
+				/* If the user would like to delete the last point stored for the right arm */
+					if ((previous_point_names.size() > 0) && (poses_right.pose_names.size() > 0)) {
+					/* If there are points to delete for the right arm*/
+						if (poses_right.pose_names.back().compare(0, 1, "s") == 0) {
+						/* If the previous position stored for the right arm was supposed to be a synchronized movement with the left arm */
+							std::string response;
+							ROS_WARN("Previous position was meant to be a synchronized movement with the left arm");
+							ROS_INFO("Would you like to keep the position on the left arm? (yes/no/skip)");
+							getline(std::cin, response);
+
+							if (response.compare("yes") == 0) {
+							/* If the user would like to keep the position on the left arm that was synchronized with the last point name on the right arm */
+								std::string new_point_name;
+								std::string last_point_name_right = poses_right.pose_names.back();
+								for (int index = (poses_left.pose_names.size()-1); index >= 0; index--) {
+								/* Search through the poses names for the left arm to find the one that matches with the last point name on the right arm */
+									if (poses_left.pose_names[index].compare(last_point_name_right) == 0) {
+									/* If the current index of the point name for the left arm matches the last point name on the right arm, 
+									   then change the point name to indicate that the point is not a synchronized movement with the right arm
+									   anymore but rather is an independent movement */
+										new_point_name = "p" + std::to_string(point_left_move);
+										point_left_movesync--;
+										point_left_move++;
+
+										poses_left.pose_names[index] = new_point_name;
+										break;
+									}
+								}
+								
+								for (int index = (previous_point_names.size()-1); index >= 0; index--) {
+								/* Search through the previous point names list to find the one that matched with the last point name on the right arm */
+									if (previous_point_names[index].compare(last_point_name_right) == 0) {
+									/* If the current index of the previous point names matches the last point name on the right arm, then
+									   update the previous point name with the new point name indicating the left arm is an independent
+									   movement instead of a synchronized movement with the right arm */
+										previous_point_names[index] = new_point_name;
+										break;
+									}
+								}
+
+								poses_right.pose_names.pop_back();
+								poses_right.pose_configs.pop_back();
+								point_right_movesync--;
+
+								ROS_INFO("Deleted the last point for the right arm and renamed the synchronized point for the left arm.");
+							} else if (response.compare("no") == 0) {
+							/* If the user would not like to keep the position on the left arm that was synchronized with the last point name on the right arm */
+								std::string new_point_name;
+								std::string last_point_name_right = poses_right.pose_names.back();
+								for (int index = (poses_left.pose_names.size()-1); index >= 0; index--) {
+								/* Search through the poses names for the left arm to find the one that matches with the last point name on the right arm */
+									if (poses_left.pose_names[index].compare(last_point_name_right) == 0) {
+									/* If the current index of the point name for the left arm matches the last point name on the right arm */
+										if (index != (poses_left.pose_names.size()-1)) {
+										/* If the index is not the last point name for the left arm */
+											for (int position = index+1; position < poses_left.pose_names.size(); position++) {
+											/* Cycle through the point names for the left arm shifting the point names and pose configs that 
+											   come after the point to be removed point to overwrite the point name and config being removed */
+												poses_left.pose_names[position-1]   = poses_left.pose_names[position];
+												poses_left.pose_configs[position-1] = poses_left.pose_configs[position];
+											}
+										}
+										poses_left.pose_names.pop_back();
+										poses_left.pose_configs.pop_back();
+										break;
+									}
+								}
+
+								for (int index = (previous_point_names.size()-1); index >= 0; index--) {
+								/* Search through the previous point names list to find the one that matched with the last point name on the right arm */
+									if (previous_point_names[index].compare(last_point_name_right) == 0) {
+									/* If the current index of the previous point names matches the last point name on the right arm */
+										if (index != (previous_point_names.size()-1)) {
+										/* If the index is not the last point name for the previous point names list */
+											for (int position = index+1; position < previous_point_names.size(); position++) {
+											/* Cycle through the previous point names list shifting the previous point names that come after 
+											   the point to be removed point to overwrite the point name being removed */
+												previous_point_names[position-1] = previous_point_names[position];
+											}
+											
+										}
+										previous_point_names.pop_back();
+										break;
+									}
+								}
+
+								poses_right.pose_names.pop_back();
+								poses_right.pose_configs.pop_back();
+								point_right_movesync--;
+								point_left_movesync--;
+
+								ROS_INFO("Deleted the last point for the right arm and the synchronized point for the left arm.");
+							} else if (response.compare("skip") == 0) {
+							/* If the user would not like to delete the previous position */
+								ROS_INFO("Not deleting any positions.");
+								continue;
+							} else {
+							/* If the provided argument is not recognized */
+								ROS_ERROR("Argument not recognized. Not deleting any positions.");
+								continue;
+							}
+						} else {
+						/* If the previous position for the left arm is independent from the right arm (non-synchronized movement) */
+							std::string last_point_name_left = poses_left.pose_names.back();
+							for (int index = (previous_point_names.size()-1); index >= 0; index--) {
+							/* Search through the previous point names list to find the one that matched with the lat point name on the left arm */
+								if (previous_point_names[index].compare(last_point_name_left) == 0) {
+								/* If the current index of the previous point names matches the last point name on the left arm */
+									if (index != (previous_point_names.size()-1)) {
+									/* If the index is not the last point name for the previous point names list */
+										for (int position = index+1; position < previous_point_names.size(); position++) {
+										/* Cycle through the previous point names list shifting the previous point names that come after 
+										   the point to be removed point to overwrite the point name being removed */
+											previous_point_names[position-1] = previous_point_names[position];
+										}
+										
+									}
+									previous_point_names.pop_back();
+									break;
+								}
+							}
+
+							poses_left.pose_names.pop_back();
+							poses_left.pose_configs.pop_back();
+							point_left_move--;
+
+							ROS_INFO("Deleted the last point for the right arm.");
+						}
+					} else {
+					/* If there are no points to delete*/
+						ROS_ERROR("There are not points to delete.");
+						continue;
+					}
+				} else {
+					if (previous_point_names.size() > 0) {
+					/* If there are points to delete based on the list of previously stored positions */
+						if (previous_point_names.back().compare(0, 1, "s") == 0) {
+						/* If the previously stored position was a synchronized movement between the left and right arm */
+							poses_left.pose_names.pop_back();
+							poses_left.pose_configs.pop_back();
+							poses_right.pose_names.pop_back();
+							poses_right.pose_configs.pop_back();
+
+							point_left_movesync--;
+							point_right_movesync--;
+							previous_point_names.pop_back();
+
+							ROS_INFO("Deleted the last point for both arms.");
+						} else if ((previous_point_names.back().compare(poses_left.pose_names.back()) == 0) && (previous_point_arm.compare("left") == 0)) {
+						/* If the previously stored position was only meant for the left arm */
+							poses_left.pose_names.pop_back();
+							poses_left.pose_configs.pop_back();
+
+							point_left_movesync--;
+							previous_point_names.pop_back();
+
+							ROS_INFO("Deleted the last point for the left arm.");
+						} else if ((previous_point_names.back().compare(poses_right.pose_names.back()) == 0) && (previous_point_arm.compare("right") == 0)) {
+						/* If the previously stored position was only meant for the right arm */
+							poses_right.pose_names.pop_back();
+							poses_right.pose_configs.pop_back();
+
+							point_right_movesync--;
+							previous_point_names.pop_back();
+
+							ROS_INFO("Deleted the last point for the right arm");
+						} else {
+						/* If there is some error with deleting previous points that occurred since this script was first run */
+							ROS_ERROR("Fatal error with deleting previous position.");
+							ROS_WARN("An unusual error occurred most likely due to error in code for deleting the previous point.");
+						}
+					} else {
+					/* If there are no points to delete*/
+						ROS_ERROR("There are not points to delete.");
+						continue;
+					}
+				}
+
+				std::string previous_point_name = previous_point_names.back();
+				if (previous_point_name.compare(poses_left.pose_names.back()) == 0) {
+				/* If the new last previous pose name is the same as the last pose name for the left arm */
+					if (poses_left.pose_names.back().compare(0, 1, "s") == 0) {
+					/* If the last pose name is a syncronous move with the right arm */
+						previous_point_arm = "both";
+					} else {
+					/* If the last pose name is an independent move from the right arm */
+						previous_point_arm = "left";
+					}
+				} else if (previous_point_name.compare(poses_right.pose_names.back()) == 0) {
+				/* If the new last previous pose name is the same as the last pose name for the right arm */
+					previous_point_arm = "right";
+				}
+			}
+
+			continue;
+
+		} else if (command.compare("delete all") == 0) {
+		/* If the user would like to delete all stored points */
+			if (desired_group == 1) {
+			/* If this script is storing positions for the left arm */
+				poses_left.pose_names.clear();
+				poses_left.pose_configs.clear();
+				point_left_move = point_left_movesync = 1;
+
+				previous_point_names.clear();
+
+				ROS_INFO("Deleted all positions for the left arm.");
+			} else if (desired_group == 2) {
+			/* If this script is storing positions for the right arm */
+				poses_right.pose_names.clear();
+				poses_right.pose_configs.clear();
+				point_right_move = point_right_movesync = 1;
+
+				previous_point_names.clear();
+
+				ROS_INFO("Deleted all positions for the right arm.");
+			} else {
+			/* If this script is storing positions for both arms */
+				poses_left.pose_names.clear();
+				poses_left.pose_configs.clear();
+				point_left_move = point_left_movesync = 1;
+
+				poses_right.pose_names.clear();
+				poses_right.pose_configs.clear();
+				point_right_move = point_right_movesync = 1;
+
+				previous_point_names.clear();
+
+				ROS_INFO("Deleted all positions for both arms.");
+			}
+
+			continue;
+
+		} else if (command.compare("show points") == 0) {
+		/* If the user would like to display the current set of points that have been stored in order */
+
+			int index_left = 0, index_right = 0, line = 1;
+			int poses_left_size = poses_left.pose_names.size(), poses_right_size = poses_right.pose_names.size();
+			std::string point_name_left, point_name_right;
+			while ((index_left < poses_left_size) || (index_right < poses_right_size)) {
+			/* While there are still point names to be displayed */
+				if ((index_left < poses_left_size) && (index_right < poses_right_size)) {
+				/* If there points to still be displayed for the left and right arm */
+					point_name_left  = poses_left.pose_names[index_left];
+					point_name_right = poses_right.pose_names[index_right];
+
+					if ((point_name_left.compare(0, 1, "s") == 0) && (point_name_right.compare(0, 1, "s") == 0)) {
+					/* If the current index of point names for the left and right arm is indicating a synchronized movement */
+						if (point_name_left.compare(point_name_right) == 0) {
+						/* Double checking above statement */
+							ROS_INFO("(Line %d)  Left: %s  |  Right: %s", line, point_name_left.c_str(), point_name_right.c_str());
+							index_left++;
+							index_right++;
+						}
+					} else if ((point_name_left.compare(0, 1, "p") == 0) || (point_name_left.compare(0, 1, "O") == 0) || (point_name_left.compare(0, 1, "C") == 0)) {
+					/* If the current index of point names for the left arm is indicating an independent movement */
+						if ((point_name_right.compare(0, 1, "p") == 0) || (point_name_right.compare(0, 1, "O") == 0) || (point_name_right.compare(0, 1, "C") == 0)) {
+						/* If the current index of point names for the right arm is also indicating an independent movement */
+							ROS_INFO("(Line %d)  Left: %s  |  Right: %s", line, point_name_left.c_str(), point_name_right.c_str());
+							index_left++;
+							index_right++;
+						} else {
+							ROS_INFO("(Line %d)  Left: %s  |  Right: --", line, point_name_left.c_str());
+							index_left++;
+						}
+					} else if ((point_name_right.compare(0, 1, "p") == 0) || (point_name_right.compare(0, 1, "O") == 0) || (point_name_right.compare(0, 1, "C") == 0)) {
+					/* If the current index of point names for the right arm is indicating an independent movement */
+						if ((point_name_left.compare(0, 1, "p") == 0) || (point_name_left.compare(0, 1, "O") == 0) || (point_name_left.compare(0, 1, "C") == 0)) {
+						/* If the current index of point names for the left arm is also indicating an independent movement */
+							ROS_INFO("(Line %d)  Left: %s  |  Right: %s", line, point_name_left.c_str(), point_name_right.c_str());
+							index_left++;
+							index_right++;
+						} else {
+							ROS_INFO("(Line %d)  Left: --  |  Right: %s", line, point_name_right.c_str());
+							index_right++;
+						}
+					}
+				} else if (index_left < poses_left_size) {
+				/* If only the left arm has point names to display */
+					point_name_left  = poses_left.pose_names[index_left];
+					ROS_INFO("(Line %d)  Left: %s  |  Right: --", line, point_name_left.c_str());
+					index_left++;
+				} else if (index_right < poses_right_size) {
+				/* If only the right arm has point names to display */
+					point_name_right = poses_right.pose_names[index_right];
+					ROS_INFO("(Line %d)  Left: --  |  Right: %s", line, point_name_right.c_str());
+					index_right++;
+				}
+
+				line++;
+			}
+
+			if ((poses_left_size == 0) && (poses_right_size == 0)) {
+			/* If there are no stored points to show */
+				ROS_WARN("There are no stored points to show");
+			}
+
+			continue;
 
 		} else if (command.compare("finish") == 0) {
 		/* If there are no more trajectory points to store, indicated by the command "finish" */
@@ -357,7 +861,7 @@ int main(int argc,char **argv) {
 			pose_config_left.pose = left_arm.getCurrentPose().pose;
 			poses_left.pose_configs.push_back(pose_config_left);
 
-			if (left_arm_only) {
+			if ((left_arm_only) || (desired_group == 1)) {
 				point_name = "p" + std::to_string(point_left_move);
 				point_left_move++;
 			} else { 
@@ -365,8 +869,10 @@ int main(int argc,char **argv) {
 				point_left_movesync++; 
 			}
 			poses_left.pose_names.push_back(point_name);
+			previous_point_names.push_back(point_name);
+			previous_point_arm = "left";
 
-			if (debug) { ROS_INFO("(Pose index left: %d) (debug) Stored point %s for left arm.", (point_left_movesync+point_left_move)-2, point_name.c_str()); }
+			ROS_INFO("(Position index left: %d) Stored point %s for left arm.", (point_left_movesync+point_left_move)-2, point_name.c_str());
 		}
 		if (((desired_group == 2) || ((desired_group == 3) && (!left_arm_only))) && (!skip_command) && (!gripper_movement)) {
 		/* If the left arm point is to be stored, either the user is only intending to store the
@@ -377,7 +883,7 @@ int main(int argc,char **argv) {
 			pose_config_right.pose = right_arm.getCurrentPose().pose;
 			poses_right.pose_configs.push_back(pose_config_right);
 
-			if (right_arm_only) {
+			if ((right_arm_only) || (desired_group == 2)) {
 				point_name = "p" + std::to_string(point_right_move);
 				point_right_move++;
 			} else { 
@@ -385,8 +891,18 @@ int main(int argc,char **argv) {
 				point_right_movesync++; 
 			}
 			poses_right.pose_names.push_back(point_name);
+			if (point_name.compare(0, 1, "p") == 0) {
+			/* If only the right arm position is being stored, then add the point name to the list 
+			   of previous point names. Otherwise, the point name has already been stored into this 
+			   list previously when storing the position for the left arm above */
+				previous_point_names.push_back(point_name);
+				previous_point_arm = "right";
+			} else {
+			/* If the current position was stored for both arms, then the previous point name was for both arms */
+				previous_point_arm = "both";
+			}
 
-			if (debug) { ROS_INFO("(Pose index right: %d) (debug) Stored point %s for right arm.", (point_right_movesync+point_right_move)-2, point_name.c_str()); }
+			ROS_INFO("(Position index right: %d) Stored point %s for right arm.", (point_right_movesync+point_right_move)-2, point_name.c_str());
 		}
 
 		if (debug) { ROS_INFO("...................."); }
@@ -401,7 +917,6 @@ int main(int argc,char **argv) {
 				ROS_INFO("Gripper command received and stored. Command: %s", command.c_str());
 				gripper_movement = false;
 			} else {
-				ROS_INFO("(Pose index left: %d | Pose index right: %d) Pose stored.", (point_left_movesync+point_left_move)-2, (point_right_movesync+point_right_move)-2);
 				pose_index++;
 			}
 		}
@@ -455,7 +970,7 @@ poseConfig getAxisConfigurations(planningInterface::MoveGroup& group, bool debug
         - D represents the compatability bit, particulary used for linear movements
             > This value is not used and is always set to (0)
 
-    EXTERNAL AXIS POSITION CONVENTION: [axis_7_position]
+    EXTERNAL AXIS POSITION CONVENTION: [arm_angle, 9E+09, 9E+09, 9E+09, 9E+09, 9E+09]
 */
     if (debug) { ROS_INFO("...................."); }
 
@@ -666,7 +1181,7 @@ std::string getRobtargetOutputLine(std::string pose_name, poseConfig& pose_confi
         > cf4 represents the configuration data for axis 4
         > cf6 represents the configuration data for axis 6
         > cfx represents the configuration data for a combination of axis 5, 3, 2, and a compatibility bit
-        > eax1 represents the position of the first external axis (axis 7)
+        > eax1 represents the arm angle
         > eax2 to eax6 represents 5 other external axis values, but these are not used on YuMi and thus are all set to 9E+09. This data is ignored.
 */
     // INITIALIZE VARIABLES
