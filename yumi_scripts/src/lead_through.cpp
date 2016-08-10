@@ -111,6 +111,8 @@ int main(int argc,char **argv) {
     left_arm.startStateMonitor();
     planningInterface::MoveGroup right_arm("right_arm_ik");
     right_arm.startStateMonitor();
+    planningInterface::MoveGroup left("left_arm"); // used strictly to determine if a gripper was loaded on the left arm
+    planningInterface::MoveGroup right("right_arm"); // user strictly to determine if a gripper was loaded on the right arm
 
     // SET MOVE GROUP REFRENCE FRAMES AND END EFFECTORS
 	std::string end_effector_left    = "yumi_link_7_l";
@@ -131,13 +133,13 @@ int main(int argc,char **argv) {
 	// ADD leadThroughPoses DATA
 	poses_left.arm  = "left";
 	poses_right.arm = "right";
-	if (left_arm.getActiveJoints().back().compare(0, 7, "gripper") == 0) {
+	if (left.getActiveJoints().back().compare(0, 7, "gripper") == 0) {
 		poses_left.gripper_attached = true;
 		if (debug) { ROS_INFO("A gripper is attached to the left arm."); }
 	} else if (debug) {
 		ROS_INFO("A gripper is not attached to the left arm.");
 	}
-	if (right_arm.getActiveJoints().back().compare(0, 7, "gripper") == 0) {
+	if (right.getActiveJoints().back().compare(0, 7, "gripper") == 0) {
 		poses_right.gripper_attached = true;
 		if (debug) { ROS_INFO("A gripper is attached to the right arm."); }
 	} else if (debug) {
@@ -146,8 +148,8 @@ int main(int argc,char **argv) {
 
 	// CHECK IF DESIRED OUTPUT FILE ALREADY EXISTS
 	if (desired_group == 3) {
-		std::string file_left_path  = yumi_scripts_directory + "paths/" + output_file_name + "_left" + ".mod";
-		std::string file_right_path = yumi_scripts_directory + "paths/" + output_file_name + "_right" + ".mod";
+		std::string file_left_path  = yumi_scripts_directory + "modules/" + output_file_name + "_left" + ".mod";
+		std::string file_right_path = yumi_scripts_directory + "modules/" + output_file_name + "_right" + ".mod";
 		/* When sotring data for both arms, the files for each arm will have the same name expect with a "_left" or "_right" at the end of the name */
 		std::ifstream file_left(file_left_path);
 		std::ifstream file_right(file_right_path);
@@ -158,7 +160,7 @@ int main(int argc,char **argv) {
 			return 1;
 		}
 	} else {
-		std::string file_path = yumi_scripts_directory + "paths/" + output_file_name + ".mod";
+		std::string file_path = yumi_scripts_directory + "modules/" + output_file_name + ".mod";
 		std::ifstream file(file_path);
 		if (file.good()) {
 			ROS_ERROR("Output file name already exists. Please use another name or delete the existing file.");
@@ -969,6 +971,11 @@ poseConfig getAxisConfigurations(planningInterface::MoveGroup& group, bool debug
             > (0) if axis 2 position >= 0 degrees, (1) if axis 2 position < 0 degrees
         - D represents the compatability bit, particulary used for linear movements
             > This value is not used and is always set to (0)
+	
+    Examples: (Compatibility bit assumed to be 0)
+        - Axis 5 = 0 degrees, Axis 3 = -90 degrees, Axis 2 = 0 degrees   | cfx = 0000 or 0
+        - Axis 5 = 0 degrees, Axis 3 = -91 degrees, Axis 2 = 0 degrees   | cfx = 0100 or 100
+        - Axis 5 = -90 degrees, Axis 3 = 0 degrees, Axis 2 = -90 degrees | cfx = 1010
 
     EXTERNAL AXIS POSITION CONVENTION: [arm_angle, 9E+09, 9E+09, 9E+09, 9E+09, 9E+09]
 */
@@ -1041,7 +1048,7 @@ void writeToFile(std::string output_file_name, leadThroughPoses& poses, bool deb
 
     PURPOSE: The purpose of this function is to write the set of data points that were stored previously
     		 to the desired file supplied by the user. The user supplied the file name, and this function
-    		 will place all files into the "paths" folder in the "yumi_scripts" ROS package. This function
+    		 will place all files into the "modules" folder in the "yumi_scripts" ROS package. This function
     		 will write a module with the ABB convention for a RAPID Module file for YuMi.
 
     INSTRUCTIONS: The output_file_name variable should not have any path preceding it (home/folder/etc...)
@@ -1085,7 +1092,7 @@ void writeToFile(std::string output_file_name, leadThroughPoses& poses, bool deb
 */
     // INITIALIZE VARIABLES
     std::string robtarget_prefix = "LOCAL VAR robtarget ";
-    std::string output_file_path = yumi_scripts_directory + "paths/" + output_file_name + ".mod";
+    std::string output_file_path = yumi_scripts_directory + "modules/" + output_file_name + ".mod";
 	std::ofstream output_file;
 
 	ROS_INFO("Writing to file at: %s", output_file_path.c_str());

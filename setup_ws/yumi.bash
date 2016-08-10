@@ -14,6 +14,8 @@ flag_robotInterface=false; # flag to indicate if the robot interface argument ha
 flag_stateServersOnly=false; # flag to indicate if state servers only argument has already been set
 total_arguments=0; # indicate the total arguments passed
 
+echo "" # add a blank line to make displayed information more visible
+
 # Iterate Through Provided Arguments
 for argument in "$@"; do # for all provided arguments
 	if [ "$argument" == "rviz" ]; then # if the user would like to only run the state servers
@@ -43,9 +45,9 @@ for argument in "$@"; do # for all provided arguments
 		else # if the argument has already been set
 			echo "Already set the argument for robot_interface." # notify the user that this argument has already been set
 		fi
-	elif [[ "$argument" == "state_servers_only" ]]; then # if the user would like to only run the state servers
+	elif [ "$argument" == "state_servers_only" ]; then # if the user would like to only run the state servers
 		((total_arguments++)); # increment the passed argument count
-		if [[ $flag_stateServersOnly = false ]] && [[ flag_robotInterface = true ]]; then # if this argument has not been set yet and the robot_interface argument has been set
+		if [ $flag_stateServersOnly = false ] && [ flag_robotInterface = true ]; then # if this argument has not been set yet and the robot_interface argument has been set
 			echo "Running only the state servers." # notify the user that the argument has been received
 			runCommand="$runCommand state_servers_only:=true"; # add argument to the run command
 			flag_stateServersOnly=true; # indicate that the argument has been set
@@ -79,12 +81,20 @@ if [ $total_arguments -eq 0 ]; then # if no arguments were passed
 	echo "To load two grippers, command: two_grippers" # notify the user the command for loading two grippers on execution
 fi
 
+if [[ $flag_robotInterface = false && ( $flag_ipAddress = true || $flag_stateServersOnly = true ) ]]; then # if the user supplied robot interface arguments but is not loading the robot interface
+	echo "" # add a blank line above error
+	echo "[ERROR] Provided robot interface commands, but not loading the robot interface." # notify the user of the error
+	echo "Please add 'robot_interface' as an additional command as well to execute the robot interface with the additional parameters." # notify the user that they should add the robot_interface command on execution
+	flag_argError=true; # indicate that there was an argument error
+fi
+
 # Check if All Arguments Were Valid
 if [ $flag_argError = false ]; then # if all arguments were valid
+	echo "" # add a blank line to make displayed information more visible
 	sleep 2; # sleep to allow the user to see the terminal echo's
 	$runCommand # run the robot interface node initializer command with user desired arguments
 else # if one or more arguments were not valid
-	echo "Error occurred. Not loading YuMi due to error." # notify user that the robot interface will not be executed
+	echo "[ WARN] Error occurred. Not loading YuMi into ROS due to error." # notify user that the robot interface will not be executed
 fi
 
 

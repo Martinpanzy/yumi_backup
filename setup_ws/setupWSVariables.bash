@@ -19,7 +19,8 @@ echo "# Purpose: Alias for YuMi commands" >> ~/.bashrc # describe purpose for ad
 echo "alias yumi='bash ${1}/setup_ws/yumi.bash'" >> ~/.bashrc # allow for YuMi to be run from command line for the real controller
 echo "alias yumi_demo='bash ${1}/setup_ws/yumi_demo.bash'" >> ~/.bashrc # allow for YuMi to be run from command line for the fake controller
 echo "alias yumi_server='bash ${1}/setup_ws/yumi_server.bash'" >> ~/.bashrc # run the YuMi server from command line to send path commands to the real controller
-echo "alias yumi_store_point='rostopic pub /lead_through_commands std_msgs/String'" >> ~/.bashrc # YuMi quick command for storing points easier when using the lead through script
+echo "alias yumi_lead='rosrun yumi_scripts lead_through'" >> ~/.bashrc # run the lead through script from command line for generating RAPID modules 
+echo "alias yumi_moveit='rosrun yumi_scripts moveit_interface'" >> ~/.bashrc # run the MoveIt! interface script from command line for interfacing MoveIt! with YuMi through command line
 echo "" >> ~/.bashrc # add in blank line underneath addition
 
 source ~/.bashrc # source bashrc to finalize changes for current terminal window

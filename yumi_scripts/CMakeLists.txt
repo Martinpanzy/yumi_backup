@@ -31,8 +31,8 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(main_script src/main_script.cpp)
-target_link_libraries(main_script ${catkin_LIBRARIES})
+add_executable(moveit_interface src/moveit_interface.cpp)
+target_link_libraries(moveit_interface ${catkin_LIBRARIES})
 
 add_executable(lead_through src/lead_through.cpp)
 target_link_libraries(lead_through ${catkin_LIBRARIES})

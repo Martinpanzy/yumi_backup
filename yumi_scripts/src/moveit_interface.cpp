@@ -194,7 +194,7 @@ int main(int argc, char **argv) {
 
     int system_return;
     bool bounds(true), planner_successfully_created(false);
-    std::string left_file(""), right_file(""), rosbag_file(""), module_folder("paths"), rosbag_folder("bags"), module_file_type(".mod"), rosbag_file_type(".bag");
+    std::string left_file(""), right_file(""), rosbag_file(""), module_folder("modules"), rosbag_folder("bags"), module_file_type(".mod"), rosbag_file_type(".bag");
     planner plans, empty_plans;
 
     system_return = std::system("clear"); // clear the screen
@@ -241,8 +241,8 @@ int main(int argc, char **argv) {
         } else if (inputs[0].compare("help") == 0) {
         /* If the user would like a list of allowed arguments*/
             ROS_INFO("_____ List of Allowed Arguments _____");
-            ROS_INFO("module <left/right> $file_name");
-            ROS_INFO("module both $left_file_name $right_file_name");
+            ROS_INFO("module <left/right> $module_name");
+            ROS_INFO("module both $left_module_name $right_module_name");
             ROS_INFO("rosbag <run/save> $file_name");
             ROS_INFO("end_effector <left/right> $end_effector_name");
             ROS_INFO("end_effector both $left_end_effector_name $right_end_effector_name");
@@ -492,6 +492,7 @@ int main(int argc, char **argv) {
             }
 
             plans = empty_plans;
+            planner_successfully_created = false;
 
             RAPIDModuleData module_left, module_right;
             if (move_group->getName().compare("left_arm") == 0) {
@@ -761,6 +762,11 @@ poseConfig getAxisConfigurations(planningInterface::MoveGroup& group, bool debug
         - D represents the compatability bit, particulary used for linear movements
             > This value is not used for the IK solver
 
+    Examples: (Compatibility bit assumed to be 0)
+        - Axis 5 = 0 degrees, Axis 3 = -90 degrees, Axis 2 = 0 degrees   | cfx = 0000 or 0
+        - Axis 5 = 0 degrees, Axis 3 = -91 degrees, Axis 2 = 0 degrees   | cfx = 0100 or 100
+        - Axis 5 = -90 degrees, Axis 3 = 0 degrees, Axis 2 = -90 degrees | cfx = 1010
+
     EXTERNAL AXIS POSITION CONVENTION: [arm_angle, 9E+09, 9E+09, 9E+09, 9E+09, 9E+09]
 */
     if (debug) { ROS_INFO("...................."); }
@@ -859,6 +865,11 @@ poseConfig getAxisConfigurations(std::vector<double> joint_values, bool debug) {
             > (0) if axis 2 position >= 0 degrees, (1) if axis 2 position < 0 degrees
         - D represents the compatability bit, particulary used for linear movements
             > This value is not used for the IK solver
+
+    Examples: (Compatibility bit assumed to be 0)
+        - Axis 5 = 0 degrees, Axis 3 = -90 degrees, Axis 2 = 0 degrees   | cfx = 0000 or 0
+        - Axis 5 = 0 degrees, Axis 3 = -91 degrees, Axis 2 = 0 degrees   | cfx = 0100 or 100
+        - Axis 5 = -90 degrees, Axis 3 = 0 degrees, Axis 2 = -90 degrees | cfx = 1010
 
     EXTERNAL AXIS POSITION CONVENTION: [arm_angle, 9E+09, 9E+09, 9E+09, 9E+09, 9E+09]
 */
@@ -988,7 +999,7 @@ RAPIDModuleData getYuMiLeadThroughData(std::string file_name, planningInterface:
     bool robtarget_end = 0;
     bool success = true;
 
-    std::string input_file = yumi_scripts_directory + "paths/" + file_name + ".mod";
+    std::string input_file = yumi_scripts_directory + "modules/" + file_name + ".mod";
 
     // CHECK IF GROUP ATTACHED TO PROVIDED GROUP
     if (group.getActiveJoints().back().compare(0, 7, "gripper") == 0) {

@@ -12,6 +12,8 @@ flag_stateServersOnly=false; # flag to indicate if state servers only argument h
 flag_ipAddress=false; # flag to inficate if the ip address argument has already been set
 total_arguments=0; # indicate the total arguments passed
 
+echo "" # add a blank line to make displayed information more visible
+
 # Iterate Through Provided Arguments
 for argument in "$@"; do # for all provided arguments
 	if [ "$argument" == "state_servers_only" ]; then # if the user would like to only run the state servers
@@ -57,10 +59,11 @@ fi
 
 # Check if All Arguments Were Valid
 if [ $flag_argError = false ]; then # if all arguments were valid
+	echo "" # add a blank line to make displayed information more visible
 	sleep 2; # sleep to allow the user to see the terminal echo's
 	$runCommand # run the robot interface node initializer command with user desired arguments
 else # if one or more arguments were not valid
-	echo "Error occurred. Not loading robot interface due to error." # notify user that the robot interface will not be executed
+	echo "Error occurred. Not executing YuMi state/motion servers due to error." # notify user that the robot interface will not be executed
 fi
 
 
