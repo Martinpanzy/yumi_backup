@@ -210,7 +210,7 @@ int main(int argc, char **argv) {
                      notified and the script will wait for another input from the user. For more information on the recognized 
                      commands, please refer to the wiki page shown below.
 
-        WIKI: github.com/ethz-asl/yumi/wiki/YuMi-Main-Script
+        WIKI: github.com/ethz-asl/yumi/wiki/YuMi-MoveIt!-Interface
     */
         std::vector<std::string> inputs(MAX_ARGUMENTS,"");
         int argument = 0;
@@ -564,9 +564,6 @@ int main(int argc, char **argv) {
     return 0;
 }
 
-/* ============================================================
-   -------------------- FINISHED FUNCTIONS --------------------
-   ============================================================ */
 
 bool fileExists(std::string file_name, std::string folder_name, std::string file_type) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
@@ -2370,9 +2367,5 @@ bool executePlans(planningInterface::MoveGroup& group, planner& plans, bool debu
 
     return true;
 }
-
-/* ============================================================
-   -------------------- FINISHED FUNCTIONS --------------------
-   ============================================================ */
 
 
