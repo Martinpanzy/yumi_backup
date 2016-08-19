@@ -12,11 +12,15 @@ find_package(catkin REQUIRED COMPONENTS
 )
 
 add_message_files(FILES
-	PrePlan.msg
+	JointMsg.msg
+	TrajectoryJointMsg.msg
+	PlannerMsg.msg
 )
 
 generate_messages(DEPENDENCIES
+	std_msgs
 	moveit_msgs
+	geometry_msgs
 )
 
 catkin_package(CATKIN_DEPENDS 
@@ -34,6 +38,9 @@ include_directories(
 
 add_executable(config_test src/config_test.cpp)
 target_link_libraries(config_test ${catkin_LIBRARIES})
+
+add_executable(yumi_interface src/yumi_interface.cpp)
+target_link_libraries(yumi_interface ${catkin_LIBRARIES})
 
 add_executable(moveit_interface src/moveit_interface.cpp)
 target_link_libraries(moveit_interface ${catkin_LIBRARIES})

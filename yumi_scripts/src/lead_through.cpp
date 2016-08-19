@@ -2,11 +2,11 @@
 #include <fstream>
 #include <regex>
 #include <sstream>
-#include <std_msgs/String.h>
 
 #include <geometry_msgs/Pose.h>
 #include <moveit/move_group_interface/move_group.h>
 #include <ros/ros.h>
+#include <std_msgs/String.h>
 
 // NAMESPACE DECLARATIONS
 using namespace ros;
