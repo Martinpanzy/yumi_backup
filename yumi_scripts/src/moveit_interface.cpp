@@ -39,7 +39,7 @@ namespace planningInterface = moveit::planning_interface;
 // GLOBAL CONSTANTS
 const double gripper_open_position = 0.024; // gripper open position (m)
 const double gripper_closed_position = 0.0; // gripper closed position (m)
-const std::string yumi_scripts_directory = "/home/yumi/yumi_ws/src/yumi/yumi_scripts/"; // full path to folder where trajectory text files should be stored
+const std::string yumi_scripts_directory = "/home/yumi/yumi_ws/src/yumi/yumi_scripts/";
 const std::string yumi_rosbag_topic_name = "yumi";
 
 // STRUCTURES
@@ -126,8 +126,9 @@ bool executePlans(planningInterface::MoveGroup&, planner&, bool debug = false);
 
 // MAIN FUNCTION
 int main(int argc, char **argv) {
-    ros::init (argc, argv, "test");
-    ros::NodeHandle node_handle;
+
+    init (argc, argv, "moveit_interface");
+    NodeHandle node_handle;
 
     ros::AsyncSpinner spinner(1);
     spinner.start();
@@ -564,6 +565,10 @@ int main(int argc, char **argv) {
     return 0;
 }
 
+
+/* ------------------------------------------------------------ */
+/* ----------- FILE CHECKING AND ROS BAG FUNCTIONS ------------ */
+/* ------------------------------------------------------------ */
 
 bool fileExists(std::string file_name, std::string folder_name, std::string file_type) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com

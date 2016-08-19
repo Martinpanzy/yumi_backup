@@ -47,7 +47,7 @@ read -p "Is ROS Indigo installed on this machine (y/n)? " response # get respons
 case "$response" in 
 	y|Y ) existROS=1;; # ROS has already been setup
 	n|N ) existROS=0;; # Set flag to install ROS
-	* ) echo "invalid response. Please use 'y' for Yes and 'n' for No" && exit;; # invalid input
+	* ) echo "[ERROR] Invalid response. Please use 'y' for Yes and 'n' for No" && exit;; # invalid input
 esac
 
 #----- If ROS Indigo has not been setup yet -----
@@ -60,7 +60,14 @@ if [ $existROS -eq 0 ]; then
 
 	sudo apt-get update # update potential install list
 
-	sudo apt-get install ros-indigo-desktop-full -y # install indigo desktop
+	sudo apt-get install ros-indigo-desktop-full -y  # install indigo desktop
+	if [[ $? > 0 ]]; then # if ROS Indigo did not install properly
+		echo "[ERROR] Failed to install ROS Indigo." # notify the user of the error
+		echo "Please execute the following commands below then re-execute this script." # notify the user of a possible fix
+		echo "	sudo apt-get remove gazeboX (where X should be a number, use tab-complete to figure out which is installed." # notify the user to remove gazebo
+		echo "  sudo apt-get install libsdformat1" # notify the user to install libsdformat1
+		exit # exit from the script
+	fi
 	sudo apt-get install python-catkin-tools -y # install catkin tools
 
 	sudo rosdep init # initialize ROS
@@ -68,7 +75,11 @@ if [ $existROS -eq 0 ]; then
 fi
 
 #----- Ensure that MoveIt! is Downloaded -----
+flag_moveitInstall=true; # create a flag to indicate whether MoveIt! installed properly or not
 sudo apt-get install ros-indigo-moveit-full -y # install MoveIt!
+if [[ $? > 0 ]]; then # if ROS Indigo MoveIt! did not install properly
+	flag_moveitInstall=false; # set the flag to indicate MoveIt! was not installed properly
+fi
 source /opt/ros/indigo/setup.bash # source ROS indigo
 
 echo "Verified installs." # notify user that the installs have been verified
@@ -119,11 +130,11 @@ addBashrcFooter=0 # 0) No additions have been made to bashrc file, footer is not
 
 #----- Add Workspace Variables to Allow Command Line Capabilities -----
 # YuMi command line tools
-read -p "Add YuMi quick commands to command line? (recommended) (y/n)? " response # get response from user
+read -p "Add YuMi quick commands to command line? (recommended) (y/N)? " response # get response from user
 case "$response" in 
 	y|Y ) addYuMiCommands=1;; # add in command line alias to run YuMi easier 
 	n|N ) echo "Not adding command line tools for YuMi... ";; # don't add in command line alias
-	* ) echo "Invalid input. Not adding command line tools for YuMi... ";; # don't add in comamnd line alias
+	* ) echo "[ WARN] Invalid input. Not adding command line tools for YuMi... ";; # don't add in comamnd line alias
 esac
 if [ $addYuMiCommands -eq 1 ]; then # if the commands should be added
 	echo "Adding command line tools for YuMi... " # notify user that command line tools for YuMi are being added
@@ -150,7 +161,7 @@ if [ $existROS -eq 0 ]; then # if this is the first time for ROS install
 fi
 
 #----- YuMi Workspace Sourcing -----
-read -p "Automatically add workspace source to bashrc? (recommended) (y/n)? " response # get response from user
+read -p "Automatically add workspace source to bashrc? (recommended) (y/N)? " response # get response from user
 case "$response" in 
 	y|Y ) addYuMiSource=1;; # add in command line alias to run YuMi easier 
 	* ) echo "Not adding source to bashrc file... ";; # don't add in comamnd line alias
@@ -188,7 +199,14 @@ echo "Finished setting up workspace." # notify user the setup has finished
 #---------- USER DIRECTIONS -----------
 #======================================
 clear # clear the terminal window
-echo "Workspace setup successfully." # notify user the setup was successful
+echo "Workspace setup successful." # notify user the setup was successful
+
+if [ $flag_moveitInstall = false ]; then # if ROS Indigo MoveIt! did not install properly
+	echo ""
+	echo "Failed to install ROS Indigo MoveIt! during installation." # notify the user
+	echo "Please take a look at any errors and look online for a solution." # notify the user to look online for a solution
+	echo "The MoveIt! interface script and other functionality will not work until MoveIt! is installed" # notify the user that MoveIt! needs to be installed for this repo to function properly
+fi
 
 #----- Give directions to user on how to run YuMi files -----
 echo "" # add in a blank space before instructions

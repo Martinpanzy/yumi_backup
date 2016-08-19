@@ -8,6 +8,7 @@ find_package(catkin REQUIRED COMPONENTS
 	geometry_msgs
 	std_msgs
 	rosbag
+	yaml_cpp_catkin
 )
 
 add_message_files(FILES
@@ -30,6 +31,9 @@ install(
 include_directories(
   ${catkin_INCLUDE_DIRS}
 )
+
+add_executable(config_test src/config_test.cpp)
+target_link_libraries(config_test ${catkin_LIBRARIES})
 
 add_executable(moveit_interface src/moveit_interface.cpp)
 target_link_libraries(moveit_interface ${catkin_LIBRARIES})

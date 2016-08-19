@@ -1,0 +1,9 @@
+debug: false
+bounded_solution: true
+save_as_rosbag: false
+dont_execute: false
+module_name_left: "Demo_ASL_Left"
+module_name_right: "Demo_ASL_Right"
+end_effector_left: "yumi_link_7_l"
+end_effector_right: "yumi_link_7_r"
+active_arms: "both"

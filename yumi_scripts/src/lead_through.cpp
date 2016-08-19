@@ -240,7 +240,7 @@ int main(int argc,char **argv) {
             ROS_INFO("            open left: Gripper is to be in the open position for the left arm");
             ROS_INFO("           open right: Gripper is to be in the open position for the right arm");
             ROS_INFO("               finish: Finished storing points, write to file");
-            ROS_INFO("          show points: Show all stored point names with lined up synchronized movements")
+            ROS_INFO("          show points: Show all stored point names with lined up synchronized movements");
             ROS_INFO("      delete previous: Delete the previously stored point");
             ROS_INFO(" delete previous left: Delete the previously stored point for the left arm");
             ROS_INFO("delete previous right: Delete the previously stored point for the right arm");
@@ -1018,19 +1018,19 @@ poseConfig getAxisConfigurations(planningInterface::MoveGroup& group, bool debug
     }
 
     // GET AXIS CONFIGURATIONS
-    axis_1_config = std::floor(joint_values[0] / (PI/2.0)); 
-    axis_4_config = std::floor(joint_values[4] / (PI/2.0));
-    axis_6_config = std::floor(joint_values[6] / (PI/2.0));
-    if (joint_values[5] < 0)     { cfx += 1000; }
-    if (joint_values[3] < -PI/2) { cfx += 100;  }
-    if (joint_values[1] < 0)     { cfx += 10;   }
+    axis_1_config = std::floor(joint_values[0] / (PI/2.0)); // joint 1 config value
+    axis_4_config = std::floor(joint_values[4] / (PI/2.0)); // joint 4 config value
+    axis_6_config = std::floor(joint_values[6] / (PI/2.0)); // joint 6 config value
+    if (joint_values[5] < 0)     { cfx += 1000; } // joint 5 config value
+    if (joint_values[3] < -PI/2) { cfx += 100;  } // joint 3 config value
+    if (joint_values[1] < 0)     { cfx += 10;   } // joint 2 config value
 
     pose_config.confdata.push_back(axis_1_config);
     pose_config.confdata.push_back(axis_4_config);
     pose_config.confdata.push_back(axis_6_config);
     pose_config.confdata.push_back(cfx);
 
-    pose_config.external_axis_position = joint_values[2];
+    pose_config.external_axis_position = joint_values[2]; // this is wrong, need to update to arm angle calculation
 
     if (debug) {
         ROS_INFO("_____ (debug) Axis Configuration for Current Joint Position _____");
