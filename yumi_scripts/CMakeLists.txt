@@ -13,7 +13,10 @@ find_package(catkin REQUIRED COMPONENTS
 
 add_message_files(FILES
 	JointMsg.msg
-	TrajectoryJointMsg.msg
+	JointConfigMsg.msg
+	PoseConfigMsg.msg
+	ModuleDataMsg.msg
+	ModuleMsg.msg
 	PlannerMsg.msg
 )
 
@@ -38,6 +41,9 @@ include_directories(
 
 add_executable(config_test src/config_test.cpp)
 target_link_libraries(config_test ${catkin_LIBRARIES})
+
+add_executable(yumi_node src/yumi_node.cpp)
+target_link_libraries(yumi_node ${catkin_LIBRARIES})
 
 add_executable(yumi_interface src/yumi_interface.cpp)
 target_link_libraries(yumi_interface ${catkin_LIBRARIES})

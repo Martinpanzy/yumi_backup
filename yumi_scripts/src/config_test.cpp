@@ -4,6 +4,9 @@
 #include <ros/ros.h>
 #include <yaml-cpp/yaml.h>
 
+#include <yumi_scripts/ModuleMsg.h>
+#include <yumi_scripts/JointMsg.h>
+
 // NAMESPACE DECLARATION
 using namespace ros;
 
@@ -62,6 +65,15 @@ int main(int argc, char **argv) {
 
     // DIPLAY CONFIGURATION DATA RETRIEVED FROM CONFIG FILE
     displayParameters(params);
+
+    // TEST(S)
+    yumi_scripts::ModuleMsg module_msg;
+    std::vector<yumi_scripts::JointMsg> joint_values_msg = module_msg.joint_trajectory;
+    std::vector<std::vector<double>> joint_values;
+    for (int point = 0; point < module_msg.total_points; point++) {
+        joint_values.push_back(joint_values_msg[point].joint_values);
+    }
+    
 
     return 0;
 }

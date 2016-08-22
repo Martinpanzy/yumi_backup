@@ -1,6 +1,10 @@
 yumi_node:
-  - debug: false
-  - dont_execute: false
+  debug: false
+  load_yumi: true
+  load_rviz: false
+  two_grippers: true
 yumi_interface:
-  - debug: false
-  - bounded_solution: true
+  debug: false
+  bounded_solution: true
+  end_effector_left: yumi_link_7_l
+  end_effector_right: yumi_link_7_r

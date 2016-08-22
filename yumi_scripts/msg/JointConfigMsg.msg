@@ -1,0 +1,3 @@
+string group_name
+JointMsg joints
+uint32 total_joints
