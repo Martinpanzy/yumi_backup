@@ -285,7 +285,7 @@ int main(int argc,char **argv) {
 				skip_command = true;
 			} else {
 				if (poses_left.gripper_attached) {
-					poses_left.pose_names.push_back("OpenHand;");
+					poses_left.pose_names.push_back("OpenHand");
 
 					poseConfig empty_pose;
 					poses_left.pose_configs.push_back(empty_pose);
@@ -305,7 +305,7 @@ int main(int argc,char **argv) {
 				skip_command = true;
 			} else {
 				if (poses_right.gripper_attached) {
-					poses_right.pose_names.push_back("OpenHand;");
+					poses_right.pose_names.push_back("OpenHand");
 
 					poseConfig empty_pose;
 					poses_right.pose_configs.push_back(empty_pose);
@@ -325,7 +325,7 @@ int main(int argc,char **argv) {
 				skip_command = true;
 			} else {
 				if (poses_left.gripper_attached) {
-					poses_left.pose_names.push_back("CloseHand;");
+					poses_left.pose_names.push_back("CloseHand");
 
 					poseConfig empty_pose;
 					poses_left.pose_configs.push_back(empty_pose);
@@ -345,7 +345,7 @@ int main(int argc,char **argv) {
 				skip_command = true;
 			} else {
 				if (poses_right.gripper_attached) {
-					poses_right.pose_names.push_back("CloseHand;");
+					poses_right.pose_names.push_back("CloseHand");
 
 					poseConfig empty_pose;
 					poses_right.pose_configs.push_back(empty_pose);
@@ -1121,7 +1121,7 @@ void writeToFile(std::string output_file_name, leadThroughPoses& poses, bool deb
 
     		if (debug) { ROS_INFO("(debug) Move %s;", poses.pose_names[line].c_str()); }
     	} else if ((poses.pose_names[line].compare(0, 1, "C") == 0) || (poses.pose_names[line].compare(0, 1, "O") == 0)) {
-    		output_file << poses.pose_names[line] << std::endl;
+    		output_file << poses.pose_names[line] << ";" << std::endl;
     	} else {
     		output_file << "MoveSync " << poses.pose_names[line] << ";" << std::endl;
     		if (debug) { ROS_INFO("(debug) MoveSync %s;", poses.pose_names[line].c_str()); }

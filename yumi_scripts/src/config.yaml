@@ -1,5 +1,5 @@
 yumi_node:
-  debug: false
+  debug: true
   load_yumi: true
   load_rviz: false
   two_grippers: true

@@ -42,10 +42,10 @@
 namespace planningInterface = moveit::planning_interface;
 
 // GLOBAL CONSTANTS
-const double gripper_open_position = 0.024; // gripper open position (m)
-const double gripper_closed_position = 0.0; // gripper closed position (m)
-const std::string yumi_scripts_directory = "/home/yumi/yumi_ws/src/yumi/yumi_scripts/";
-const std::string yumi_rosbag_topic_name = "yumi";
+const double GRIPPER_OPEN_POSITION = 0.024; // gripper open position (m)
+const double GRIPPER_CLOSED_POSITION = 0.0; // gripper closed position (m)
+const std::string YUMI_SCRIPTS_DIRECTORY = "/home/yumi/yumi_ws/src/yumi/yumi_scripts/";
+const std::string YUMI_ROSBAG_TOPIC_NAME = "yumi";
 
 // STRUCTURES
 struct poseConfig {
@@ -189,7 +189,7 @@ int main(int argc, char **argv) {
     }
 
     // SETUP PUBLISHERS
-    ros::Publisher module_pub  = node_handle.advertise<yumi_scripts::ModuleMsg>("modules", 1000);
+    ros::Publisher module_pub  = node_handle.advertise<yumi_scripts::ModuleMsg>("modules", 10);
     ros::Publisher rosbag_pub  = node_handle.advertise<yumi_scripts::JointConfigMsg>("joint_configs", 1000);
     ros::Publisher pose_pub    = node_handle.advertise<yumi_scripts::PoseConfigMsg>("pose_configs", 1000);
     ros::Publisher command_pub = node_handle.advertise<std_msgs::String>("commands", 1000);
@@ -435,7 +435,7 @@ int main(int argc, char **argv) {
                                     joint_trajectory = convertPoseTrajectoryToJointTrajectory(both_arms, pose_trajectory, ik_left, ik_right, bounds, debug);
                                     if (joint_trajectory.group_name.compare("") != 0) {
                                     /* If there were no errors when converting the pose trajectory to a joint trajectory */
-                                        ROS_INFO(">--------------------");
+                                        ROS_INFO("....................");
                                         ROS_INFO("Successfully converted RAPID modules to a joint trajectory.");
                                         success = true;
                                     } else {
@@ -481,7 +481,7 @@ int main(int argc, char **argv) {
                         /* If the user has previously set the module locations for left module */
                             bool success = false;
 
-                            RAPIDModuleData module_left  = getYuMiLeadThroughData(module_left_name, left_arm, debug);
+                            module_left  = getYuMiLeadThroughData(module_left_name, left_arm, debug);
                             if (module_left.group_name.compare("") != 0) {
                             /* If there were no errors when retrieving the RAPID module data from the provided file */
                                 pose_trajectory = convertModuleToPoseTrajectory(module_left, debug);
@@ -490,6 +490,7 @@ int main(int argc, char **argv) {
                                     joint_trajectory = convertPoseTrajectoryToJointTrajectory(left_arm, pose_trajectory, ik_left, ik_right, bounds, debug);
                                     if (joint_trajectory.group_name.compare("") != 0) {
                                     /* If there were no errors when converting the pose trajectory to a joint trajectory */
+                                        ROS_INFO("....................");
                                         ROS_INFO("Successfully converted RAPID module to a joint trajectory.");
                                         success = true;
                                     } else {
@@ -524,7 +525,7 @@ int main(int argc, char **argv) {
                         /* If the user has previously set the module locations for left module */
                             bool success = false;
 
-                            RAPIDModuleData module_right  = getYuMiLeadThroughData(module_right_name, right_arm, debug);
+                            module_right  = getYuMiLeadThroughData(module_right_name, right_arm, debug);
                             if (module_right.group_name.compare("") != 0) {
                             /* If there were no errors when retrieving the RAPID module data from the provided file */
                                 pose_trajectory = convertModuleToPoseTrajectory(module_right, debug);
@@ -533,7 +534,7 @@ int main(int argc, char **argv) {
                                     joint_trajectory = convertPoseTrajectoryToJointTrajectory(right_arm, pose_trajectory, ik_left, ik_right, bounds, debug);
                                     if (joint_trajectory.group_name.compare("") != 0) {
                                     /* If there were no errors when converting the pose trajectory to a joint trajectory */
-                                        ROS_INFO(">--------------------");
+                                        ROS_INFO("....................");
                                         ROS_INFO("Successfully converted RAPID module to a joint trajectory.");
                                         success = true;
                                     } else {
@@ -777,56 +778,49 @@ yumi_scripts::ModuleMsg convertModulesToModuleMsg(RAPIDModuleData& module_left, 
     yumi_scripts::JointMsg joint_msg;
     yumi_scripts::PoseConfigMsg pose_config_msg;
     yumi_scripts::ModuleMsg module_msg;
-
+    bool store_left_module_data  = ((joint_trajectory.group_name.compare("left_arm") == 0) || (joint_trajectory.group_name.compare("both_arms") == 0));
+    bool store_right_module_data = ((joint_trajectory.group_name.compare("right_arm") == 0) || (joint_trajectory.group_name.compare("both_arms") == 0));
     
-    ROS_INFO("Converting module(s) and joint trajectory to module message.");
+    ROS_INFO("Converting module(s) and joint trajectory to module message for group: %s.", joint_trajectory.group_name.c_str());
 
     // TRANSFER DATA FROM MODULE(S) AND JOINT TRAJECTORY TO MODULE MESSAGE
     module_msg.group_name   = joint_trajectory.group_name;
     module_msg.total_joints = joint_trajectory.total_joints;
     module_msg.total_points = joint_trajectory.total_points;
 
-    module_msg.module_left.pose_names  = module_left.pose_names;
-    module_msg.module_right.pose_names = module_right.pose_names;
-    module_msg.module_left.total_points  = module_left.total_points;
-    module_msg.module_right.total_points = module_right.total_points;
+    if (store_left_module_data) {
+    /* If the group the joint trajectory is intended for the left arm or both arms, store non-vector data to module msg */
+        module_msg.module_left.pose_names       = module_left.pose_names;
+        module_msg.module_left.total_points     = module_left.total_points;
+        module_msg.module_left.gripper_attached = module_left.gripper_attached;
+    } 
+    if (store_right_module_data) {
+    /* If the group the joint trajectory is intended for the right arm or both arms, store non-vector data to module msg */
+        module_msg.module_right.pose_names       = module_right.pose_names;
+        module_msg.module_right.total_points     = module_right.total_points;
+        module_msg.module_right.gripper_attached = module_right.gripper_attached;
+    }
 
-    if (module_msg.group_name.compare("both_arms") == 0) {
-    /* If the group the joint trajectory is intended for both arms, send corresponding poses for both arms */
-        for (int point = 0; point < joint_trajectory.total_points; point++) {
-            joint_msg.joint_values = joint_trajectory.joints[point];
-            module_msg.joint_trajectory.push_back(joint_msg);
+    for (int point = 0; point < joint_trajectory.total_points; point++) {
+        joint_msg.joint_values = joint_trajectory.joints[point];
+        module_msg.joint_trajectory.push_back(joint_msg);
 
+        if (store_left_module_data) {
             pose_config_msg.pose     = module_left.pose_configs[point].pose;
             pose_config_msg.confdata = module_left.pose_configs[point].confdata;
             pose_config_msg.external_axis_position = module_left.pose_configs[point].external_axis_position;
+            if (module_left.gripper_attached) {
+                pose_config_msg.gripper_position = module_left.pose_configs[point].gripper_position;
+            }
             module_msg.module_left.pose_configs.push_back(pose_config_msg);
-
+        }
+        if (store_right_module_data) {
             pose_config_msg.pose     = module_right.pose_configs[point].pose;
             pose_config_msg.confdata = module_right.pose_configs[point].confdata;
             pose_config_msg.external_axis_position = module_right.pose_configs[point].external_axis_position;
-            module_msg.module_right.pose_configs.push_back(pose_config_msg);
-        }
-    } else if (module_msg.group_name.compare("left_arm") == 0) {
-    /* If the group the joint trajectory is intended for the left arm, only send corresponding poses for the left arm */
-        for (int point = 0; point < joint_trajectory.total_points; point++) {
-            joint_msg.joint_values = joint_trajectory.joints[point];
-            module_msg.joint_trajectory.push_back(joint_msg);
-
-            pose_config_msg.pose     = module_left.pose_configs[point].pose;
-            pose_config_msg.confdata = module_left.pose_configs[point].confdata;
-            pose_config_msg.external_axis_position = module_left.pose_configs[point].external_axis_position;
-            module_msg.module_left.pose_configs.push_back(pose_config_msg);
-        }
-    } else {
-    /* If the group the joint trajectory is intended for the right arm, only send corresponding poses for the right arm */
-        for (int point = 0; point < joint_trajectory.total_points; point++) {
-            joint_msg.joint_values = joint_trajectory.joints[point];
-            module_msg.joint_trajectory.push_back(joint_msg);
-
-            pose_config_msg.pose     = module_right.pose_configs[point].pose;
-            pose_config_msg.confdata = module_right.pose_configs[point].confdata;
-            pose_config_msg.external_axis_position = module_right.pose_configs[point].external_axis_position;
+            if (module_right.gripper_attached) {
+                pose_config_msg.gripper_position = module_right.pose_configs[point].gripper_position;
+            }
             module_msg.module_right.pose_configs.push_back(pose_config_msg);
         }
     }
@@ -853,7 +847,7 @@ bool fileExists(std::string file_name, std::string folder_name, std::string file
                   returns true if the file exists and false if the file does not exist.
 */
     // INITIALIZE VARIABLES
-    std::string file_path = yumi_scripts_directory + folder_name + "/" + file_name + file_type;
+    std::string file_path = YUMI_SCRIPTS_DIRECTORY + folder_name + "/" + file_name + file_type;
     std::ifstream file(file_path);
 
     // CHECK IF FILE EXISTS
@@ -946,7 +940,7 @@ RAPIDModuleData getYuMiLeadThroughData(std::string file_name, planningInterface:
     bool robtarget_end = 0;
     bool success = true;
 
-    std::string input_file = yumi_scripts_directory + "modules/" + file_name + ".mod";
+    std::string input_file = YUMI_SCRIPTS_DIRECTORY + "modules/" + file_name + ".mod";
 
     // CHECK IF GROUP ATTACHED TO PROVIDED GROUP
     if (group.getActiveJoints().back().compare(0, 7, "gripper") == 0) {
@@ -1032,7 +1026,7 @@ RAPIDModuleData getYuMiLeadThroughData(std::string file_name, planningInterface:
                             function_point_name = "pStart";
                         }
                         if (module.gripper_attached) {
-                            gripper_position = gripper_open_position;
+                            gripper_position = GRIPPER_OPEN_POSITION;
                         } else if (!gripper_warning_stated) {
                             ROS_WARN("Module contains gripper command but a gripper is not attached to the provided group.");
                             ROS_WARN("Module name: %s", module.module_name.c_str());
@@ -1056,7 +1050,7 @@ RAPIDModuleData getYuMiLeadThroughData(std::string file_name, planningInterface:
                             function_point_name = "pStart";
                         }
                         if (module.gripper_attached) {
-                            gripper_position = gripper_closed_position;
+                            gripper_position = GRIPPER_CLOSED_POSITION;
                         } else if (!gripper_warning_stated) {
                             ROS_WARN("Module contains gripper command but a gripper is not attached to the provided group.");
                             ROS_WARN("Module name: %s", module.module_name.c_str());
@@ -1123,7 +1117,7 @@ RAPIDModuleData getYuMiLeadThroughData(std::string file_name, planningInterface:
         for (int point = 0; point < module.total_points; point++) {
             current_point_name = module.pose_names[point].c_str();
             if (previous_point_name.compare(current_point_name) == 0) {
-                if (module.pose_configs[point].gripper_position == gripper_open_position) {
+                if (module.pose_configs[point].gripper_position == GRIPPER_OPEN_POSITION) {
                     ROS_INFO("(debug) Open Hand");
                 } else {
                     ROS_INFO("(debug) Close Hand");
@@ -1255,7 +1249,7 @@ trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module, bool debu
     // INTIALIZE VARIABLES
     trajectoryPoses pose_trajectory;
 
-    if (debug) { ROS_INFO("Converting module %s for group %s to a pose trajectory structure", module.module_name.c_str(), module.group_name.c_str()); }
+    if (debug) { ROS_INFO("(debug) Converting module %s for group %s to a pose trajectory structure", module.module_name.c_str(), module.group_name.c_str()); }
 
     // TRANSFER DATA TO NEW STRUCTURE FROM MODULE
     pose_trajectory.group_name = pose_trajectory.intended_group = module.group_name;
@@ -1269,7 +1263,16 @@ trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module, bool debu
         pose_trajectory.gripper_attached_right = module.gripper_attached;
     }
 
-    if (debug) { ROS_INFO("Conversion from RAPID module data to pose trajectory structure successful."); }
+    // CHECK IF THIS MODULE IS SUPPOSED TO PERFORM ANY SYNCRONIZED MOVEMENTS WITH OTHER ARM
+    for (int point = 0; point < module.pose_names.size(); point++) {
+        if (module.pose_names[point].compare(0, 1, "s") == 0) {
+            ROS_WARN("Module %s has syncronized movements with other arm.", module.module_name.c_str());
+            ROS_WARN("YuMi node will override trajectory point names to indicate non-syncronized movements.");
+            break;
+        }
+    }
+
+    if (debug) { ROS_INFO("(debug) Conversion from RAPID module data to pose trajectory structure successful."); }
 
     return pose_trajectory;
 }
@@ -1314,8 +1317,8 @@ trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module_1, RAPIDMo
     ROS_INFO("Combining modules.");
 
     if (debug) {
-        ROS_INFO("(debug) Module 1 | Name: %s | Move group: %s", module_1.module_name.c_str(), module_1.group_name.c_str());
-        ROS_INFO("(debug) Module 2 | Name: %s | Move group: %s", module_2.module_name.c_str(), module_2.group_name.c_str());
+        ROS_INFO("(debug) Module 1: %s (name) %s (move group)", module_1.module_name.c_str(), module_1.group_name.c_str());
+        ROS_INFO("(debug) Module 2: %s (name) %s (move group)", module_2.module_name.c_str(), module_2.group_name.c_str());
     }
 
     // CONSTRUCT TRAJECTORY WITH SYNCRONIZED MOTION BETWEEN ARMS
@@ -1326,8 +1329,20 @@ trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module_1, RAPIDMo
             break;
         } else if (index_1 == module_1.total_points) {
             index_1--;
+            if (module_2.pose_names[index_2].compare(0, 1, "s") == 0) {
+                ROS_ERROR("From: combineModules(module_1, module_2, debug)");
+                ROS_ERROR("Cannot combine modules.");
+                ROS_WARN("There are more MoveSync commands in the second module than the first.");
+                success = false;
+            }
         } else if (index_2 == module_2.total_points) {
             index_2--;
+            if (module_1.pose_names[index_1].compare(0, 1, "s") == 0) {
+                ROS_ERROR("From: combineModules(module_1, module_2, debug)");
+                ROS_ERROR("Cannot combine modules.");
+                ROS_WARN("There are more MoveSync commands in the first module than the second.");
+                success = false;
+            }
         } else if (module_1.pose_names[index_1].compare(module_2.pose_names[index_2]) != 0) {
             if ((module_1.pose_names[index_1].compare(0, 1, "p") == 0) && (module_2.pose_names[index_2].compare(0, 1, "p") != 0)) {
             /* If the first module is going to a non-syncronized point (designated by p#) and the second module is going to a syncronized point */
@@ -1350,10 +1365,9 @@ trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module_1, RAPIDMo
             } else if ((module_1.pose_names[index_1].compare(0, 1, "s") == 0) && (module_2.pose_names[index_2].compare(0, 1, "s") == 0)) {
             /* If both modules are at a MoveSync command, but the robtarget names are different meaning neither of them are able to continue execution */
                 ROS_ERROR("From: combineModules(module_1, module_2, debug)");
-                ROS_ERROR("Cannot combine provided modules. The MoveSync target names do not match up.");
+                ROS_ERROR("Cannot combine provided modules.");
+                ROS_WARN("The MoveSync target names do not match up.");
                 ROS_WARN("Line %d of module 1 main function and line %d of module 2 main function.", index_1+1, index_2+1);
-                ROS_WARN("Module 1: %s", module_1.module_name.c_str());
-                ROS_WARN("Module 2: %s", module_2.module_name.c_str());
                 success = false;
             }
         } 
@@ -1370,6 +1384,8 @@ trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module_1, RAPIDMo
         if (debug) { ROS_INFO("(debug) Line: %d | Module 1 point: %s | Module 2 point: %s", index, module_1.pose_names[index_1-1].c_str(), module_2.pose_names[index_2-1].c_str()); }
 
         if (!success) {
+            ROS_WARN("Module 1: %s", module_1.module_name.c_str());
+            ROS_WARN("Module 2: %s", module_2.module_name.c_str());
             break;
         }
     }
@@ -1464,7 +1480,7 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
     /* If the provided pose trajectory is intended for the left arm */
         if (group.getName().compare("left_arm") == 0) {
         /* If the provided group is also for manipulating the left arm*/
-            ROS_INFO("Converting pose trajectory to joint trajectory for the left arm.");
+            ROS_INFO("Converting pose trajectory to joint trajectory for group: left_arm.");
 
             std::vector<std::string> joint_names = group.getActiveJoints();
             std::vector<double>     joint_values = group.getCurrentJointValues();
@@ -1479,7 +1495,6 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
                 }
             }
             success_left = convertPoseConfigToJointTrajectory(joint_trajectory_left, ik_left, pose_trajectory.pose_configs_left, BOUNDED_SOLUTION, debug);
-            
 
             if (success_left) {
                 ROS_INFO("....................");
@@ -1527,7 +1542,7 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
     /* If the provided pose trajectory is intended for the right arm */
         if (group.getName().compare("right_arm") == 0) {
         /* If the provided group is also for manipulating the right arm*/
-            ROS_INFO("Converting pose trajectory to joint trajectory for the right arm.");
+            ROS_INFO("Converting pose trajectory to joint trajectory for group: right arm.");
 
             std::vector<std::string> joint_names = group.getActiveJoints();
             std::vector<double>     joint_values = group.getCurrentJointValues();
@@ -1545,7 +1560,7 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
 
             if (success_right) {
                 ROS_INFO("....................");
-                ROS_INFO("Successfully converted pose trajectory to joint trajectory for right arm.");
+                ROS_INFO("Successfully converted pose trajectory to joint trajectory for right_arm.");
                 ROS_INFO("Adding gripper values to trajectory if neccessary.");
 
                 joint_trajectory_right.total_joints = joint_values.size();
@@ -1589,7 +1604,7 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
     /* If the provided pose trajectory is intended for both arms */
         if (group.getName().compare("both_arms") == 0) {
         /* If the provided group is also for manipulating both arms*/
-            ROS_INFO("Converting pose trajectory to joint trajectory for both arms.");
+            ROS_INFO("Converting pose trajectory to joint trajectory for group: both_arms.");
 
             std::vector<std::string> joint_names = group.getActiveJoints();
             std::vector<double>     joint_values = group.getCurrentJointValues();
@@ -1623,7 +1638,7 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
                 success_left = success_right = success = false;
             }
 
-            if (((success_left) && (success_right)) && joint_trajectory_left.total_points > 0) {
+            if (((success_left) && (success_right)) && (joint_trajectory_left.total_points > 0)) {
                 ROS_INFO("....................");
                 ROS_INFO("Conversion from pose trajectory to joint trajectory successful."); 
                 ROS_INFO("Combining joint trajectories for the left and right arm.");
@@ -1659,7 +1674,7 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
                     if (debug) {
                         ROS_INFO("_____ (debug) Joint Trajectory Point %d Joint Values _____", point+1);
                         for (int joint = 0; joint < joint_values.size(); joint++) {
-                            ROS_INFO("%s joint value: %.5f", joint_names[joint].c_str(), joint_values[joint]);
+                            ROS_INFO("%s joint value: %.5f", joint_names[joint].c_str(), joint_trajectory.joints[point][joint]);
                         }
                     }
                 }
