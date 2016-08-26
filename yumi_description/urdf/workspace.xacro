@@ -13,17 +13,8 @@
     <!--                         -->
     <!--          TABLE          -->
     <!--                         -->
-
-    <joint name="${table_parent}_to_table" type="fixed">
+    <joint name="table_main_to_${table_parent}" type="fixed">
       <parent link="${table_parent}"/>
-      <child link="table"/>
-      <insert_block name="origin"/>
-    </joint>
-
-    <link name="table"/>
-
-    <joint name="table_main_to_table" type="fixed">
-      <parent link="table"/>
       <child link="table_main"/>
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </joint>
@@ -45,8 +36,8 @@
       </collision>
     </link>
 
-    <joint name="table_two_to_table" type="fixed">
-      <parent link="table"/>
+    <joint name="table_two_to_${table_parent}" type="fixed">
+      <parent link="${table_parent}"/>
       <child link="table_two"/>
       <origin rpy="0 0 0" xyz="-0.4 1.3 0"/>
     </joint>
@@ -79,15 +70,7 @@
       <origin rpy="0 0 0" xyz="0 0 0"/>
     </joint>
 
-    <link name="stand"/>
-
-    <joint name="base_to_stand" type="fixed">
-      <parent link="stand"/>
-      <child link="stand_base"/>
-      <origin rpy="0 0 0" xyz="0 0 0"/>
-    </joint>
-
-    <link name="stand_base">
+    <link name="stand">
       <visual>
         <origin rpy="0 0 0" xyz="165.03939 -0.25716 0.00014"/>
         <origin rpy="0 0 0" xyz=""/>

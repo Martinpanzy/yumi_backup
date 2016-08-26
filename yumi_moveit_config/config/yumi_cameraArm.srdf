@@ -261,12 +261,12 @@
     <!-------------- Programmer: Frederick Wachter -------------->
     <!--------------- First Modified: 2016-05-20 ---------------->
     <!--=======================================================-->
+    <disable_collisions link1="stand" link2="table_main" reason="Adjacent"/> <!-- Main Table and YuMi Stand -->
+    <disable_collisions link1="stand" link2="table_two" reason="Never"/> <!-- Second Table and YuMi Stand -->
     <disable_collisions link1="yumi_body" link2="table_main" reason="Adjacent"/> <!-- Main Table and YuMi Body -->
-    <disable_collisions link1="stand_base" link2="table_main" reason="Adjacent"/> <!-- Main Table and YuMi Stand -->
     <disable_collisions link1="yumi_body" link2="table_two" reason="Never"/> <!-- Second Table and YuMi Body -->
-    <disable_collisions link1="stand_base" link2="table_two" reason="Never"/> <!-- Second Table and YuMi Stand -->
+    <disable_collisions link1="yumi_body" link2="stand" reason="Adjacent"/> <!-- Stand and YuMi Body -->
     <disable_collisions link1="table_main" link2="table_two" reason="Adjacent"/> <!-- Main Table and Second Table -->
-    <disable_collisions link1="yumi_body" link2="stand_base" reason="Adjacent"/> <!-- Stand and YuMi Body -->
     
     <disable_collisions link1="yumi_link_7_l" link2="camera_assembly" reason="Adjacent"/> <!-- Link 7 Left Hand to Camera Assembly -->
     <disable_collisions link1="yumi_link_7_l" link2="camera_holder" reason="Adjacent"/> <!-- Link 7 Left Hand and Camera Holder -->

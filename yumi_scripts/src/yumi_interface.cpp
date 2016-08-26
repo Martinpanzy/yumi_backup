@@ -30,6 +30,7 @@
 #include <rosbag/bag.h>
 #include <rosbag/view.h>
 #include <std_msgs/String.h>
+#include <yaml-cpp/yaml.h>
 
 #include <yumi_scripts/JointMsg.h>
 #include <yumi_scripts/JointConfigMsg.h>
@@ -46,6 +47,7 @@ const double GRIPPER_OPEN_POSITION = 0.024; // gripper open position (m)
 const double GRIPPER_CLOSED_POSITION = 0.0; // gripper closed position (m)
 const std::string YUMI_SCRIPTS_DIRECTORY = "/home/yumi/yumi_ws/src/yumi/yumi_scripts/";
 const std::string YUMI_ROSBAG_TOPIC_NAME = "yumi";
+const std::string NODE_NAME = "yumi_interface";
 
 // STRUCTURES
 struct poseConfig {
@@ -105,6 +107,11 @@ double toc() { // similar to MATLAB version of toc
 }
 
 // FUNCTION PROTOTYPES
+/* File Configuration Functions */
+bool getConfigParameters(bool&, bool&, std::string&, std::string&, std::string&, std::string&);
+void updateConfigParameter(ros::NodeHandle&, std::string, std::string, std::string, bool debug = false);
+void updateConfigFile(YAML::Node&);
+
 /* Configuration Functions */
 poseConfig getCurrentPoseConfig(planningInterface::MoveGroup&, bool debug = false);
 poseConfig getAxisConfigurations(planningInterface::MoveGroup&, bool debug = false);
@@ -129,7 +136,7 @@ bool isClose(poseConfig&, poseConfig&, bool debug = false);
 // MAIN FUNCTION
 int main(int argc, char **argv) {
 
-    ros::init(argc, argv, "yumi_interface");
+    ros::init(argc, argv, NODE_NAME);
     ros::NodeHandle node_handle("yumi");
 
     ros::AsyncSpinner spinner(1);
@@ -137,10 +144,29 @@ int main(int argc, char **argv) {
 
     // INITIALIZE VARIABLES
     bool debug = false;
-    std::string end_effector_left    = "yumi_link_7_l";
-    std::string end_effector_right   = "yumi_link_7_r";
+    bool bounds = true;
+    std::string module_name_left(""), module_name_right(""), module_folder("modules"), module_file_type(".mod");
+    std::string end_effector_left, end_effector_right;
     std::string pose_reference_frame = "yumi_body";
     double search_discretization     = 0.001;
+
+    // GET CONFIGURATION PARAMETERS FROM PARAMETER SERVER`
+    bool parameters_exist = getConfigParameters(debug, bounds, module_name_left, module_name_right, end_effector_left, end_effector_right);
+    if (!parameters_exist) {
+        ROS_INFO(">--------------------");
+        ROS_ERROR("Not able to get configuration parameters from parameter server.");
+        ROS_WARN("The configuration parameters must have not been loaded before the YuMi interface node started.");
+        return 0;
+    }
+
+    if (end_effector_left.compare("") == 0) {
+    /* If the parameter for the end effector on the left arm was empty, set the default value */
+        end_effector_left    = "yumi_link_7_l";
+    }
+    if (end_effector_right.compare("") == 0) {
+    /* If the parameter for the end effector on the right arm was empty, set the default value */
+        end_effector_right   = "yumi_link_7_r";
+    }
 
     // INITIALIZE MOVE GROUPS FOR THE LEFT ARM, RIGHT ARM, AND BOTH ARMS
     planningInterface::MoveGroup left_arm("left_arm");
@@ -166,7 +192,7 @@ int main(int argc, char **argv) {
         ik_left  = kinematics_loader->createInstance(plugin_name);
         ik_right = kinematics_loader->createInstance(plugin_name);
     } catch (pluginlib::PluginlibException& ex) {
-        ROS_ERROR("The plugin failed to load. Error: %s", ex.what());
+        ROS_ERROR("The kinematics plugin failed to load. Error: %s", ex.what());
         return 1;
     }
 
@@ -184,7 +210,8 @@ int main(int argc, char **argv) {
         } else {
             ROS_ERROR("Failed to initialize IK for right arm.");
         }
-        ROS_ERROR("Program existing.");
+        ROS_WARN("Error module likely due to end effector names set in the configuration file not existing in YuMi model.");
+        ROS_WARN("Exiting program.");
         return 1;
     }
 
@@ -198,9 +225,6 @@ int main(int argc, char **argv) {
     const int MAX_ARGUMENTS = 4;
 
     int system_return;
-    bool bounds = true; // need to get this form param server
-    std::string module_left_name(""), module_right_name(""), module_folder("modules"), module_file_type(".mod");
-
     system_return = std::system("clear"); // clear the screen
     ROS_INFO("Ready to take arguments. For a list of recognized arguments, enter \"help\"");
 
@@ -238,7 +262,7 @@ int main(int argc, char **argv) {
         /* If the user would like a list of allowed arguments*/
             ROS_INFO("_____ List of Allowed Arguments _____");
             ROS_INFO("module <left/right> $module_name");
-            ROS_INFO("module both $module_left_name_name $module_right_name_name");
+            ROS_INFO("module both $module_name_left $module_name_right");
             ROS_INFO("end_effector <left/right> $end_effector_name");
             ROS_INFO("end_effector both $left_end_effector_name $right_end_effector_name");
             ROS_INFO("send module <left/right/both>");
@@ -258,9 +282,11 @@ int main(int argc, char **argv) {
             if (inputs[1].compare("on") == 0) {
             /* If the user would like to turn debug mode on */
                 debug = true;
+                updateConfigParameter(node_handle, NODE_NAME, "debug", "true", debug);
             } else if (inputs[1].compare("off") == 0) {
             /* If the user would like to turn debug mode off */
                 debug = false;
+                updateConfigParameter(node_handle, NODE_NAME, "debug", "false", debug);
             } else {
             /* If the agument is not recognized */
                 ROS_ERROR("Argument not recognized.");
@@ -279,9 +305,11 @@ int main(int argc, char **argv) {
             if (inputs[1].compare("on") == 0) {
             /* If the user would like to have the IK solutions bounded according to the axis configuration values in the module(s) */
                 bounds = true;
+                updateConfigParameter(node_handle, NODE_NAME, "bounded_solution", "true", debug);
             } else if (inputs[1].compare("off") == 0) {
             /* If the user would not like to have bounded IK solutions */
                 bounds = false;
+                updateConfigParameter(node_handle, NODE_NAME, "bounded_solution", "false", debug);
             } else {
             /* If the agument is not recognized */
                 ROS_ERROR("Argument not recognized.");
@@ -299,8 +327,8 @@ int main(int argc, char **argv) {
         /* If the user would like to know the state variables of the function (debug, bounds, etc.) */
             ROS_INFO("                   Debug mode: %s", debug?"on":"off");
             ROS_INFO("         Bounded IK solutions: %s", bounds?"on":"off");
-            ROS_INFO("    Left arm mdolue file name: %s", module_left_name.c_str());
-            ROS_INFO("   Right arm module file name: %s", module_right_name.c_str());
+            ROS_INFO("    Left arm mdolue file name: %s", module_name_left.c_str());
+            ROS_INFO("   Right arm module file name: %s", module_name_right.c_str());
             ROS_INFO(" Left arm end effector for IK: %s", end_effector_left.c_str());
             ROS_INFO("Right arm end effector for IK: %s", end_effector_right.c_str());
 
@@ -310,20 +338,22 @@ int main(int argc, char **argv) {
             /* If the user is providing a file name of the module to be used for the left arm */
                 if (fileExists(inputs[2], module_folder, module_file_type)) {
                 /* If the provided file name for the module for the left arm exists */
-                    module_left_name = inputs[2];
-                    ROS_INFO("Left arm module file name: %s", module_left_name.c_str());
+                    module_name_left = inputs[2];
+                    ROS_INFO("Left arm module file name: %s", module_name_left.c_str());
+                    updateConfigParameter(node_handle, NODE_NAME, "module_name_left", module_name_left, debug);
                 } else {
-                    module_left_name = "";
+                    module_name_left = "";
                     ROS_ERROR("File could not be found, please check inputted file name.");
                 }
             } else if (inputs[1].compare("right") == 0) {
             /* If the user is providing a file name of the module to be used for the right arm */
                 if (fileExists(inputs[2], module_folder, module_file_type)) {
                 /* If the provided file name for the module for the right arm exists */
-                    module_right_name = inputs[2];
-                    ROS_INFO("Right arm module file name: %s", module_right_name.c_str());
+                    module_name_right = inputs[2];
+                    ROS_INFO("Right arm module file name: %s", module_name_right.c_str());
+                    updateConfigParameter(node_handle, NODE_NAME, "module_name_right", module_name_right, debug);
                 } else {
-                    module_right_name = "";
+                    module_name_right = "";
                     ROS_ERROR("File could not be found, please check inputted file name.");
                 }
             } else if (inputs[1].compare("both") == 0) {
@@ -332,13 +362,15 @@ int main(int argc, char **argv) {
                 bool file_right_exists = fileExists(inputs[3], module_folder, module_file_type);
                 if ((file_left_exists) && (file_right_exists)) {
                 /* If the provided file name for the module for both arms exists */
-                    module_left_name  = inputs[2];
-                    module_right_name = inputs[3];
-                    ROS_INFO(" Left arm module file name: %s", module_left_name.c_str());
-                    ROS_INFO("Right arm module file name: %s", module_right_name.c_str());
+                    module_name_left  = inputs[2];
+                    module_name_right = inputs[3];
+                    ROS_INFO(" Left arm module file name: %s", module_name_left.c_str());
+                    ROS_INFO("Right arm module file name: %s", module_name_right.c_str());
+                    updateConfigParameter(node_handle, NODE_NAME, "module_name_left", module_name_left, debug);
+                    updateConfigParameter(node_handle, NODE_NAME, "module_name_right", module_name_right, debug);
                 } else {
-                    module_left_name  = "";
-                    module_right_name = "";
+                    module_name_left  = "";
+                    module_name_right = "";
                     if ((!file_left_exists) && (!file_right_exists)) {
                         ROS_ERROR("Both file names do not exist.");
                     } else if (!file_left_exists) {
@@ -393,11 +425,15 @@ int main(int argc, char **argv) {
 
                 if (inputs[1].compare("left") == 0) {
                     end_effector_left = inputs[2];
+                    updateConfigParameter(node_handle, NODE_NAME, "end_effector_left", end_effector_left, debug);
                 } else if (inputs[1].compare("right") == 0) {
                     end_effector_right = inputs[2];
+                    updateConfigParameter(node_handle, NODE_NAME, "end_effector_right", end_effector_right, debug);
                 } else {
                     end_effector_left  = inputs[2];
                     end_effector_right = inputs[3]; 
+                    updateConfigParameter(node_handle, NODE_NAME, "end_effector_left", end_effector_left, debug);
+                    updateConfigParameter(node_handle, NODE_NAME, "end_effector_right", end_effector_right, debug);
                 }
             } else {
                 if ((!success_ik_left) && (!success_ik_right)) {
@@ -421,12 +457,12 @@ int main(int argc, char **argv) {
 
                     if (inputs[2].compare("both") == 0) {
                     /* If the user specified that both modules should be sent */
-                        if ((module_left_name.compare("") != 0) && (module_right_name.compare("") != 0)) {
+                        if ((module_name_left.compare("") != 0) && (module_name_right.compare("") != 0)) {
                         /* If the user has previously set the module locations for both the left and right modules */
                             bool success = false;
 
-                            module_left  = getYuMiLeadThroughData(module_left_name, left_arm, debug);
-                            module_right = getYuMiLeadThroughData(module_right_name, right_arm, debug);
+                            module_left  = getYuMiLeadThroughData(module_name_left, left_arm, debug);
+                            module_right = getYuMiLeadThroughData(module_name_right, right_arm, debug);
                             if ((module_left.group_name.compare("") != 0) && (module_right.group_name.compare("") != 0)) {
                             /* If there were no errors when retrieving the RAPID module data from the provided file */
                                 pose_trajectory = convertModuleToPoseTrajectory(module_left, module_right, debug);
@@ -460,11 +496,11 @@ int main(int argc, char **argv) {
                             }
                         } else {
                         /* If the user did not specify the left and/or right module locations */
-                            if ((module_left_name.compare("") == 0) && (module_right_name.compare("") == 0)) {
+                            if ((module_name_left.compare("") == 0) && (module_name_right.compare("") == 0)) {
                             /* If the user did not specify the module locations for both the left and right module */
                                 ROS_ERROR("Cannot send modules for both arms.");
                                 ROS_WARN("Please specify the module locations for the left and right module.");
-                            } else if (module_left_name.compare("") == 0) {
+                            } else if (module_name_left.compare("") == 0) {
                             /* If the user did not specify the module location for the left module */
                                 ROS_ERROR("Cannot send modules for both arms.");
                                 ROS_WARN("Please specify the left module location.");
@@ -477,11 +513,11 @@ int main(int argc, char **argv) {
                         }
                     } else if (inputs[2].compare("left") == 0) {
                     /* If the user specified that the left module should be sent */
-                        if (module_left_name.compare("") != 0) {
+                        if (module_name_left.compare("") != 0) {
                         /* If the user has previously set the module locations for left module */
                             bool success = false;
 
-                            module_left  = getYuMiLeadThroughData(module_left_name, left_arm, debug);
+                            module_left  = getYuMiLeadThroughData(module_name_left, left_arm, debug);
                             if (module_left.group_name.compare("") != 0) {
                             /* If there were no errors when retrieving the RAPID module data from the provided file */
                                 pose_trajectory = convertModuleToPoseTrajectory(module_left, debug);
@@ -521,11 +557,11 @@ int main(int argc, char **argv) {
                         }
                     } else if (inputs[2].compare("right") == 0) {
                     /* If the user specified that the right module should be sent */
-                        if (module_right_name.compare("") != 0) {
+                        if (module_name_right.compare("") != 0) {
                         /* If the user has previously set the module locations for left module */
                             bool success = false;
 
-                            module_right  = getYuMiLeadThroughData(module_right_name, right_arm, debug);
+                            module_right  = getYuMiLeadThroughData(module_name_right, right_arm, debug);
                             if (module_right.group_name.compare("") != 0) {
                             /* If there were no errors when retrieving the RAPID module data from the provided file */
                                 pose_trajectory = convertModuleToPoseTrajectory(module_right, debug);
@@ -623,9 +659,106 @@ int main(int argc, char **argv) {
 
 
 /* ------------------------------------------------------------ */
+/* --------------- FILE CONFIGURATION FUNCTIONS --------------- */
+/* ------------------------------------------------------------ */
+bool getConfigParameters(bool& debug, bool& bounds, std::string& module_name_left, std::string& module_name_right, std::string& end_effector_left, std::string& end_effector_right) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-08-25
+*/
+    // INITIALIZE VARIABLES
+    bool parameters_exist;
+
+    // GET CONFIGURATION PARAMETERS FROM PARAMETER SERVER
+    parameters_exist = ((ros::param::get("/yumi/yumi_interface/debug", debug)) && (ros::param::get("/yumi/yumi_interface/bounded_solution", bounds)));
+    parameters_exist = ((ros::param::get("/yumi/yumi_interface/module_name_left", module_name_left)) && (ros::param::get("/yumi/yumi_interface/module_name_right", module_name_right)) && (parameters_exist));
+    parameters_exist = ((ros::param::get("/yumi/yumi_interface/end_effector_left", end_effector_left)) && (ros::param::get("/yumi/yumi_interface/end_effector_right", end_effector_right)) && (parameters_exist));
+
+    if ((debug) && (parameters_exist)) {
+        ROS_INFO("......................");
+        ROS_INFO("(debug) Retrieved configuration parameters from parameter server");
+        ROS_INFO("_____ (debug) Configuration Parameters _____");
+        ROS_INFO("                  Debug: %s", debug?"true":"false");
+        ROS_INFO("      Bounded Solutions: %s", bounds?"true":"false");
+        ROS_INFO("       Left Module Name: %s", module_name_left.c_str());
+        ROS_INFO("      Right Module Name: %s", module_name_right.c_str());
+        ROS_INFO(" Left End Effector Name: %s", end_effector_left.c_str());
+        ROS_INFO("Right End Effector Name: %s", end_effector_right.c_str());
+        ROS_INFO("......................");
+    }
+
+    return parameters_exist;
+}
+
+void updateConfigParameter(ros::NodeHandle& node_handle, std::string group, std::string name, std::string value, bool debug) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-08-25
+*/
+    if (debug) {
+        ROS_INFO("....................");
+        ROS_INFO("(debug) Updating parameter \"%s\" to: %s", name.c_str(), value.c_str());
+    }
+
+    // GET CONFIG FILE PARAMETERS, UPDATE DESIRED PARAMETERS, THEN REWRITE FILE
+    YAML::Node config = YAML::LoadFile(YUMI_SCRIPTS_DIRECTORY + "src/config.yaml");
+    config[group][name] = value;
+    updateConfigFile(config);
+
+    if (value.compare("true") == 0) {
+        node_handle.setParam(group + "/" + name, true);
+    } else if (value.compare("false") == 0) {
+        node_handle.setParam(group + "/" + name, false);
+    } else {
+        node_handle.setParam(group + "/" + name, value);
+    }
+
+    if (debug) { 
+        ROS_INFO("(debug) Updated parameter in configuration file and parameter server"); 
+        ROS_INFO("....................");
+    }
+}
+
+void updateConfigFile(YAML::Node& config) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-08-25
+*/
+    YAML::Emitter output;
+
+    output << YAML::BeginMap;
+    output << YAML::Key << "yumi_node";
+    output << YAML::Value << YAML::BeginMap;
+        output << YAML::Key << "debug";
+        output << YAML::Value << config["yumi_node"]["debug"];
+        output << YAML::Key << "load_yumi";
+        output << YAML::Value << config["yumi_node"]["load_yumi"];
+        output << YAML::Key << "load_rviz";
+        output << YAML::Value << config["yumi_node"]["load_rviz"];
+        output << YAML::Key << "two_grippers";
+        output << YAML::Value << config["yumi_node"]["two_grippers"];
+        output << YAML::EndMap;
+    output << YAML::Key << "yumi_interface";
+    output << YAML::Value << YAML::BeginMap;
+        output << YAML::Key << "debug";
+        output << YAML::Value << config["yumi_interface"]["debug"];
+        output << YAML::Key << "bounded_solution";
+        output << YAML::Value << config["yumi_interface"]["bounded_solution"];
+        output << YAML::Key << "module_name_left";
+        output << YAML::Value << config["yumi_interface"]["module_name_left"];
+        output << YAML::Key << "module_name_right";
+        output << YAML::Value << config["yumi_interface"]["module_name_right"];
+        output << YAML::Key << "end_effector_left";
+        output << YAML::Value << config["yumi_interface"]["end_effector_left"];
+        output << YAML::Key << "end_effector_right";
+        output << YAML::Value << config["yumi_interface"]["end_effector_right"];
+        output << YAML::EndMap;
+    output << YAML::EndMap;
+
+    std::ofstream output_file(YUMI_SCRIPTS_DIRECTORY + "src/config.yaml"); 
+    output_file << output.c_str();
+}
+
+/* ------------------------------------------------------------ */
 /* --------------- AXIS CONFIGURATION FUNCTIONS --------------- */
 /* ------------------------------------------------------------ */
-
 poseConfig getCurrentPoseConfig(planningInterface::MoveGroup& group, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-07-26
@@ -1006,7 +1139,8 @@ RAPIDModuleData getYuMiLeadThroughData(std::string file_name, planningInterface:
                 } else {
                 /* If all robtargets have been stored and the end of the file has not been reached yet */
                     main_function_index++;
-                    if (data_type.compare("MoveSync") == 0) {
+                    if (data_type.compare(0, 4, "Move") == 0) {
+                    /* If the move command is either MoveSync or Move */
                         current_line >> function_point_name;
                         function_point_name = function_point_name.substr(0, function_point_name.length()-1);
                     } else if (data_type.compare("OpenHand;") == 0) {
@@ -1107,7 +1241,7 @@ RAPIDModuleData getYuMiLeadThroughData(std::string file_name, planningInterface:
         module.group_name = "";
     }
 
-    if (debug) {
+    if ((debug) && (success)) {
         ROS_INFO("....................");
         ROS_INFO("(debug) Module Name: %s", module.module_name.c_str());
 
@@ -1313,6 +1447,8 @@ trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module_1, RAPIDMo
     int index_1(0), index_2(0), index(0);
     bool success = true;
 
+    bool only_show_1(false), only_show_2(false);
+
     // NOTIFY THE USER THE FUNCTION IS ABOUT TO START
     ROS_INFO("Combining modules.");
 
@@ -1333,6 +1469,9 @@ trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module_1, RAPIDMo
                 ROS_ERROR("From: combineModules(module_1, module_2, debug)");
                 ROS_ERROR("Cannot combine modules.");
                 ROS_WARN("There are more MoveSync commands in the second module than the first.");
+                ROS_WARN("Module 1: %s", module_1.module_name.c_str());
+                ROS_WARN("Module 2: %s", module_2.module_name.c_str());
+                only_show_2 = true;
                 success = false;
             }
         } else if (index_2 == module_2.total_points) {
@@ -1341,6 +1480,9 @@ trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module_1, RAPIDMo
                 ROS_ERROR("From: combineModules(module_1, module_2, debug)");
                 ROS_ERROR("Cannot combine modules.");
                 ROS_WARN("There are more MoveSync commands in the first module than the second.");
+                ROS_WARN("Module 1: %s", module_1.module_name.c_str());
+                ROS_WARN("Module 2: %s", module_2.module_name.c_str());
+                only_show_1 = true;
                 success = false;
             }
         } else if (module_1.pose_names[index_1].compare(module_2.pose_names[index_2]) != 0) {
@@ -1381,16 +1523,20 @@ trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module_1, RAPIDMo
         index_2++;
         index++;
 
-        if (debug) { ROS_INFO("(debug) Line: %d | Module 1 point: %s | Module 2 point: %s", index, module_1.pose_names[index_1-1].c_str(), module_2.pose_names[index_2-1].c_str()); }
+        if (debug) { 
+            if (only_show_1) {
+                ROS_INFO("(debug) Line: %d | Module 1 point: %s | Module 2 point: --- ", index, module_1.pose_names[index_1-1].c_str());
+            } else if (only_show_2) {
+                ROS_INFO("(debug) Line: %d | Module 1 point: --- | Module 2 point: %s", index, module_2.pose_names[index_2-1].c_str());
+            } else {
+                ROS_INFO("(debug) Line: %d | Module 1 point: %s | Module 2 point: %s", index, module_1.pose_names[index_1-1].c_str(), module_2.pose_names[index_2-1].c_str()); 
+            }
+        }
 
         if (!success) {
-            ROS_WARN("Module 1: %s", module_1.module_name.c_str());
-            ROS_WARN("Module 2: %s", module_2.module_name.c_str());
             break;
         }
     }
-
-    ROS_INFO("Modules combined. Total trajectory points: %lu", pose_configs_1.size());
 
     // UPDATE MODULES TO REFLECT ANY CHANGES IN POSE CONFIGS
     module_1.pose_configs = pose_configs_1;
@@ -1403,6 +1549,8 @@ trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData& module_1, RAPIDMo
 
     // STORE CONSTRUCTED TRAJECTORIES TO CORRECT ARM
     if (success) {
+        ROS_INFO("Modules combined. Total trajectory points: %lu", pose_configs_1.size());
+
         if (module_1.group_name.compare("left_arm") == 0) {
             pose_trajectory.pose_configs_left = pose_configs_1;
             pose_trajectory.gripper_attached_left = module_1.gripper_attached;

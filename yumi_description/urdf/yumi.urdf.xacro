@@ -4,7 +4,7 @@
   DATE CREATED: 2016-05-30
   PURPOSE: Import necessary files to build YuMi URDF with workspace
 
-  NECESSARY INPUTS:
+  NECESSARY INPUTS FOR VI SENSOR:
     - enable_cameras: true/false
     - enable_depth: true/false
     - enable_ground_truth: true/false
@@ -54,17 +54,17 @@
 
   <!-- Set defaults -->
 
-  <!-- Define Macros for YuMi Import -->
-  <xacro:yumi name="yumi" hardware_interface="${hardware_interface}" parent="workspace">
-	  <origin xyz="0 0 0" rpy="0 0 0"/> <!-- Bring bottom of YuMi to (x,y) plane -->
-  </xacro:yumi>
-
   <!-- Define Macros for Workspace Import -->
   <xacro:workspace stand_parent="yumi_body" table_parent="workspace">
-    <origin rpy="0 0 0" xyz="0.334 -0.01 -0.113"/>
+    <origin xyz="0.334 -0.01 -0.113" rpy="0 0 0"/>
   </xacro:workspace>
 
-  <!-- Define Macros for Right and Left Servo Gripper Import -->
+  <!-- Define Macros for YuMi Import -->
+  <xacro:yumi name="yumi" hardware_interface="${hardware_interface}" parent="table_main">
+	  <origin xyz="0 0 0.113" rpy="0 0 0"/> <!-- Bring bottom of YuMi to (x,y) plane -->
+  </xacro:yumi>
+
+  <!-- Define Macros for Right Servo Gripper Import -->
   <xacro:yumi_servo_gripper name="gripper_r" hardware_interface="${hardware_interface}" parent="yumi_link_7_r">
   	<origin xyz="0 0 0.007" rpy="0 0 ${PI}"/>
   </xacro:yumi_servo_gripper>
@@ -76,6 +76,7 @@
     />
   </xacro:unless>
   <xacro:if value="$(arg two_grippers)">
+    <!-- Define Macros for Left Servo Gripper Import -->
     <xacro:yumi_servo_gripper name="gripper_l" hardware_interface="${hardware_interface}" parent="yumi_link_7_l">
       <origin xyz="0 0 0.007" rpy="0 0 ${PI}"/>
     </xacro:yumi_servo_gripper>

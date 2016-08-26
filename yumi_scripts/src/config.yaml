@@ -1,10 +1,12 @@
 yumi_node:
-  debug: true
+  debug: false
   load_yumi: true
   load_rviz: false
   two_grippers: true
 yumi_interface:
-  debug: false
+  debug: true
   bounded_solution: true
-  end_effector_left: yumi_link_7_l
-  end_effector_right: yumi_link_7_r
+  module_name_left: tester_left
+  module_name_right: tester_right
+  end_effector_left: gripper_l_tcp
+  end_effector_right: gripper_r_tcp

@@ -125,7 +125,7 @@ bool checkModulesLineUp(RAPIDModuleData&, RAPIDModuleData&, bool debug = false);
 
 /* File Checking and ROS Bag Functions */
 bool fileExists(std::string, std::string, std::string);
-// void savePlanner(std::string, planner&);
+void savePlanner(std::string, planner&);
 
 /* RAPID Module Writing Functions */
 bool renameModulePoses(RAPIDModuleData&, RAPIDModuleData&, RAPIDModuleData&, RAPIDModuleData&, bool debug = false);
@@ -135,6 +135,7 @@ void writeToFile(std::string, RAPIDModuleData&, RAPIDModuleData&, bool debug = f
 std::string getRobtargetOutputLine(std::string, poseConfig&, bool debug = false);
 
 /* Plan and Execution Functions */
+trajectoryJoints fillJointTrajectory(planningInterface::MoveGroup&, std::vector<trajectoryJoints>&, bool debug = false);
 bool generatePlans(planner&, planningInterface::MoveGroup&, trajectoryJoints&, bool debug = false);
 bool executePlans(planningInterface::MoveGroup&, planner&, bool debug = false);
 
@@ -183,25 +184,26 @@ int main(int argc, char **argv) {
 
     // SETUP NODE STRUCTURES AND VARIABLES
     std::string group_name;
-    RAPIDModuleData module_master_left, module_master_right, module_left, module_right, module_empty;
+    RAPIDModuleData module_left_master, module_right_master, module_left, module_right, module_empty;
     std::vector<trajectoryJoints> joint_trajectories_master, joint_trajectory_empty;
     std::vector<yumi_scripts::JointMsg> joint_trajectory_msg;
-
     poseConfig pose_config;
     jointConfig joint_config;
-
     std::string command;
 
-    std::vector<planner> plans_master, plans_empty;
+    planner plans_master, plans_empty;
 
     bool success_generated_plans = false;
 
+    module_left_master.total_points  = 0;
+    module_right_master.total_points = 0;
+
     // CHECK IF GRIPPERS ARE ATTACHED
     if (left_arm.getActiveJoints().back().compare(0, 7, "gripper") == 0) {
-        module_master_left.gripper_attached = true;
+        module_left_master.gripper_attached = true;
     }
     if (right_arm.getActiveJoints().back().compare(0, 7, "gripper") == 0) {
-        module_master_right.gripper_attached = true;
+        module_right_master.gripper_attached = true;
     }
 
     // WAIT FOR COMMANDS
@@ -212,6 +214,7 @@ int main(int argc, char **argv) {
         DATE CREATED: 2016-08-22
     */
         if (new_module) {
+        /* If the user is sending a module and joint trajectory to add to the master modules and joint trajectory */
             new_module  = false;
 
             // COPY GLOBAL VARIABLES/STRUCTURES TO LOCAL
@@ -249,8 +252,8 @@ int main(int argc, char **argv) {
                 } else {
                     bool success = checkModulesLineUp(module_left, module_right, debug);
                     if (success) {
-                        appendMasterModule(module_master_left, module_left, group_name, debug);
-                        appendMasterModule(module_master_right, module_right, group_name, debug);
+                        appendMasterModule(module_left_master, module_left, group_name, debug);
+                        appendMasterModule(module_right_master, module_right, group_name, debug);
                     } else {
                         ROS_INFO(">--------------------");
                         ROS_WARN("Not storing modules and joint trajectory due to error.");
@@ -261,13 +264,13 @@ int main(int argc, char **argv) {
                 if (joint_trajectory_msg.size() != module_left.pose_names.size()) {
                     size_mismatch = true;
                 } else {
-                    appendMasterModule(module_master_left, module_left, group_name, debug);
+                    appendMasterModule(module_left_master, module_left, group_name, debug);
                 }
             } else if (group_name.compare("right_arm") == 0) {
                 if (joint_trajectory_msg.size() != module_right.pose_names.size()) {
                     size_mismatch = true;
                 } else {
-                    appendMasterModule(module_master_right, module_right, group_name, debug);
+                    appendMasterModule(module_right_master, module_right, group_name, debug);
                 }
             }
 
@@ -286,6 +289,7 @@ int main(int argc, char **argv) {
         }
 
         if (new_joint_config) {
+        /* If the user would like to store a new joint configuration into the joint trajectory and modules */
             new_joint_config  = false;
             joint_config = global_joint_config;
             joint_config_lock = false;
@@ -296,6 +300,7 @@ int main(int argc, char **argv) {
         }
 
         if (new_pose_config) {
+        /* If the user would like to store a new pose configuration into the joint trajectory and modules */
             new_pose_config  = false;
             pose_config = global_pose_config;
             pose_config_lock = false;
@@ -306,8 +311,10 @@ int main(int argc, char **argv) {
         }
 
         if (new_command) {
-            // COPY GLOBAL VARIABLES/STRUCTURES TO LOCAL THEN RELEASE DATA LOCK
+        /* If the user is sending a command to the YuMi node */
             new_command  = false;
+
+            // COPY GLOBAL VARIABLES/STRUCTURES TO LOCAL THEN RELEASE DATA LOCK
             command = global_command;
             command_lock = false;
 
@@ -315,78 +322,87 @@ int main(int argc, char **argv) {
             ROS_INFO(">--------------------");
             ROS_INFO("Received command: %s", command.c_str());
 
-            if (command.compare("show_trajectory") == 0) {
+            if (command.compare("create_plan") == 0) {
+            /* If the user would like to create a joint trajectory plan for the current joint trajectory */
+                plans_master = plans_empty; // reset plans_master to empty
+
+                // FILL MASTER TRAJECTORY AND GENERATE PLAN
+                trajectoryJoints joint_trajectory_filled = fillJointTrajectory(both_arms, joint_trajectories_master, debug);
+                bool success = generatePlans(plans_master, both_arms, joint_trajectory_filled, debug);
+
+                ROS_INFO("....................");
+                if (success) {
+                    ROS_INFO("Successfully created joint trajectory plan. Total trajectory points: %d", plans_master.total_plans);
+                    success_generated_plans = true;
+                } else {
+                    ROS_ERROR("Not able to generate joint trajectory plans due to error.");
+                    ROS_WARN("Not storing any joint trajectory plans.");
+                    success_generated_plans = false;
+                }
+
+            } else if (command.compare("show_trajectory") == 0) {
+            /* If the user would like to show the current trajectory of the plan in RViz */
                 if (success_generated_plans) {
                     ROS_INFO("Showing trajectories.");
 
                     moveit_msgs::DisplayTrajectory display_trajectory;
-                    display_trajectory.trajectory_start = plans_master[0].plans[0].start_state_;
+                    display_trajectory.trajectory_start = plans_master.plans[0].start_state_;
 
-                    int total_plans, total_modules = plans_master.size();
-                    for (int module = 0; module < total_modules; module++) {
-                        total_plans = plans_master[module].plans.size();
-                        for (int plan = 0; plan < total_plans; plan++) {
-                            display_trajectory.trajectory.push_back(plans_master[module].plans[plan].trajectory_);
-                        }
+                    for (int plan = 0; plan < plans_master.total_plans; plan++) {
+                        display_trajectory.trajectory.push_back(plans_master.plans[plan].trajectory_);
                     }
                     display_publisher.publish(display_trajectory);
                 } else {
                     ROS_ERROR("Plans have not been successfully created yet.");
                     ROS_WARN("To create plans for trajectories, send the command: create plan");
                 }
-            } else if (command.compare("create_plan") == 0) {
-                plans_master = plans_empty; // reset plans_master to empty
-                success_generated_plans = false;
 
-                bool success;
-                for (int trajectory = 0; trajectory < joint_trajectories_master.size(); trajectory++) {
-                    planner plan;
-                    std::string group_name = joint_trajectories_master[trajectory].group_name;
-
-                    ROS_INFO("....................");
-                    ROS_INFO("Creating planner for module %d of %lu", trajectory+1, joint_trajectories_master.size());
-
-                    if (group_name.compare("both_arms") == 0) {
-                        success = generatePlans(plan, both_arms, joint_trajectories_master[trajectory], debug);
-                    } else if (group_name.compare("left_arm") == 0) {
-                        right_arm.getCurrentJointValues();
-                        /* ----------------------------------- */
-                        /* ----- ^ NEED TO CHANGE THIS ^ ----- */
-                        /* ----------------------------------- */
-                        success = generatePlans(plan, left_arm, joint_trajectories_master[trajectory], debug);
-                    } else {
-                        left_arm.getCurrentJointValues();
-                        /* ----------------------------------- */
-                        /* ----- ^ NEED TO CHANGE THIS ^ ----- */
-                        /* ----------------------------------- */
-                        success = generatePlans(plan, right_arm, joint_trajectories_master[trajectory], debug);
-                    }
-
-                    if (success) {
-                        plans_master.push_back(plan);
-                        ROS_INFO("Successfully created planner for module %d.", trajectory+1);
-                    } else {
-                        ROS_INFO("....................");
-                        ROS_ERROR("Error creating plan for group: %s.", group_name.c_str());
-                        ROS_WARN("Not storing any created plans.");
-                        break;
-                    }
+            } else if (command.compare(0, 11, "save_rosbag") == 0) {
+            /* If the user would like to save the current joint trajectory plan */
+                if (!success_generated_plans) {
+                    ROS_ERROR("There are no valid joint trajectory plans to save.");
+                    ROS_WARN("A plan needs to be constructed successfully before saving.");
+                    continue;
                 }
 
-                if (success) {
-                    success_generated_plans = true;
-                    ROS_INFO("....................");
-                    ROS_INFO("Successfully created plans for %lu modules.", plans_master.size());
-                } else {
-                    success_generated_plans = false;
-                }
-            } else if (command.compare(0, 11, "save_module") == 0) {
                 if ((command.length() > 11) && (command.compare(11, 2, ":=") == 0)) {
                     std::string file_name = command.substr(13);
                     RAPIDModuleData module_left_save, module_right_save;
+                    bool file_exists;
 
-                    bool file_exists = fileExists(file_name, "modules", ".mod");
+                    file_exists = fileExists(file_name, "bags", ".bag");
                     if (file_exists) {
+                        ROS_ERROR("File name for ROS bag already exists.");
+                        ROS_WARN("Please re-supply a file name that does not already exists.");
+                        continue;
+                    }
+
+                    ROS_INFO(">--------------------");
+                    ROS_INFO("Saving joint trajectory plan.");
+                    savePlanner(file_name, plans_master);
+                    ROS_INFO("Successfully saved joint trajectory plan.");
+                } else {
+                    ROS_ERROR("ROS bag name not provided or not provided correctly.");
+                    ROS_WARN("Correct format: save_rosbag:=file_name");
+                    ROS_WARN("replace file_name with the name of ROS bag file.");
+                }
+
+            } else if (command.compare(0, 11, "save_module") == 0) {
+            /* If the user would like to save the current module data */
+                if ((module_left_master.total_points == 0) && (module_right_master.total_points == 0)) {
+                    ROS_ERROR("There are no trajecotry points to save.");
+                    continue;
+                }
+
+                if ((command.length() > 11) && (command.compare(11, 2, ":=") == 0)) {
+                    std::string file_name = command.substr(13);
+                    RAPIDModuleData module_left_save, module_right_save;
+                    bool file_exists, file_exists_left, file_exists_right;
+
+                    file_exists       = fileExists(file_name, "modules", ".mod");
+                    file_exists_left  = fileExists(file_name + "_left", "modules", ".mod");
+                    file_exists_right = fileExists(file_name + "_right", "modules", ".mod");
+                    if ((file_exists) || (file_exists_left) || (file_exists_right)) {
                         ROS_ERROR("File name for module already exists.");
                         ROS_WARN("Please re-supply a file name that does not already exists.");
                         continue;
@@ -394,7 +410,7 @@ int main(int argc, char **argv) {
 
                     ROS_INFO(">--------------------");
                     ROS_INFO("Renaming module poses.");
-                    bool success = renameModulePoses(module_master_left, module_left_save, module_master_right, module_right_save, debug);
+                    bool success = renameModulePoses(module_left_master, module_left_save, module_right_master, module_right_save, debug);
                     if (success) {
                         ROS_INFO("Successfully renamed module poses.");
 
@@ -415,16 +431,19 @@ int main(int argc, char **argv) {
                         }
                     } else {
                         ROS_INFO("....................");
+                        ROS_INFO("Not saving modules due to error");
                         continue;
                     }
                     ROS_INFO(">--------------------");
-                    ROS_INFO("Successfully saved module.");
+                    ROS_INFO("Successfully saved module(s).");
                 } else {
                     ROS_ERROR("Module name not provided or not provided correctly.");
                     ROS_WARN("Correct format: save_module:=file_name");
-                    ROS_WARN("replace file_name with the name of desired file.");
+                    ROS_WARN("replace file_name with the name of module.");
                 }
+
             } else if (command.compare("update_params") == 0) {
+            /* If the use would like for the internal parameters to be updated from the parameter server */
                 bool previous_debug = debug;
                 if (!(ros::param::get("/yumi/yumi_node/debug", debug))) {
                     ROS_INFO(">--------------------");
@@ -437,15 +456,21 @@ int main(int argc, char **argv) {
                         ROS_INFO("All parameters are already up to date.");
                     }
                 }
+
             } else if (command.compare("clear_data") == 0) {
+            /* If the user would like to clear all data */
                 joint_trajectories_master = joint_trajectory_empty;
-                module_master_left  = module_empty;
-                module_master_right = module_empty;
+                module_left_master  = module_empty;
+                module_right_master = module_empty;
+
+                module_left_master.total_points  = 0;
+                module_right_master.total_points = 0;
 
                 plans_master = plans_empty;
                 success_generated_plans = false;
 
                 ROS_INFO("Cleared modules and joint trajectories.");
+
             } else {
                 ROS_ERROR("Command not recognized.");
                 ROS_WARN("Recognized commands: create_plan, show_trajectory");
@@ -583,10 +608,9 @@ void appendMasterModule(RAPIDModuleData& master_module, RAPIDModuleData& module,
     } else {
         if (debug) { ROS_INFO("(debug) Assuming only non-syncronized movements since only one module was sent."); }
 
-        std::string pose_name;
         for (int pose = 0; pose < module.total_points; pose++) {
-            pose_name = "p" + std::to_string(pose+1);
-            master_module.pose_names.push_back(pose_name);
+            module.pose_names[pose].replace(0, 1, "p");
+            master_module.pose_names.push_back(module.pose_names[pose]);
             master_module.pose_configs.push_back(module.pose_configs[pose]);
         }
     }
@@ -677,7 +701,16 @@ bool checkModulesLineUp(RAPIDModuleData& module_1, RAPIDModuleData& module_2, bo
         index_2++;
         index++;
 
-        if (debug) { ROS_INFO("(debug) Line: %d | Module 1 point: %s | Module 2 point: %s", index, module_1.pose_names[index_1-1].c_str(), module_2.pose_names[index_2-1].c_str()); }
+        if (debug) {
+            std::string index_adjustment = "";
+            if (index < 10) { index_adjustment = " "; }
+            if (module_1.pose_names[index_1-1].length() < 3) {
+                ROS_INFO("(debug) Line: %d%s | Module 1 point: %s  | Module 2 point: %s", index, index_adjustment.c_str(), module_1.pose_names[index_1-1].c_str(), module_2.pose_names[index_2-1].c_str());
+            } else {
+                ROS_INFO("(debug) Line: %d%s | Module 1 point: %s | Module 2 point: %s", index, index_adjustment.c_str(), module_1.pose_names[index_1-1].c_str(), module_2.pose_names[index_2-1].c_str());
+            }
+            
+        }
 
         if (!success) {
             ROS_ERROR("From: checkModulesLineUp(module_1, module_2, debug)");
@@ -720,6 +753,48 @@ bool fileExists(std::string file_name, std::string folder_name, std::string file
     }
 }
 
+void savePlanner(std::string bag_name, planner& plans) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-08-05
+
+    PRUPOSE: The purpose of this function is to store the provided planner in a ROS bag with the
+             provided bag name. All bags will be stored within the "yumi_scripts" package in a folder
+             called "bags". A custom messages called PlannerMsg was created in order to store the 
+             appropriate data from the planner. The idea behind storing the planner structure is
+             that all data is first converted into a planner structure, and if the planner was
+             successfully create then this data can be stored and retrieved later for execution.
+             All information is stored within a topic called "yumi".
+
+    INSTRUCTIONS: Provide the bag name and the planner structure containing successfully created
+                  plans for the desired data. The function will create the bag with the topic name
+                  of "yumi".
+
+    NOTE: There is not error checking in this function since it is expected that all the relevent
+          information and requirements mentioned above are satisfied.
+*/  
+    // INITIALIZE VARIABLES
+    std::string bag_path = YUMI_SCRIPTS_DIRECTORY + "bags/" + bag_name + ".bag";
+    yumi_scripts::PlannerMsg planner_msg;
+
+    // CREATE ROSBAG
+    rosbag::Bag bag(bag_path, rosbag::bagmode::Write);
+
+    // CONSTRUCT PLANNER MESSAGE
+    planner_msg.group_name  = plans.group_name;
+    planner_msg.start_state = plans.plans[0].start_state_;
+    planner_msg.total_plans = plans.total_plans;
+    for (int plan = 0; plan < plans.total_plans; plan++) {
+        planner_msg.trajectory.push_back(plans.plans[plan].trajectory_);
+    }
+
+    // WRITE TO BAG
+    bag.write(YUMI_ROSBAG_TOPIC_NAME, ros::Time::now(), planner_msg);
+    bag.close();
+
+    ROS_INFO("Planner successfully saved for group %s.", plans.group_name.c_str());
+    ROS_INFO("Bag location: %s", bag_path.c_str());
+}
+
 /* ------------------------------------------------------------ */
 /* -------------- RAPID MODULE WRITING FUNCTIONS -------------- */
 /* ------------------------------------------------------------ */
@@ -759,24 +834,11 @@ bool renameModulePoses(RAPIDModuleData& module_1, RAPIDModuleData& module_1_new,
         // DETERMINE WHICH POSE NAMES WILL BE UPDATED ON THIS ITERATION
         if ((module_1_index == module_1.total_points) && (module_2_index == module_2.total_points)) {
             break;
-        } else if (module_1_index == module_1.total_points) {
-            module_1_index--;
-            if (module_2.pose_names[module_2_index].compare(0, 1, "s") == 0) {
-                ROS_ERROR("From: renameModulePoses(module_1, module_1_new, module_2, module_2_new, debug)");
-                ROS_WARN("This is due to some internal error from incorrect error checking with incoming data.");
-                return false;
-            } else {
-                module_2_only = true;
-            }
-        } else if (module_2_index == module_2.total_points) {
-            module_2_index--;
-            if (module_1.pose_names[module_1_index].compare(0, 1, "s") == 0) {
-                ROS_ERROR("From: renameModulePoses(module_1, module_1_new, module_2, module_2_new, debug)");
-                ROS_WARN("This is due to some internal error from incorrect error checking with incoming data.");
-                return false;
-            } else {
-                module_1_only = true;
-            }
+        } else if ((module_1_index == module_1.total_points) || (module_2_index == module_2.total_points)) {
+        /* If the modules are not lined up properly*/
+            ROS_ERROR("From: renameModulePoses(module_1, module_1_new, module_2, module_2_new, debug)");
+            ROS_WARN("This is due to some internal error from incorrect error checking with incoming data.");
+            return false;
         } else if (module_1.pose_names[module_1_index].compare(0, 1, "p") == 0) {
             if (module_2.pose_names[module_2_index].compare(0, 1, "p") == 0) {
                 modules_move_nosync = true;
@@ -810,19 +872,12 @@ bool renameModulePoses(RAPIDModuleData& module_1, RAPIDModuleData& module_1_new,
                         module_1_new.pose_names.push_back("CloseHand");
                         module_1_new.pose_configs.push_back(module_1.pose_configs[module_1_index]);
                     }
-                } else {
-                    if (module_1.pose_names[module_1_index].compare(0, 1, "p") == 0) {
-                        /* MODULE IS BAD, DON'T DO ANYTHING */
-                    }
                 }
             } else {
-                /* ADD POSSIBLE GRIPPER MOVEMENT ERROR */
                 if (modules_move_sync) {
                     if (!repeated_point_2) {
                         module_1_new.pose_names.push_back("s" + std::to_string(move_sync_index));
                         module_1_new.pose_configs.push_back(module_1.pose_configs[module_1_index]);
-                    } else {
-                        /* MODULE IS BAD, DON'T DO ANYTHING. MUSTVE NOT BEEN REORDERED BEFORE SENT */
                     }
                 } else {
                     module_1_new.pose_names.push_back("p" + std::to_string(move_index_1));
@@ -830,7 +885,6 @@ bool renameModulePoses(RAPIDModuleData& module_1, RAPIDModuleData& module_1_new,
                     move_index_1++;
                 }
             }
-            module_1_index++;
         } 
 
         if ((module_2_only) || (modules_move_nosync) || (modules_move_sync)) {
@@ -845,20 +899,13 @@ bool renameModulePoses(RAPIDModuleData& module_1, RAPIDModuleData& module_1_new,
                         module_2_new.pose_names.push_back("CloseHand");
                         module_2_new.pose_configs.push_back(module_2.pose_configs[module_2_index]);
                     }
-                } else {
-                    if (module_2.pose_names[module_2_index].compare(0, 1, "p") == 0) {
-                        /* MODULE IS BAD, DON'T DO ANYTHING */
-                    }
                 }
             } else {
-                /* ADD POSSIBLE GRIPPER MOVEMENT ERROR */
                 if (modules_move_sync) {
                     if (!repeated_point_1) {
                         module_2_new.pose_names.push_back("s" + std::to_string(move_sync_index));
                         module_2_new.pose_configs.push_back(module_2.pose_configs[module_2_index]);
                         move_sync_index++;
-                    } else {
-                        /* MODULE IS BAD, DON'T DO ANYTHING. MUSTVE NOT BEEN REORDERED BEFORE SENT */
                     }
                 } else {
                     module_2_new.pose_names.push_back("p" + std::to_string(move_index_2));
@@ -866,17 +913,40 @@ bool renameModulePoses(RAPIDModuleData& module_1, RAPIDModuleData& module_1_new,
                     move_index_2++;
                 }
             }
-            module_2_index++;
         }
+
+        module_1_index++;
+        module_2_index++;
 
         index++;
         if (debug) { 
+        /* The output lines differ by command to try to line up consecutive outputs which is the reasoning behind the multiple if statements */
+            std::string output_adjustment = "";
+            if (index < 10) {
+                output_adjustment = " ";
+            }
             if (module_1_only) {
-                ROS_INFO("(debug) Line: %d | Module 1: %s | Module 2: ---", index, module_1_new.pose_names.back().c_str());
+                if (module_1_new.pose_names.back().compare(0, 1, "O") == 0) {
+                    ROS_INFO("(debug) Line: %d%s | Module 1: %s  | Module 2: ---", index, output_adjustment.c_str(), module_1_new.pose_names.back().c_str());
+                } else if (module_1_new.pose_names.back().compare(0, 1, "C") == 0) {
+                    ROS_INFO("(debug) Line: %d%s | Module 1: %s | Module 2: ---", index, output_adjustment.c_str(), module_1_new.pose_names.back().c_str());
+                } else if (module_1_new.pose_names.back().length() < 3) {
+                    ROS_INFO("(debug) Line: %d%s | Module 1: %s        | Module 2: ---", index, output_adjustment.c_str(), module_1_new.pose_names.back().c_str());
+                } else {
+                    ROS_INFO("(debug) Line: %d%s | Module 1: %s       | Module 2: ---", index, output_adjustment.c_str(), module_1_new.pose_names.back().c_str());
+                }
             } else if (module_2_only) {
-                ROS_INFO("(debug) Line: %d | Module 1: --- | Module 2: %s", index, module_2_new.pose_names.back().c_str());
+                ROS_INFO("(debug) Line: %d%s | Module 1: ---      | Module 2: %s", index, output_adjustment.c_str(), module_2_new.pose_names.back().c_str());
             } else {
-                ROS_INFO("(debug) Line: %d | Module 1: %s | Module 2: %s", index, module_1_new.pose_names.back().c_str(), module_2_new.pose_names.back().c_str());
+                if (module_1_new.pose_names.back().compare(0, 1, "O") == 0) {
+                    ROS_INFO("(debug) Line: %d%s | Module 1: %s  | Module 2: %s", index, output_adjustment.c_str(), module_1_new.pose_names.back().c_str(), module_2_new.pose_names.back().c_str());
+                } else if (module_1_new.pose_names.back().compare(0, 1, "C") == 0) {
+                    ROS_INFO("(debug) Line: %d%s | Module 1: %s | Module 2: %s", index, output_adjustment.c_str(), module_1_new.pose_names.back().c_str(), module_2_new.pose_names.back().c_str());
+                } else if (module_1_new.pose_names.back().length() < 3) {
+                    ROS_INFO("(debug) Line: %d%s | Module 1: %s        | Module 2: %s", index, output_adjustment.c_str(), module_1_new.pose_names.back().c_str(), module_2_new.pose_names.back().c_str());
+                } else { 
+                    ROS_INFO("(debug) Line: %d%s | Module 1: %s       | Module 2: %s", index, output_adjustment.c_str(), module_1_new.pose_names.back().c_str(), module_2_new.pose_names.back().c_str());
+                }
             } 
         }
 
@@ -1051,12 +1121,9 @@ void writeToFile(std::string output_file_name, RAPIDModuleData& module, bool deb
         if (module.pose_names[line].compare(0, 1, "p") == 0) {
             output_file << "Move " << module.pose_names[line] << ";" << std::endl;
             if (debug) { ROS_INFO("(debug) Move %s;", module.pose_names[line].c_str()); }
-        } else if (module.pose_names[line].compare(0, 1, "C") == 0) {
+        } else if ((module.pose_names[line].compare(0, 1, "C") == 0) || (module.pose_names[line].compare(0, 1, "O") == 0)) {
             output_file << module.pose_names[line] << ";" << std::endl;
-            if (debug) { ROS_INFO("(debug) CloseHand;", module.pose_names[line].c_str()); }
-        } else if (module.pose_names[line].compare(0, 1, "O") == 0) {
-            output_file << module.pose_names[line] << ";" << std::endl;
-            if (debug) { ROS_INFO("(debug) OpenHand;", module.pose_names[line].c_str()); }
+            if (debug) { ROS_INFO("(debug) %s;", module.pose_names[line].c_str()); }
         } else {
             output_file << "MoveSync " << module.pose_names[line] << ";" << std::endl;
             if (debug) { ROS_INFO("(debug) MoveSync %s;", module.pose_names[line].c_str()); }
@@ -1107,7 +1174,10 @@ std::string getRobtargetOutputLine(std::string pose_name, poseConfig& pose_confi
     PURPOSE: The purpose of this function is to construct robtarget data according to the ABB
              convention and return the robtarget as a string. The appropriate unit conversions
              are also applied according to the unit conventions shown below. The ABB robtarget
-             conventionis also shown below.
+             conventionis also shown below. If one of the output values are less than 1e-5, then
+             by default those numbers will be outputted in scientific for using "e". ABB 
+             convention uses "E" instead of "e" for scientific notation, so this is also checked
+             before returning the output line.
 
     INSTRUCTIONS: The pose name and pose configuration data must be supplied. The returned
                   value is a string containing the robtarget definition.
@@ -1130,6 +1200,7 @@ std::string getRobtargetOutputLine(std::string pose_name, poseConfig& pose_confi
     const double PI      = 3.14159;
     const double rad2deg = 180.0/PI;
     const double m2mm    = 1000.0;
+    const int total_empty_values = 5;
 
     std::ostringstream output;
     std::string empty_value = "9E+09";
@@ -1140,17 +1211,124 @@ std::string getRobtargetOutputLine(std::string pose_name, poseConfig& pose_confi
     output << pose_config.pose.orientation.w << "," << pose_config.pose.orientation.x << "," << pose_config.pose.orientation.y << "," << pose_config.pose.orientation.z << "],[";
     output << pose_config.confdata[0] << "," << pose_config.confdata[1] << "," << pose_config.confdata[2] << "," << pose_config.confdata[3] << "],[";
     output << pose_config.external_axis_position*rad2deg;
-    for (int i = 0; i < 5; i++) { output << "," << empty_value; }
+    for (int i = 0; i < total_empty_values; i++) { output << "," << empty_value; }
     output << "]];";
 
-    if (debug) { ROS_INFO("(debug) %s", output.str().c_str()); }
+    // CONVERT ANY 'e' to 'E'
+    std::string output_string = output.str();
+    for (int i = 0; i < output_string.length(); i++) {
+        if (output_string.compare(i, 1, "e") == 0) {
+            output_string.replace(i, 1, "E");
+        }
+    }
 
-    return output.str();
+    if (debug) { ROS_INFO("(debug) %s", output_string.c_str()); }
+
+    return output_string;
 }
 
 /* ------------------------------------------------------------ */
 /* ------------- PLANNING AND EXECUTION FUNCTIONS ------------- */
 /* ------------------------------------------------------------ */
+trajectoryJoints fillJointTrajectory(planningInterface::MoveGroup& both_arms, std::vector<trajectoryJoints>& joint_trajectories, bool debug) {
+/*  PROGRAMMER: Frederick Wachter
+    DATE CREATED: 2016-08-26
+*/
+    ROS_INFO(">--------------------");
+
+    // INITIALIZE VARIABLES
+    trajectoryJoints joint_trajectory;
+    std::vector<double> init_joint_values_left, init_joint_values_right, init_joint_values, joint_values;
+    int total_joints_left, total_joints_right;
+
+    init_joint_values = both_arms.getCurrentJointValues();
+    init_joint_values_left  = std::vector<double>(&init_joint_values[0], &init_joint_values[total_joints_left]);
+    init_joint_values_right = std::vector<double>(&init_joint_values[total_joints_left], &init_joint_values[joint_trajectory.total_joints]);
+
+    joint_trajectory.group_name   = both_arms.getName();
+    joint_trajectory.total_joints = init_joint_values.size();
+
+    std::vector<std::string> joint_names = both_arms.getActiveJoints();
+    for (int joint = 7; joint < joint_trajectory.total_joints; joint++) {
+    /* Find the first joint in the right arm to calculate the total joints in the left and right arm */
+        if (joint_names[joint].compare("yumi_joint_1_r") == 0) {
+            total_joints_left  = joint;
+            total_joints_right = joint_trajectory.total_joints - total_joints_left;
+            break;
+        }
+    }
+
+    ROS_INFO("Filling joint trajectory.");
+
+    for (int trajectory = 0; trajectory < joint_trajectories.size(); trajectory++) {
+        trajectoryJoints current_joint_trajectory = joint_trajectories[trajectory];
+        if (current_joint_trajectory.group_name.compare("left_arm") == 0) {
+        /* If the current joint trajectory only contains joint values for the left arm */
+            std::vector<double> right_joint_values;
+
+            if (trajectory = 0) {
+            /* If the first trajectory is being stored, then use the current joint values for the right arm as the joint values in the trajectory */
+                right_joint_values = init_joint_values_right;
+            } else {
+            /* If this is not the first trajectory being stored, set the right joint values as the last trajectory point joint values corresponding 
+               to the right arm of the joint trajectory being constructed */
+                right_joint_values = std::vector<double>(&joint_trajectory.joints.back()[total_joints_left], &joint_trajectory.joints.back()[joint_trajectory.total_joints]);
+            }
+
+            for (int point = 0; point < current_joint_trajectory.total_points; point++) {
+                joint_values = current_joint_trajectory.joints[point];
+                for (int joint = 0; joint < total_joints_right; joint++) {
+                    joint_values.push_back(right_joint_values[joint]);
+                }
+                joint_trajectory.joints.push_back(joint_values);
+            }
+        } else if (current_joint_trajectory.group_name.compare("right_arm") == 0) {
+        /* If the current joint trajectory only contains joint values for the right arm */
+            std::vector<double> left_joint_values, right_joint_values;
+
+            if (trajectory = 0) {
+            /* If the first trajectory is being stored, then use the current joint values for the left arm as the joint values in the trajectory */
+                left_joint_values = init_joint_values_left;
+            } else {
+            /* If this is not the first trajectory being stored, set the left joint values as the last trajectory point joint values corresponding 
+               to the left arm of the joint trajectory being constructed */
+                left_joint_values = std::vector<double>(&joint_trajectory.joints.back()[0], &joint_trajectory.joints.back()[total_joints_left]);
+            }
+
+            for (int point = 0; point < current_joint_trajectory.total_points; point++) {
+                joint_values = left_joint_values;
+                right_joint_values = current_joint_trajectory.joints[point];
+                for (int joint = 0; joint < total_joints_right; joint++) {
+                    joint_values.push_back(right_joint_values[joint]);
+                }
+                joint_trajectory.joints.push_back(joint_values);
+            }
+        } else {
+        /* If the current joint trajectory contains joint values for both arms */
+            for (int point = 0; point < current_joint_trajectory.total_points; point++) {
+                joint_trajectory.joints.push_back(current_joint_trajectory.joints[point]);
+            }
+        }
+    }
+
+    joint_trajectory.total_points = joint_trajectory.joints.size();
+
+    if (debug) {
+        ROS_INFO("....................");
+        ROS_INFO("(debug) Displaying filled joint trajectory.");
+        for (int point = 0; point < joint_trajectory.total_points; point++) {
+            ROS_INFO("....................");
+            ROS_INFO("_____ (debug) Joint Trajectory Point %d Joint Values _____", point+1);
+            for (int joint = 0; joint < joint_trajectory.total_joints; joint++) {
+                ROS_INFO("%s joint value: %.5f", joint_names[joint].c_str(), joint_trajectory.joints[point][joint]);
+            }
+        }
+    }
+
+    ROS_INFO("Successfully filled joint trajectory.");
+    return joint_trajectory;
+}
+
 bool generatePlans(planner& plans, planningInterface::MoveGroup& group, trajectoryJoints& joint_trajectory, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-06-22
@@ -1240,6 +1418,7 @@ bool generatePlans(planner& plans, planningInterface::MoveGroup& group, trajecto
     return true;
 }
 
+
 bool executePlans(planningInterface::MoveGroup& group, planner& plans, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-06-22
@@ -1316,87 +1495,5 @@ bool executePlans(planningInterface::MoveGroup& group, planner& plans, bool debu
 
     return true;
 }
-
-
-
-
-// void savePlanner(std::string bag_name, planner& plans) {
-// /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
-//     DATE CREATED: 2016-08-05
-
-//     PRUPOSE: The purpose of this function is to store the provided planner in a ROS bag with the
-//              provided bag name. All bags will be stored within the "yumi_scripts" package in a folder
-//              called "bags". A custom messages called PlannerMsg was created in order to store the 
-//              appropriate data from the planner. The idea behind storing the planner structure is
-//              that all data is first converted into a planner structure, and if the planner was
-//              successfully create then this data can be stored and retrieved later for execution.
-//              All information is stored within a topic called "yumi".
-
-//     INSTRUCTIONS: Provide the bag name and the planner structure containing successfully created
-//                   plans for the desired data. The function will create the bag with the topic name
-//                   of "yumi".
-
-//     NOTE: There is not error checking in this function since it is expected that all the relevent
-//           information and requirements mentioned above are satisfied.
-// */  
-//     // INITIALIZE VARIABLES
-//     std::string bag_path = YUMI_SCRIPTS_DIRECTORY + "bags/" + bag_name + ".bag";
-//     yumi_scripts::PlannerMsg planner_msg;
-
-//     // CREATE ROSBAG
-//     rosbag::Bag bag(bag_path, rosbag::bagmode::Write);
-
-//     // CONSTRUCT PLANNER MESSAGE
-//     planner_msg.group_name  = plans.group_name;
-//     planner_msg.start_state = plans.plans[0].start_state_;
-//     planner_msg.total_plans = plans.total_plans;
-//     for (int plan = 0; plan < plans.total_plans; plan++) {
-//         planner_msg.trajectory.push_back(plans.plans[plan].trajectory_);
-//     }
-
-//     // WRITE TO BAG
-//     bag.write(YUMI_ROSBAG_TOPIC_NAME, ros::Time::now(), planner_msg);
-//     bag.close();
-
-//     ROS_INFO("Planner successfully saved for group %s.", plans.group_name.c_str());
-//     ROS_INFO("Bag location: %s", bag_path.c_str());
-// }
-
-
-// INITIALIZE IK SERVICES FOR EACH ARM
-// std::string end_effector_left    = "yumi_link_7_l";
-// std::string end_effector_right   = "yumi_link_7_r";
-// double search_discretization     = 0.001;
-// boost::shared_ptr<pluginlib::ClassLoader<kinematics::KinematicsBase>> kinematics_loader;
-// kinematics::KinematicsBasePtr ik_left;
-// kinematics::KinematicsBasePtr ik_right;
-
-// kinematics_loader.reset(new pluginlib::ClassLoader<kinematics::KinematicsBase>("moveit_core", "kinematics::KinematicsBase"));
-// std::string plugin_name = "kdl_kinematics_plugin/KDLKinematicsPlugin";
-// try {
-//     ik_left  = kinematics_loader->createInstance(plugin_name);
-//     ik_right = kinematics_loader->createInstance(plugin_name);
-// } catch (pluginlib::PluginlibException& ex) {
-//     ROS_ERROR("The plugin failed to load. Error: %s", ex.what());
-//     return 1;
-// }
-
-// bool success_ik_left, success_ik_right; 
-// success_ik_left  = ik_left->initialize("/robot_description", "left_arm_ik", pose_reference_frame, end_effector_left, search_discretization);
-// success_ik_right = ik_right->initialize("/robot_description", "right_arm_ik", pose_reference_frame, end_effector_right, search_discretization);
-
-// if ((success_ik_left) && (success_ik_right)) {
-//     ROS_INFO("Successfully initialized IK services for the left and right arm.");
-// } else {
-//     if ((!success_ik_left) && (!success_ik_right)) {
-//         ROS_ERROR("Failed to initialize IK for left and right arm.");
-//     } else if (!success_ik_left) {
-//         ROS_ERROR("Failed to initialize IK for left arm.");
-//     } else {
-//         ROS_ERROR("Failed to initialize IK for right arm.");
-//     }
-//     ROS_ERROR("Program existing.");
-//     return 1;
-// }
 
 
