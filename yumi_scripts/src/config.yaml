@@ -1,8 +1,5 @@
 yumi_node:
   debug: false
-  load_yumi: true
-  load_rviz: false
-  two_grippers: true
 yumi_interface:
   debug: true
   bounded_solution: true

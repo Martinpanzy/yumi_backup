@@ -1,0 +1,10 @@
+<launch>
+
+  <!-- Load Parameters to Parameter Server -->
+  <rosparam command="load" ns="yumi" file="$(find yumi_scripts)/src/config.yaml" /> <!-- load the configuration file parameters -->
+  <rosparam param="/yumi/yumi_scripts_location" subst_value="True">$(find yumi_scripts)</rosparam> <!-- load location of yumi_scripts package -->
+
+  <!-- Load YuMi Node -->
+  <node pkg="yumi_scripts" type="yumi_node" name="yumi_node" output="screen"/> <!-- initiate the YuMi node -->
+
+</launch>

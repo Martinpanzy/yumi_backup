@@ -85,8 +85,8 @@ struct planner {
 // GLOBAL VARIABLE
 const double GRIPPER_OPEN_POSITION = 0.024; // gripper open position (m)
 const double GRIPPER_CLOSED_POSITION = 0.0; // gripper closed position (m)
-const std::string YUMI_SCRIPTS_DIRECTORY = "/home/yumi/yumi_ws/src/yumi/yumi_scripts/";
 const std::string YUMI_ROSBAG_TOPIC_NAME = "yumi";
+std::string YUMI_SCRIPTS_DIRECTORY;
 
 bool module_lock(false), joint_config_lock(false), pose_config_lock(false), command_lock(false);
 bool new_module(false), new_joint_config(false), new_pose_config(false), new_command(false);
@@ -156,6 +156,9 @@ int main(int argc, char **argv) {
         ROS_ERROR("Not able to get debug parameter from parameter server.");
         ROS_WARN("The configuration parameters must have not been loaded before the YuMi node was started.");
         return 0;
+    } else {
+        ros::param::get("/yumi/yumi_scripts_location", YUMI_SCRIPTS_DIRECTORY);
+        YUMI_SCRIPTS_DIRECTORY = YUMI_SCRIPTS_DIRECTORY + "/";
     }
 
     // INITIALIZE MOVE GROUPS FOR THE LEFT ARM, RIGHT ARM, AND BOTH ARMS
