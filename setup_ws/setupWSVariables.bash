@@ -21,6 +21,8 @@ echo "alias yumi_demo='bash ${1}/setup_ws/yumi_demo.bash'" >> ~/.bashrc # allow 
 echo "alias yumi_server='bash ${1}/setup_ws/yumi_server.bash'" >> ~/.bashrc # run the YuMi server from command line to send path commands to the real controller
 echo "alias yumi_lead='rosrun yumi_scripts lead_through'" >> ~/.bashrc # run the lead through script from command line for generating RAPID modules 
 echo "alias yumi_moveit='rosrun yumi_scripts moveit_interface'" >> ~/.bashrc # run the MoveIt! interface script from command line for interfacing MoveIt! with YuMi through command line
+echo "alias yumi_node='roslaunch yumi_scripts yumi_node.launch'" >> ~/.bashrc # execute the node used to manipulate YuMi
+echo "alias yumi_interface='rosrun yumi_scripts yumi_interface'" >> ~/.bashrc # run the script that interfaces with the YuMi node
 echo "" >> ~/.bashrc # add in blank line underneath addition
 
 source ~/.bashrc # source bashrc to finalize changes for current terminal window

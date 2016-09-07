@@ -71,6 +71,7 @@ struct RAPIDModuleData {
 struct trajectoryJoints {
     std::string group_name;
     std::string intended_group;
+    std::vector<int> failed_conversions;
     std::vector<std::vector<double>> joints;
     int total_joints;
     int total_points;
@@ -1236,6 +1237,19 @@ std::string getRobtargetOutputLine(std::string pose_name, poseConfig& pose_confi
 trajectoryJoints fillJointTrajectory(planningInterface::MoveGroup& both_arms, std::vector<trajectoryJoints>& joint_trajectories, bool debug) {
 /*  PROGRAMMER: Frederick Wachter
     DATE CREATED: 2016-08-26
+
+    PURPOSE: The purpose of this function is to take a set of joint trajectories and convert them into a single joint trajectory.
+             This function will also fill in joint values for one of the arms in the case that the current joint trajectory was
+             originally only meant for one arm. Since the planner fuction is set to only create plans for both arms, if the current
+             joint trajectory is only meant for one arm, then the other arm will be filled with either the most recent joint values
+             or the current joint values of the robot depending on whether there exists a set of recent joint values.
+
+    INSTRUCTIONS: This function requires that the move group for both arms to be supplied, along with the joint trajectories that
+                  are to be filled. This function will then iterate through each joint trajectory, and if a joint trajectory was
+                  intended only for one arm, then the joint values for the other arm will be added in. If the first joint trajectory
+                  was a joint trajectory involving only one arm, then the current state of the other arm will be used as the joint
+                  values for the other arm. Otherwise, the previous joint values stored in the final joint trajectory will be used 
+                  for the other arm.
 */
     ROS_INFO(">--------------------");
 
@@ -1245,8 +1259,6 @@ trajectoryJoints fillJointTrajectory(planningInterface::MoveGroup& both_arms, st
     int total_joints_left, total_joints_right;
 
     init_joint_values = both_arms.getCurrentJointValues();
-    init_joint_values_left  = std::vector<double>(&init_joint_values[0], &init_joint_values[total_joints_left]);
-    init_joint_values_right = std::vector<double>(&init_joint_values[total_joints_left], &init_joint_values[joint_trajectory.total_joints]);
 
     joint_trajectory.group_name   = both_arms.getName();
     joint_trajectory.total_joints = init_joint_values.size();
@@ -1260,6 +1272,9 @@ trajectoryJoints fillJointTrajectory(planningInterface::MoveGroup& both_arms, st
             break;
         }
     }
+    
+    init_joint_values_left  = std::vector<double>(&init_joint_values[0], &init_joint_values[total_joints_left]);
+    init_joint_values_right = std::vector<double>(&init_joint_values[total_joints_left], &init_joint_values[joint_trajectory.total_joints]);
 
     ROS_INFO("Filling joint trajectory.");
 

@@ -72,6 +72,7 @@ struct RAPIDModuleData {
 struct trajectoryJoints {
     std::string group_name;
     std::string intended_group;
+    std::vector<int> failed_conversions;
     std::vector<std::vector<double>> joints;
     int total_joints;
     int total_points;

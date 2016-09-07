@@ -2,8 +2,9 @@
 
   <!-- initialize arguments -->
   <arg name="debug" default="false"/> <!-- by default, we are not in debug mode -->
-  <arg name="rviz" default="false"/>
+  <arg name="rviz" default="false"/> <!-- argument to load rviz or not -->
   <arg name="two_grippers" default="false"/> <!-- argument to load either two grippers or one gripper -->
+  <arg name="joint_state_pub" default="true"/> <!-- argument to execute joint state publisher node or not -->
   <arg name="enable_cameras" default="false"/> <!-- argument to enable/disable cameras -->
   <arg name="enable_depth" default="false"/> <!-- argument to enable/disable depth on camera -->
   <arg name="enable_ground_truth" default="false"/> <!-- argument to enable/disable ground truth for cameras -->
@@ -20,10 +21,12 @@
   <!-- If needed, broadcast static tf for robot root --> <!-- What is this? | Date: 2016-06-22 -->  
 
   <!-- We do not have a robot connected, so publish fake joint states -->
-  <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
-    <param name="/use_gui" value="false"/>
-    <rosparam param="/source_list">[/move_group/fake_controller_joint_states]</rosparam>
-  </node>
+  <group if="$(arg joint_state_pub)">
+    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
+      <param name="/use_gui" value="false"/>
+      <rosparam param="/source_list">[/move_group/fake_controller_joint_states]</rosparam>
+    </node>
+  </group>
 
   <!-- Given the published joint states, publish tf for the robot links -->
   <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="true" output="screen" />

@@ -1,0 +1,9 @@
+<launch>
+
+  <!-- Load Parameters to Parameter Server -->
+  <rosparam command="load" ns="yumi" file="$(find yumi_scripts)/src/config.yaml" /> <!-- load the configuration file parameters -->
+
+  <!-- Start YuMi Leap Interface -->
+  <node pkg="yumi_scripts" type="leap_interface" name="leap_interface" output="screen"/> <!-- initiate the YuMi node -->
+
+</launch>

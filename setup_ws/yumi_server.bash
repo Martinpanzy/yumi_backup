@@ -46,6 +46,7 @@ for argument in "$@"; do # for all provided arguments
 	else # if the argument is not recognized
 		echo "Argument $currentArgument is not recognized." # notify the user that the current argument is not recognized
 		flag_argError=true; # indicate that an argument error has occurred
+		((total_arguments++)); # increment the passed argument count
 		break; # break from the loop
 	fi
 done

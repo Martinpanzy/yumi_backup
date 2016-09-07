@@ -1,6 +1,6 @@
 string group_name
-JointMsg[] joint_trajectory
 ModuleDataMsg module_left
 ModuleDataMsg module_right
+JointMsg[] joint_trajectory
 uint32 total_joints
 uint32 total_points

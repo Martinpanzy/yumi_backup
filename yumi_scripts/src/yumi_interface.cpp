@@ -81,6 +81,7 @@ struct trajectoryPoses {
 struct trajectoryJoints {
     std::string group_name;
     std::string intended_group;
+    std::vector<int> failed_conversions;
     std::vector<std::vector<double>> joints;
     int total_joints;
     int total_points;
@@ -109,15 +110,13 @@ double toc() { // similar to MATLAB version of toc
 // FUNCTION PROTOTYPES
 /* File Configuration Functions */
 bool getConfigParameters(bool&, bool&, std::string&, std::string&, std::string&, std::string&);
-void updateConfigParameter(ros::NodeHandle&, std::string, std::string, std::string, bool debug = false);
-void updateConfigFile(YAML::Node&);
 
 /* Configuration Functions */
 poseConfig getCurrentPoseConfig(planningInterface::MoveGroup&, bool debug = false);
 poseConfig getAxisConfigurations(planningInterface::MoveGroup&, bool debug = false);
 
 /* Message Conversion Functions */
-yumi_scripts::ModuleMsg convertToModuleMsg(RAPIDModuleData&, RAPIDModuleData&, trajectoryJoints&, bool debug = false);
+bool convertToModuleMsg(yumi_scripts::ModuleMsg&, RAPIDModuleData&, RAPIDModuleData&, trajectoryJoints&, bool debug = false);
 
 /* File Checking and ROS Bag Functions */
 bool fileExists(std::string, std::string, std::string);
@@ -129,7 +128,7 @@ poseConfig getRobtargetData(std::string, bool debug = false);
 trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData&, bool debug = false);
 trajectoryPoses convertModuleToPoseTrajectory(RAPIDModuleData&, RAPIDModuleData&, bool debug = false);
 trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveGroup&, trajectoryPoses&, kinematics::KinematicsBasePtr&, kinematics::KinematicsBasePtr&, const bool, bool debug = false);
-bool convertPoseConfigToJointTrajectory(trajectoryJoints&, kinematics::KinematicsBasePtr&, std::vector<poseConfig>&, const bool, bool debug = false, std::vector<int>& failed_ik_index = -1);
+bool convertPoseConfigToJointTrajectory(trajectoryJoints&, kinematics::KinematicsBasePtr&, std::vector<poseConfig>&, const bool, bool debug = false);
 bool parseCFX(int&, int&, int&, int&, bool debug = false);
 bool isClose(poseConfig&, poseConfig&, bool debug = false);
 
@@ -282,11 +281,9 @@ int main(int argc, char **argv) {
             if (inputs[1].compare("on") == 0) {
             /* If the user would like to turn debug mode on */
                 debug = true;
-                updateConfigParameter(node_handle, NODE_NAME, "debug", "true", debug);
             } else if (inputs[1].compare("off") == 0) {
             /* If the user would like to turn debug mode off */
                 debug = false;
-                updateConfigParameter(node_handle, NODE_NAME, "debug", "false", debug);
             } else {
             /* If the agument is not recognized */
                 ROS_ERROR("Argument not recognized.");
@@ -305,11 +302,9 @@ int main(int argc, char **argv) {
             if (inputs[1].compare("on") == 0) {
             /* If the user would like to have the IK solutions bounded according to the axis configuration values in the module(s) */
                 bounds = true;
-                updateConfigParameter(node_handle, NODE_NAME, "bounded_solution", "true", debug);
             } else if (inputs[1].compare("off") == 0) {
             /* If the user would not like to have bounded IK solutions */
                 bounds = false;
-                updateConfigParameter(node_handle, NODE_NAME, "bounded_solution", "false", debug);
             } else {
             /* If the agument is not recognized */
                 ROS_ERROR("Argument not recognized.");
@@ -340,7 +335,6 @@ int main(int argc, char **argv) {
                 /* If the provided file name for the module for the left arm exists */
                     module_name_left = inputs[2];
                     ROS_INFO("Left arm module file name: %s", module_name_left.c_str());
-                    updateConfigParameter(node_handle, NODE_NAME, "module_name_left", module_name_left, debug);
                 } else {
                     module_name_left = "";
                     ROS_ERROR("File could not be found, please check inputted file name.");
@@ -351,7 +345,6 @@ int main(int argc, char **argv) {
                 /* If the provided file name for the module for the right arm exists */
                     module_name_right = inputs[2];
                     ROS_INFO("Right arm module file name: %s", module_name_right.c_str());
-                    updateConfigParameter(node_handle, NODE_NAME, "module_name_right", module_name_right, debug);
                 } else {
                     module_name_right = "";
                     ROS_ERROR("File could not be found, please check inputted file name.");
@@ -366,8 +359,6 @@ int main(int argc, char **argv) {
                     module_name_right = inputs[3];
                     ROS_INFO(" Left arm module file name: %s", module_name_left.c_str());
                     ROS_INFO("Right arm module file name: %s", module_name_right.c_str());
-                    updateConfigParameter(node_handle, NODE_NAME, "module_name_left", module_name_left, debug);
-                    updateConfigParameter(node_handle, NODE_NAME, "module_name_right", module_name_right, debug);
                 } else {
                     module_name_left  = "";
                     module_name_right = "";
@@ -425,15 +416,11 @@ int main(int argc, char **argv) {
 
                 if (inputs[1].compare("left") == 0) {
                     end_effector_left = inputs[2];
-                    updateConfigParameter(node_handle, NODE_NAME, "end_effector_left", end_effector_left, debug);
                 } else if (inputs[1].compare("right") == 0) {
                     end_effector_right = inputs[2];
-                    updateConfigParameter(node_handle, NODE_NAME, "end_effector_right", end_effector_right, debug);
                 } else {
                     end_effector_left  = inputs[2];
                     end_effector_right = inputs[3]; 
-                    updateConfigParameter(node_handle, NODE_NAME, "end_effector_left", end_effector_left, debug);
-                    updateConfigParameter(node_handle, NODE_NAME, "end_effector_right", end_effector_right, debug);
                 }
             } else {
                 if ((!success_ik_left) && (!success_ik_right)) {
@@ -607,15 +594,17 @@ int main(int argc, char **argv) {
                         continue;
                     }
 
-                    yumi_scripts::ModuleMsg module_msg = convertToModuleMsg(module_left, module_right, joint_trajectory, debug);
+                    yumi_scripts::ModuleMsg module_msg;
+                    bool success = convertToModuleMsg(module_msg, module_left, module_right, joint_trajectory, debug);
 
-                    /* ---------------------------------------------------------------------------------------------------------------------------------- */
-                    /* ===== NEED TO FIX IN CASE DEBUG IS ON AND IK FAILS FOR A POINT, DON'T STORE CORRESPONDING POSE INTO THE JOINT TRAJECTORY MSG ===== */
-                    /* ---------------------------------------------------------------------------------------------------------------------------------- */
-
-                    module_pub.publish(module_msg);
                     ROS_INFO(">--------------------");
-                    ROS_INFO("Sent module for group %s with %d trajectory points to YuMi node.", module_msg.group_name.c_str(), module_msg.total_points);
+                    if (success) {
+                        module_pub.publish(module_msg);
+                        ROS_INFO("Sent module for group %s with %d trajectory points to YuMi node.", module_msg.group_name.c_str(), module_msg.total_points);
+                    } else {
+                        ROS_INFO("Did not send module due to error.");
+                    }
+                    
                 } else {
                 /* If the user did not indicate whether to send the left, right, or both modules */
                     ROS_ERROR("Did not specify which module to send.");
@@ -664,14 +653,24 @@ int main(int argc, char **argv) {
 bool getConfigParameters(bool& debug, bool& bounds, std::string& module_name_left, std::string& module_name_right, std::string& end_effector_left, std::string& end_effector_right) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-08-25
+
+    PURPOSE: The purpose of this function is to get al the configuration parameter that are located in the ROS parameter server
+             that are used in this script.
+
+    INSTRUCTIONS: Provide all the variables that will be used to store the configruations parameters from the ROS parameter server.
+                  If debug is set to true, then the user will be notified of the values for all the configuration parameters.
 */
     // INITIALIZE VARIABLES
     bool parameters_exist;
 
     // GET CONFIGURATION PARAMETERS FROM PARAMETER SERVER
-    parameters_exist = ((ros::param::get("/yumi/yumi_interface/debug", debug)) && (ros::param::get("/yumi/yumi_interface/bounded_solution", bounds)));
-    parameters_exist = ((ros::param::get("/yumi/yumi_interface/module_name_left", module_name_left)) && (ros::param::get("/yumi/yumi_interface/module_name_right", module_name_right)) && (parameters_exist));
-    parameters_exist = ((ros::param::get("/yumi/yumi_interface/end_effector_left", end_effector_left)) && (ros::param::get("/yumi/yumi_interface/end_effector_right", end_effector_right)) && (parameters_exist));
+    parameters_exist = ((ros::param::get("/yumi/yumi_interface/debug", debug)) && 
+                        (ros::param::get("/yumi/yumi_interface/bounded_solution", bounds)) && 
+                        (ros::param::get("/yumi/yumi_interface/module_name_left", module_name_left)) && 
+                        (ros::param::get("/yumi/yumi_interface/module_name_right", module_name_right)) && 
+                        (ros::param::get("/yumi/yumi_interface/end_effector_left", end_effector_left)) && 
+                        (ros::param::get("/yumi/yumi_interface/end_effector_right", end_effector_right)) && 
+                        (ros::param::get("/yumi/yumi_scripts_location", YUMI_SCRIPTS_DIRECTORY)));
 
     if ((debug) && (parameters_exist)) {
         ROS_INFO("......................");
@@ -686,77 +685,9 @@ bool getConfigParameters(bool& debug, bool& bounds, std::string& module_name_lef
         ROS_INFO("......................");
     }
 
-    ros::param::get("/yumi/yumi_scripts_location", YUMI_SCRIPTS_DIRECTORY);
     YUMI_SCRIPTS_DIRECTORY = YUMI_SCRIPTS_DIRECTORY + "/";
 
     return parameters_exist;
-}
-
-void updateConfigParameter(ros::NodeHandle& node_handle, std::string group, std::string name, std::string value, bool debug) {
-/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
-    DATE CREATED: 2016-08-25
-*/
-    if (debug) {
-        ROS_INFO("....................");
-        ROS_INFO("(debug) Updating parameter \"%s\" to: %s", name.c_str(), value.c_str());
-    }
-
-    // GET CONFIG FILE PARAMETERS, UPDATE DESIRED PARAMETERS, THEN REWRITE FILE
-    YAML::Node config = YAML::LoadFile(YUMI_SCRIPTS_DIRECTORY + "src/config.yaml");
-    config[group][name] = value;
-    updateConfigFile(config);
-
-    if (value.compare("true") == 0) {
-        node_handle.setParam(group + "/" + name, true);
-    } else if (value.compare("false") == 0) {
-        node_handle.setParam(group + "/" + name, false);
-    } else {
-        node_handle.setParam(group + "/" + name, value);
-    }
-
-    if (debug) { 
-        ROS_INFO("(debug) Updated parameter in configuration file and parameter server"); 
-        ROS_INFO("....................");
-    }
-}
-
-void updateConfigFile(YAML::Node& config) {
-/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
-    DATE CREATED: 2016-08-25
-*/
-    YAML::Emitter output;
-
-    output << YAML::BeginMap;
-    output << YAML::Key << "yumi_node";
-    output << YAML::Value << YAML::BeginMap;
-        output << YAML::Key << "debug";
-        output << YAML::Value << config["yumi_node"]["debug"];
-        output << YAML::Key << "load_yumi";
-        output << YAML::Value << config["yumi_node"]["load_yumi"];
-        output << YAML::Key << "load_rviz";
-        output << YAML::Value << config["yumi_node"]["load_rviz"];
-        output << YAML::Key << "two_grippers";
-        output << YAML::Value << config["yumi_node"]["two_grippers"];
-        output << YAML::EndMap;
-    output << YAML::Key << "yumi_interface";
-    output << YAML::Value << YAML::BeginMap;
-        output << YAML::Key << "debug";
-        output << YAML::Value << config["yumi_interface"]["debug"];
-        output << YAML::Key << "bounded_solution";
-        output << YAML::Value << config["yumi_interface"]["bounded_solution"];
-        output << YAML::Key << "module_name_left";
-        output << YAML::Value << config["yumi_interface"]["module_name_left"];
-        output << YAML::Key << "module_name_right";
-        output << YAML::Value << config["yumi_interface"]["module_name_right"];
-        output << YAML::Key << "end_effector_left";
-        output << YAML::Value << config["yumi_interface"]["end_effector_left"];
-        output << YAML::Key << "end_effector_right";
-        output << YAML::Value << config["yumi_interface"]["end_effector_right"];
-        output << YAML::EndMap;
-    output << YAML::EndMap;
-
-    std::ofstream output_file(YUMI_SCRIPTS_DIRECTORY + "src/config.yaml"); 
-    output_file << output.c_str();
 }
 
 /* ------------------------------------------------------------ */
@@ -904,20 +835,62 @@ poseConfig getAxisConfigurations(planningInterface::MoveGroup& group, bool debug
 /* --------------- MESSAGE CONVERSION FUNCTIONS --------------- */
 /* ------------------------------------------------------------ */
 
-yumi_scripts::ModuleMsg convertToModuleMsg(RAPIDModuleData& module_left, RAPIDModuleData& module_right, trajectoryJoints& joint_trajectory, bool debug) {
+bool convertToModuleMsg(yumi_scripts::ModuleMsg& module_msg, RAPIDModuleData& module_left, RAPIDModuleData& module_right, trajectoryJoints& joint_trajectory, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-08-22
+
+    PRUPOSE: The purpose of this function is to convert modules for the left and right arm, along with its associated joint 
+             trajectory into a ROS message to be send to the YuMi node. 
+
+    INSTRUCTIONS: This function requires two modules to be supplied and its associated joint trajectory. The left module must
+                  be supplied first, followed by the right module, then the assiated joint trajectory. If the joint trajectory
+                  is only meant for one of the modules, then the other module should be supplied as an empty RAPID module
+                  structure. If debug is set to true, then the user will be notified of which groups data (left arm, right arm, 
+                  or both arms) is being stored into the module message to be sent to the YuMi node and when the conversion to 
+                  a module message has finished, 
+
+
+    -------------------- OTHER INFORMATION --------------------
+
+    ROS MESSAGES USED:
+
+    ModulesMsg.msg
+      - group_name > string
+      - joint_trajectory[] > vector<JointMsg>
+      - module_left > ModuleDataMsg
+      - module_right > ModuleDataMsg
+      - total_joints > int
+      - total_points > int
+
+    ModuleDataMsg.msg
+      - group_name > string *
+      - pose_names[] > vector<string>
+      - pose_configs[] > vector<PoseConfigMsg>
+      - total_points > int
+
+    PoseConfigMsg.msg
+      - group_name > string *
+      - pose > geometry_msgs/Pose
+      - confdata[] > vector<int>
+      - external_axis_position > double
+      - gripper_attached > bool
+      - gripper_position > double
+
+    JointMsg.msg
+      - joint_values[] > vector<double>
+
+    * data point not used
+
 */
-    ROS_INFO(">--------------------");
+    if (debug) { ROS_INFO(">--------------------"); }
 
     // INITIALIZE VARIABLES
     yumi_scripts::JointMsg joint_msg;
     yumi_scripts::PoseConfigMsg pose_config_msg;
-    yumi_scripts::ModuleMsg module_msg;
     bool store_left_module_data  = ((joint_trajectory.group_name.compare("left_arm") == 0) || (joint_trajectory.group_name.compare("both_arms") == 0));
     bool store_right_module_data = ((joint_trajectory.group_name.compare("right_arm") == 0) || (joint_trajectory.group_name.compare("both_arms") == 0));
     
-    ROS_INFO("Converting module(s) and joint trajectory to module message for group: %s.", joint_trajectory.group_name.c_str());
+    if (debug) { ROS_INFO("Converting module(s) and joint trajectory to module message for group: %s.", joint_trajectory.group_name.c_str()); }
 
     // TRANSFER DATA FROM MODULE(S) AND JOINT TRAJECTORY TO MODULE MESSAGE
     module_msg.group_name   = joint_trajectory.group_name;
@@ -926,22 +899,39 @@ yumi_scripts::ModuleMsg convertToModuleMsg(RAPIDModuleData& module_left, RAPIDMo
 
     if (store_left_module_data) {
     /* If the group the joint trajectory is intended for the left arm or both arms, store non-vector data to module msg */
-        module_msg.module_left.pose_names       = module_left.pose_names;
-        module_msg.module_left.total_points     = module_left.total_points;
+        if (module_left.group_name.compare("left_arm") != 0) {
+            ROS_ERROR("From: convertToModuleMsg(module_left, module_right, joint_trajectory, debug)");
+            ROS_ERROR("The first inputted module structure was not meant for the left arm.");
+            ROS_WARN("Ensure that the first inputted module into this function is meant for the left arm");
+            return false;
+        }
         module_msg.module_left.gripper_attached = module_left.gripper_attached;
     } 
     if (store_right_module_data) {
     /* If the group the joint trajectory is intended for the right arm or both arms, store non-vector data to module msg */
-        module_msg.module_right.pose_names       = module_right.pose_names;
-        module_msg.module_right.total_points     = module_right.total_points;
+        if (module_right.group_name.compare("right_arm") != 0) {
+            ROS_ERROR("From: convertToModuleMsg(module_left, module_right, joint_trajectory, debug)");
+            ROS_ERROR("The second inputted module structure was not meant for the right arm.");
+            ROS_WARN("Ensure that the second inputted module into this function is meant for the right arm");
+            return false;
+        }
         module_msg.module_right.gripper_attached = module_right.gripper_attached;
     }
 
+    bool skip_point = false;
+    int failed_conversion_index = 0;
     for (int point = 0; point < joint_trajectory.total_points; point++) {
         joint_msg.joint_values = joint_trajectory.joints[point];
         module_msg.joint_trajectory.push_back(joint_msg);
 
-        if (store_left_module_data) {
+        skip_point = ((joint_trajectory.failed_conversions.size() > 0) && (point == joint_trajectory.failed_conversions[failed_conversion_index]));
+        /* If there were failed conversions from pose to joint trajectory and if the current point is one of those points that
+           failed the conversion, then don't store the point since it was not included in the joint trajectory. */
+
+        if ((store_left_module_data) && (!skip_point)) {
+        /* If the left module data is being sent and the current pose trajectory point did not fail during its pose to joint conversion for the left arm */
+            module_msg.module_left.pose_names.push_back(module_left.pose_names[point]);
+
             pose_config_msg.pose     = module_left.pose_configs[point].pose;
             pose_config_msg.confdata = module_left.pose_configs[point].confdata;
             pose_config_msg.external_axis_position = module_left.pose_configs[point].external_axis_position;
@@ -950,7 +940,10 @@ yumi_scripts::ModuleMsg convertToModuleMsg(RAPIDModuleData& module_left, RAPIDMo
             }
             module_msg.module_left.pose_configs.push_back(pose_config_msg);
         }
-        if (store_right_module_data) {
+        if ((store_right_module_data) && (!skip_point)) {
+        /* If the right module data is being sent and the current pose trajectory point did not fail during its pose to joint conversion for the right arm */
+            module_msg.module_right.pose_names.push_back(module_right.pose_names[point]);
+
             pose_config_msg.pose     = module_right.pose_configs[point].pose;
             pose_config_msg.confdata = module_right.pose_configs[point].confdata;
             pose_config_msg.external_axis_position = module_right.pose_configs[point].external_axis_position;
@@ -958,12 +951,17 @@ yumi_scripts::ModuleMsg convertToModuleMsg(RAPIDModuleData& module_left, RAPIDMo
                 pose_config_msg.gripper_position = module_right.pose_configs[point].gripper_position;
             }
             module_msg.module_right.pose_configs.push_back(pose_config_msg);
+        } else {
+            failed_conversion_index++;
         }
     }
 
-    ROS_INFO("Successfully converted module(s) and joint trajectory to module message.");
+    module_msg.module_left.total_points  = module_msg.module_left.pose_names.size();
+    module_msg.module_right.total_points = module_msg.module_right.pose_names.size();
 
-    return module_msg;
+    if (debug) { ROS_INFO("Successfully converted module(s) and joint trajectory to module message."); }
+
+    return true;
 }
 
 /* ------------------------------------------------------------ */
@@ -1764,8 +1762,6 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
             std::vector<std::string> joint_names = group.getActiveJoints();
             std::vector<double>     joint_values = group.getCurrentJointValues();
 
-            std::vector<int> failed_ik_left_index, failed_ik_right_index;
-
             if (debug) {
                 ROS_INFO("....................");
                 ROS_INFO("(debug) Solving IK for left arm");
@@ -1775,7 +1771,7 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
                     ROS_INFO("(debug) Not bounding solutions to IK solver");
                 }
             }
-            success_left  = convertPoseConfigToJointTrajectory(joint_trajectory_left, ik_left, pose_trajectory.pose_configs_left, BOUNDED_SOLUTION, debug, failed_ik_left_index);
+            success_left  = convertPoseConfigToJointTrajectory(joint_trajectory_left, ik_left, pose_trajectory.pose_configs_left, BOUNDED_SOLUTION, debug);
             if (debug) {
                 ROS_INFO("....................");
                 ROS_INFO("(debug) Solving IK for right arm");
@@ -1785,7 +1781,7 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
                     ROS_INFO("(debug) Not bounding solutions to IK solver");
                 }
             }
-            success_right = convertPoseConfigToJointTrajectory(joint_trajectory_right, ik_right, pose_trajectory.pose_configs_right, BOUNDED_SOLUTION, debug, failed_ik_right_index);
+            success_right = convertPoseConfigToJointTrajectory(joint_trajectory_right, ik_right, pose_trajectory.pose_configs_right, BOUNDED_SOLUTION, debug);
 
             if (joint_trajectory_left.total_points != joint_trajectory_right.total_points) {
                 ROS_INFO("....................");
@@ -1794,20 +1790,30 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
                 ROS_WARN("Left joint trajectory size: %d | Right joint trajectory size: %d", joint_trajectory_left.total_points, joint_trajectory_right.total_points);
                 success_left = success_right = success = false;
             } else if (debug) {
+            /* If the pose configuration to joint trajectory conversion function was run in debug mode, and check if any conversions 
+               failed for the left or right arm. It is acceptable if the same trajectory point conversion failed for the left and 
+               right arm, otherwise the joint trajectory cannot be lined up properly and thus the final joint trajectory will not be
+               constructed. */
                 bool same_poses_removed = true;
-                for (int removed_pose = 0; removed_pose < failed_ik_left_index.size(); removed_pose++) {
-                    if (failed_ik_left_index[removed_pose] != failed_ik_right_index[removed_pose]) {
+
+                int total_failures = joint_trajectory_left.failed_conversions.size();
+                for (int failure = 0; failure < total_failures; failure++) {
+                    if (joint_trajectory_left.failed_conversions[failure] != joint_trajectory_left.failed_conversions[failure]) {
                         same_poses_removed = false;
                         break;
                     }
                 }
 
                 if (!same_poses_removed) {
+                /* If a pose to joint conversion failed on either arm and the other arm did not fail, then notify the user that the
+                   final joint trajectory cannot be constructed. */
                     ROS_INFO("....................");
                     ROS_ERROR("From: convertPoseTrajectoryToJointTrajectory(group, pose_trajectory, ik_left, ik_right, debug)");
                     ROS_ERROR("IK calculation failed on for different poses on each arm.");
                     ROS_WARN("Poses are not aligned between arms anymore, cannot create proper joint trajectory.");
                     success_left = success_right = success = false;
+                } else {
+                    joint_trajectory.failed_conversions = joint_trajectory_left.failed_conversions;
                 }
             }
 
@@ -1897,7 +1903,7 @@ trajectoryJoints convertPoseTrajectoryToJointTrajectory(planningInterface::MoveG
     }
 }
 
-bool convertPoseConfigToJointTrajectory(trajectoryJoints& joint_trajectory, kinematics::KinematicsBasePtr& ik, std::vector<poseConfig>& pose_configs, const bool BOUNDED_SOLUTION, bool debug, std::vector<int>& failed_ik_index) {
+bool convertPoseConfigToJointTrajectory(trajectoryJoints& joint_trajectory, kinematics::KinematicsBasePtr& ik, std::vector<poseConfig>& pose_configs, const bool BOUNDED_SOLUTION, bool debug) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-07-28
 
@@ -1968,17 +1974,6 @@ bool convertPoseConfigToJointTrajectory(trajectoryJoints& joint_trajectory, kine
     ERROR CODE DESCRIPTIONS: http://docs.ros.org/indigo/api/moveit_msgs/html/msg/MoveItErrorCodes.html
 */
     ROS_INFO("....................");
-
-    // CHECK INPUTS
-    if ((debug) && (failed_ik_index[0] == -1)) {
-    /* If the last parameter is the default value and debug was set to true */
-        ROS_ERROR("From: convertPoseConfigToJointTrajectory(joint_trajectory, ik, pose_configs, BOUNDED_SOLUTION, debug)");
-        ROS_ERROR("Debug is set to true but additional vector of integers not supplied.");
-        ROS_WARN("A vector of integers need to be supplied, used to indicate the index of the failed IK calculations.");
-        return false;
-    } else {
-        failed_ik_index = std::vector<int>(); // make sure the failed ik index is empty
-    }
 
     // INITIALIZE VARIABLES
     const double PI = 3.14159;
@@ -2086,7 +2081,7 @@ bool convertPoseConfigToJointTrajectory(trajectoryJoints& joint_trajectory, kine
         }
 
         if (debug) {
-            ROS_INFO("____ (debug) Joint Value Solution for Index %d _____", pose+1);
+            ROS_INFO("_____ (debug) Joint Value Solution for Index %d _____", pose+1);
             if (error_code.val != 1) {
                 previous_solution_failed = true;
                 ROS_WARN("Solution not found. Error code: %d", error_code.val);
@@ -2120,7 +2115,7 @@ bool convertPoseConfigToJointTrajectory(trajectoryJoints& joint_trajectory, kine
                     ROS_WARN("(debug) Trying again without solution bounds.");
                     success = ik->searchPositionIK(pose_configs[pose].pose, (const std::vector<double>)seed, timeout, solution, error_code);
 
-                    ROS_INFO("____ (debug) Joint Value Solution for Index %d _____", pose+1);
+                    ROS_INFO("_____ (debug) Joint Value Solution for Index %d _____", pose+1);
                     if (error_code.val != 1) {
                         ROS_WARN("Solution not found. Error code: %d", error_code.val);
                     } else {
@@ -2147,7 +2142,7 @@ bool convertPoseConfigToJointTrajectory(trajectoryJoints& joint_trajectory, kine
                     joint_trajectory.joints.push_back(solution);
                 } else {
                     ROS_WARN("(debug) Skipping trajectory point.");
-                    failed_ik_index.push_back(pose);
+                    joint_trajectory.failed_conversions.push_back(pose);
                 }
             } else {
                 ROS_ERROR("From: convertPoseConfigToJointTrajectory(joint_trajectory, ik, pose_configs, BOUNDED_SOLUTION, debug)");
@@ -2160,32 +2155,24 @@ bool convertPoseConfigToJointTrajectory(trajectoryJoints& joint_trajectory, kine
         if (debug) { ROS_INFO("...................."); }
     }
 
-    if ((debug) && (failed_ik_index.size() > 0)) {
-        ROS_INFO("(debug) Removing pose configurations that failed IK solver.");
-
-        int remove_adjust = 0; // if a pose is removed, then the next index needs to be decemented to reflect the change in index of the failed pose
-        for (int failed_ik = 0; failed_ik < failed_ik_index.size(); failed_ik++) {
-            int pose = failed_ik_index[failed_ik] - remove_adjust;
-
-            ROS_INFO("(debug) Removing pose configuration: %d", pose+remove_adjust+1);
-            for (int shift_pose = pose+1; shift_pose < pose_configs.size(); shift_pose++) {
-            /* This loop removes the pose configuration that caused the error by shifting all the next pose configurations and removing the last pose configuration afterwards*/
-                pose_configs[shift_pose-1] = pose_configs[shift_pose];
-            }
-            pose_configs.pop_back();
-            remove_adjust++;
-        }
-    }
-
     joint_trajectory.total_points = joint_trajectory.joints.size();
     joint_trajectory.total_joints = total_joints;
 
-    if ((debug) && (BOUNDED_SOLUTION)) {
-        ROS_INFO("Able to convert %d of %lu poses to joints with bounded solutions.", solutions_stored, pose_configs.size());
-        ROS_INFO("Able to convert %d of %lu poses to joints with unbounded/bounded solutions.", joint_trajectory.total_points, pose_configs.size());
-    } else {
-        ROS_INFO("Able to convert %d of %lu poses to joint trajectory points.", solutions_stored, pose_configs.size());
+    if (debug) {
+        ROS_INFO("_____ (debug) List of Failed Solutions (index starts at 0) _____");
+        for (int failure = 0; failure < joint_trajectory.failed_conversions.size(); failure++) {
+            ROS_INFO("Conversion failed for index: %d", joint_trajectory.failed_conversions[failure]);
+        }
+
+        ROS_INFO("....................");
+        if (BOUNDED_SOLUTION) {
+            ROS_INFO("Able to convert %d of %lu poses to joints with bounded solutions.", solutions_stored, pose_configs.size());
+            ROS_INFO("Able to convert %d of %lu poses to joints with unbounded/bounded solutions.", joint_trajectory.total_points, pose_configs.size());
+        } else {
+            ROS_INFO("Able to convert %d of %lu poses to joint trajectory points.", solutions_stored, pose_configs.size());
+        }
     }
+
     ROS_INFO("Processing time: %.5f",toc());
     return true;
 }

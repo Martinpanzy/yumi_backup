@@ -2,28 +2,29 @@ cmake_minimum_required(VERSION 2.8.3)
 project(yumi_scripts)
 
 find_package(catkin REQUIRED COMPONENTS
-	roscpp
-	moveit_ros_planning_interface
-	message_generation
 	geometry_msgs
-	std_msgs
+	leap_motion
+	message_generation
+	moveit_ros_planning_interface
 	rosbag
+	roscpp
+	std_msgs
 	yaml_cpp_catkin
 )
 
 add_message_files(FILES
-	JointMsg.msg
 	JointConfigMsg.msg
-	PoseConfigMsg.msg
+	JointMsg.msg
 	ModuleDataMsg.msg
 	ModuleMsg.msg
 	PlannerMsg.msg
+	PoseConfigMsg.msg
 )
 
 generate_messages(DEPENDENCIES
-	std_msgs
-	moveit_msgs
 	geometry_msgs
+	moveit_msgs
+	std_msgs
 )
 
 catkin_package(CATKIN_DEPENDS 
@@ -39,8 +40,8 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(config_test src/config_test.cpp)
-target_link_libraries(config_test ${catkin_LIBRARIES})
+add_executable(leap_interface src/leap_interface.cpp)
+target_link_libraries(leap_interface ${catkin_LIBRARIES})
 
 add_executable(yumi_node src/yumi_node.cpp)
 target_link_libraries(yumi_node ${catkin_LIBRARIES})
