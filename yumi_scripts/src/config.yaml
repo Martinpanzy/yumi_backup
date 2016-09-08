@@ -8,8 +8,10 @@ yumi_interface:
   end_effector_left: gripper_l_tcp
   end_effector_right: gripper_r_tcp
 yumi_leap:
-  demo_mode: false # whether using the leap motion interface only with strictly simulated YuMi
+  demo_mode: true # whether using the leap motion interface only with strictly simulated YuMi
   show_data: true # whether to show the pose, orientation, deltas, and gripper position at each iteration
+  show_arrow: true # whether to show arrow in RViz
+  lock_pitch_roll: true # whether pitch and roll should be locked
   gripper_open_position: 0.024 # open gripper position (m)
   gripper_closed_position: 0.0 # closed gripper position (m)
   gripper_distance_toggle: 50.0 # distance between thump and index finger (mm)

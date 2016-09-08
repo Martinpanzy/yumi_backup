@@ -25,6 +25,7 @@ generate_messages(DEPENDENCIES
 	geometry_msgs
 	moveit_msgs
 	std_msgs
+	visualization_msgs
 )
 
 catkin_package(CATKIN_DEPENDS 

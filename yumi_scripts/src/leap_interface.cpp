@@ -22,6 +22,7 @@
 #include <sensor_msgs/JointState.h>
 #include <tf/transform_datatypes.h>
 #include <trajectory_msgs/JointTrajectory.h>
+#include <visualization_msgs/Marker.h>
 
 // NAMESPACE DECLARATION
 namespace planningInterface = moveit::planning_interface;
@@ -29,6 +30,7 @@ namespace planningInterface = moveit::planning_interface;
 // FUNCTION PROTOTYPES
 /* Constructor Functions */
 bool createIKSolvers(kinematics::KinematicsBasePtr&, kinematics::KinematicsBasePtr&, std::string, std::string, std::string);
+visualization_msgs::Marker createMarker(ros::Publisher&, std::string, geometry_msgs::Point&);
 geometry_msgs::Point constructPoint(double, double, double);
 geometry_msgs::Vector3 constructVector(double, double, double);
 geometry_msgs::Pose constructPose(geometry_msgs::Point, geometry_msgs::Quaternion);
@@ -55,6 +57,7 @@ bool getOrientationDelta(geometry_msgs::Vector3&, const geometry_msgs::Vector3&,
 bool getGripperPosition(const geometry_msgs::Point&, const geometry_msgs::Point&);
 void updateRelativePosition(geometry_msgs::Point&, const geometry_msgs::Point&);
 void updateRelativeOrientation(geometry_msgs::Quaternion&, const geometry_msgs::Vector3&);
+void updateMarkerPosition(ros::Publisher&, visualization_msgs::Marker&, geometry_msgs::Point&, geometry_msgs::Point&);
 bool addTrajectoryPoint(trajectory_msgs::JointTrajectory&, planningInterface::MoveGroup&, const geometry_msgs::Pose&, const bool&, kinematics::KinematicsBasePtr&);
 
 /* MoveIt! Functions */
@@ -77,7 +80,7 @@ double DEAD_ZONE_POSITION, DEAD_ZONE_ORIENTATION;
 double SCALE_FACTOR_POSITION, SCALE_FACTOR_ORIENTATION = (1.0/90.0);
 double COMMUNICATION_DELAY;
 int TRAJECTORY_LENGTH;
-bool DEMO_MODE, SHOW_DATA;
+bool DEMO_MODE, SHOW_DATA, SHOW_ARROW, LOCK_PITCH_AND_ROLL;
 
 // MAIN FUNCTION
 int main(int argc, char **argv) {
@@ -93,6 +96,7 @@ int main(int argc, char **argv) {
     ros::Subscriber leap_sub = node_handle_leap.subscribe("data", 1, leapCallback);
     ros::Publisher joint_state_pub = node_handle.advertise<sensor_msgs::JointState>("joint_states", 1);
     ros::Publisher joint_trajectory_pub = node_handle.advertise<trajectory_msgs::JointTrajectory>("left_arm/joint_path_command", 1);
+    ros::Publisher marker_pub = node_handle.advertise<visualization_msgs::Marker>("visualization_marker", 0);
 
     // INITIALIZE MOVEIT VARIABLES
     sensor_msgs::JointState joint_state;
@@ -102,9 +106,11 @@ int main(int argc, char **argv) {
     planningInterface::MoveGroup right_arm_ik("right_arm_ik");
     planningInterface::MoveGroup both_arms("both_arms");
     kinematics::KinematicsBasePtr ik_left, ik_right;
+    visualization_msgs::Marker marker;
 
     joint_state.name = both_arms.getActiveJoints();
 
+    ROS_INFO("Setting up move groups...");
     left_arm.startStateMonitor();
     left_arm.getCurrentJointValues();
     left_arm_ik.startStateMonitor();
@@ -128,6 +134,7 @@ int main(int argc, char **argv) {
     left_arm_ik.setEndEffectorLink(end_effector_left);
     right_arm_ik.setEndEffectorLink(end_effector_right);
 
+    ROS_INFO("Creating IK solvers...");
     bool success = createIKSolvers(ik_left, ik_right, end_effector_left, end_effector_right, pose_reference_frame);
     if (!success) {
         ROS_ERROR("Stopping execution due to error in creating IK solvers.");
@@ -161,9 +168,13 @@ int main(int argc, char **argv) {
 
     start_location.z -= 0.11;
 
+    if (SHOW_ARROW) {
+        marker = createMarker(marker_pub, pose_reference_frame, start_location);
+    }
+
     geometry_msgs::Vector3 palmdir, palmnor;
     geometry_msgs::Point palmpos, prev_palmpos, thumb_tip, index_tip;
-    geometry_msgs::Point palm_position = start_location;
+    geometry_msgs::Point previous_palm_position, palm_position = start_location;
     geometry_msgs::Quaternion palm_orientation = start_orientation;
 
     trajectory_msgs::JointTrajectory trajectory;
@@ -215,8 +226,13 @@ int main(int argc, char **argv) {
             geometry_msgs::Vector3 delta_orienation = constructVector(0.0, 0.0, 0.0); // give orientation delta a default value incase current orientation is within the dead zone
             bool dead_zone_ori = getOrientationDelta(delta_orienation, palmdir, palmnor);
 
+            previous_palm_position = palm_position;
             updateRelativePosition(palm_position, delta_position);
             updateRelativeOrientation(palm_orientation, delta_orienation);
+
+            if (SHOW_ARROW) {
+                updateMarkerPosition(marker_pub, marker, previous_palm_position, delta_position);
+            }
 
             // GET GRIPPER POSITION
             bool new_gripper_position = getGripperPosition(thumb_tip, index_tip);
@@ -306,6 +322,35 @@ bool createIKSolvers(kinematics::KinematicsBasePtr& ik_left, kinematics::Kinemat
     return success;
 }
 
+visualization_msgs::Marker createMarker(ros::Publisher& marker_pub, std::string reference_frame, geometry_msgs::Point& point) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-09-08
+*/
+    // INITIALIZE VARIABLES
+    visualization_msgs::Marker marker;
+
+    // ADD MARKER DATA
+    marker.header.frame_id = reference_frame;
+    marker.header.stamp = ros::Time();
+    marker.ns = "/leapmotion/objects";
+    marker.id = 0;
+    marker.type = visualization_msgs::Marker::ARROW;
+    marker.action = visualization_msgs::Marker::ADD;
+    marker.points.push_back(point);
+    marker.points.push_back(point);
+    marker.scale.x = 0.02;
+    marker.scale.y = 0.04;
+    marker.scale.z = 0.0;
+    marker.color.a = 1.0;
+    marker.color.r = 0.0;
+    marker.color.g = 1.0;
+    marker.color.b = 0.0;
+
+    marker_pub.publish(marker);
+
+    return marker;
+}
+
 geometry_msgs::Point constructPoint(double x, double y, double z) {
 /*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
     DATE CREATED: 2016-08-31
@@ -364,7 +409,9 @@ bool getConfigParameters() {
 
     // GET CONFIGURATION PARAMETERS FROM PARAMETER SERVER
     parameters_exist = ((ros::param::get("/yumi/yumi_leap/demo_mode", DEMO_MODE)) && 
-                        (ros::param::get("/yumi/yumi_leap/show_data", SHOW_DATA)) &&
+                        (ros::param::get("/yumi/yumi_leap/show_data", SHOW_DATA)) && 
+                        (ros::param::get("/yumi/yumi_leap/show_arrow", SHOW_ARROW)) && 
+                        (ros::param::get("/yumi/yumi_leap/lock_pitch_roll", LOCK_PITCH_AND_ROLL)) &&
                         (ros::param::get("/yumi/yumi_leap/gripper_open_position", GRIPPER_OPEN_POSITION)) && 
                         (ros::param::get("/yumi/yumi_leap/gripper_closed_position", GRIPPER_CLOSED_POSITION)) && 
                         (ros::param::get("/yumi/yumi_leap/gripper_distance_toggle", CLOSED_GRIPPER_DISTANCE)) && 
@@ -564,12 +611,16 @@ bool getOrientationDelta(geometry_msgs::Vector3& delta, const geometry_msgs::Vec
     DATE CREATED: 2016-08-31
 */
     // INTIIALIZE VARIABLES
+    double pitch, roll;
     double yaw   = -atan2(direction.y, -direction.x);
-    // double pitch = asin(normal.x);
-    // double roll  = -asin(normal.y);
-    double pitch = 0.0; // dont allow pitch
-    double roll  = 0.0; // dont allow roll
     bool dead_zone = true;
+
+    if (LOCK_PITCH_AND_ROLL) {
+        pitch = roll = 0.0; // dont allow pitch and roll
+    } else {
+        pitch = asin(normal.x);
+        roll  = -asin(normal.y);
+    }
 
     if (std::abs(roll) > DEAD_ZONE_ORIENTATION) {
         dead_zone = false;
@@ -661,6 +712,25 @@ void updateRelativeOrientation(geometry_msgs::Quaternion& orientation, const geo
 
     // CONVERT ROLL, PITCH, AND YAW BACK TO QUATERNION
     orientation = convertYPRToQuaternion(orientation_ypr);
+}
+
+void updateMarkerPosition(ros::Publisher& marker_pub, visualization_msgs::Marker& marker, geometry_msgs::Point& tail_position, geometry_msgs::Point& delta) {
+/*  PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
+    DATE CREATED: 2016-09-08
+*/  
+    // INITIALIZE VARIABLES
+    const double SCALE = 50.0;
+    geometry_msgs::Point head_position;
+
+    // CREATE END POSITION
+    head_position.x = tail_position.x + (delta.x * SCALE);
+    head_position.y = tail_position.y + (delta.y * SCALE);
+    head_position.z = tail_position.z + (delta.z * SCALE);
+
+    marker.points[0] = tail_position;
+    marker.points[1] = head_position;
+
+    marker_pub.publish(marker);
 }
 
 bool addTrajectoryPoint(trajectory_msgs::JointTrajectory& trajectory, planningInterface::MoveGroup& group, const geometry_msgs::Pose& pose, const bool& gripper_position, kinematics::KinematicsBasePtr& ik) {
