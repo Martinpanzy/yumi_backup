@@ -23,6 +23,7 @@ echo "alias yumi_lead='rosrun yumi_scripts lead_through'" >> ~/.bashrc # run the
 echo "alias yumi_moveit='rosrun yumi_scripts moveit_interface'" >> ~/.bashrc # run the MoveIt! interface script from command line for interfacing MoveIt! with YuMi through command line
 echo "alias yumi_node='roslaunch yumi_scripts yumi_node.launch'" >> ~/.bashrc # execute the node used to manipulate YuMi
 echo "alias yumi_interface='rosrun yumi_scripts yumi_interface'" >> ~/.bashrc # run the script that interfaces with the YuMi node
+echo "alias yumi_leap='roslaunch yumi_scripts leap_interface.launch'" >> ~/.bashrc # execute the node that interfaces the Leap Motion sensor with YuMi
 echo "" >> ~/.bashrc # add in blank line underneath addition
 
 source ~/.bashrc # source bashrc to finalize changes for current terminal window
