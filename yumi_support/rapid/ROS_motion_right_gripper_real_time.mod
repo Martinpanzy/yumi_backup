@@ -1,4 +1,4 @@
-MODULE ROS_motion_right_gripper
+MODULE ROS_motion_r_gripper_rt
 
 ! Software License Agreement (BSD License)
 !
@@ -31,22 +31,21 @@ MODULE ROS_motion_right_gripper
 ! ----------------------------------------------
 ! ----------------- CONSTANTS ------------------
 ! ----------------------------------------------
-LOCAL CONST zonedata DEFAULT_CORNER_DIST := z10;
+LOCAL CONST zonedata DEFAULT_CORNER_DIST := z1;
 LOCAL CONST num GRIPPER_POS_TOL := 2;
 
 ! ----------------------------------------------
 ! ----------------- VARIABLES ------------------
 ! ----------------------------------------------
 ! Trajectory Variables
-LOCAL VAR ROS_joint_trajectory_pt jointTrajectory{MAX_TRAJ_LENGTH};
-LOCAL VAR ROS_gripper_trajectory_pt gripperTrajectory{MAX_TRAJ_LENGTH};
+LOCAL VAR ROS_joint_trajectory_pt jointTrajectory;
 LOCAL VAR num newGripperPos; ! store new gripper position locally
 LOCAL VAR num previousGripperPos; ! store old gripper position locally
-LOCAL VAR num trajectory_size := 0;
 
 ! Flag Variables
 LOCAL VAR bool flag_handCalibrated := FALSE;
 LOCAL VAR bool flag_programStarted := FALSE;
+LOCAL VAR bool flag_firstPoint := FALSE;
 
 ! Task Name
 LOCAL VAR string task_name := "M_Right";
@@ -67,8 +66,6 @@ PROC main()
     VAR num current_index;
     VAR jointtarget target;
     VAR num gripperTarget;
-    VAR zonedata stop_mode;
-    VAR bool skip_move;
 
     ! Syncronize Tasks
     IF (flag_programStarted = FALSE) THEN
@@ -76,6 +73,7 @@ PROC main()
         flag_programStarted := TRUE;
     ELSE
         TPWrite task_name + ": Program restarted.";
+        flag_firstPoint := TRUE;
     ENDIF
     
     IF (flag_handCalibrated = FALSE) THEN
@@ -85,56 +83,36 @@ PROC main()
 
     ! Make Sure YuMi Wont Start Running Previous Stored Trajectory
     ROS_new_trajectory_right := FALSE;
-    trajectory_size := 0;
     ClearPath;
 
-    ! Get Trajectory and Move Arm
-    WHILE true DO
-        ! Check For New Trajectory
-        IF (ROS_new_trajectory_right)
-            init_trajectory;
-
-        ! Execute All Points in Trajectory
-        IF (trajectory_size > 0) THEN
-            TPWrite task_name + ": Running trajectory...";
-
-            ! Move Gripper
-            newGripperPos := gripperTrajectory{trajectory_size}.gripper_pos; ! store new gripper position locally
-            IF (NOT (newGripperPos = previousGripperPos)) THEN
-                IF ((newGripperPos < GRIPPER_CLOSE_TOL) AND (previousGripperPos > (newGripperPos + GRIPPER_CLOSE_TOL))) THEN ! if gripping an object
-                    Hand_GripInward \holdForce:= 10, \NoWait; ! grip object without waiting for movement to complete
-                ELSEIF (newGripperPos > GRIPPER_CLOSE_TOL) THEN ! if not gripping an object
-                    Hand_MoveTo newGripperPos, \NoWait; ! go to the gripper position without waiting for movement to complete
-                ENDIF
-                previousGripperPos := newGripperPos;
-            ENDIF
-
-            ! Move Arm
-            FOR current_index FROM 1 TO trajectory_size DO
-                target.robax := jointTrajectory{current_index}.joint_pos.robax;
-                target.extax.eax_a := jointTrajectory{current_index}.joint_pos.extax.eax_a;
-
-                skip_move := (current_index = 1) AND is_near(target.robax, 0.1);
-
-                ! If At Final Point, Make Fine Movement, Otherwise Use Zone Movements
-                IF (current_index = trajectory_size) THEN
-                    stop_mode := fine; ! stop at path end
-                ELSE
-                    stop_mode := DEFAULT_CORNER_DIST; ! assume we are smoothing between points
-                ENDIF
-
-                ! Execute move command
-                IF (NOT skip_move) THEN
-                    MoveAbsJ target, NORM_SPEED, \T:=jointTrajectory{current_index}.duration, stop_mode, tool0; ! move arm
-                ENDIF
-            ENDFOR
-            trajectory_size := 0;  ! trajectory done
-            StopMove; ClearPath; ! clear movement buffer for arm
-
-            TPWrite task_name + ": Finished Trajectory.";
+    ! Wait For First Trajectory To Be Sent
+    WHILE (NOT (flag_firstPoint)) DO
+        IF (ROS_new_trajectory_right) THEN
+            flag_firstPoint := TRUE;
         ENDIF
+    ENDWHILE
+
+    ! Get Trajectories and Move Arm
+    WHILE true DO
         
-        WaitTime 0.05;  ! throttle loop while waiting for new command
+        ! Move Gripper
+        newGripperPos := ROS_trajectory_gripper_r{1}.gripper_pos;
+        IF (NOT (newGripperPos = previousGripperPos)) THEN
+            IF ((newGripperPos < GRIPPER_CLOSE_TOL) AND (previousGripperPos > (newGripperPos + GRIPPER_CLOSE_TOL))) THEN ! if gripping an object
+                Hand_GripInward \holdForce:= 10, \NoWait; ! grip object without waiting for movement to complete
+            ELSEIF (newGripperPos > GRIPPER_CLOSE_TOL) THEN ! if not gripping an object
+                Hand_MoveTo newGripperPos, \NoWait; ! go to the gripper position without waiting for movement to complete
+            ENDIF
+            previousGripperPos := newGripperPos;
+        ENDIF
+
+        ! Move Arm
+        jointTrajectory := ROS_trajectory_right{1};
+        target.robax := jointTrajectory.joint_pos.robax;
+        target.extax.eax_a := jointTrajectory.joint_pos.extax.eax_a;
+        
+        MoveAbsJ target, v100, \T:=0.01, DEFAULT_CORNER_DIST, tool0; ! move arm
+
     ENDWHILE
 ERROR (ERR_WAITSYNCTASK)
     IF (ERRNO=ERR_WAITSYNCTASK) THEN
@@ -145,25 +123,6 @@ ERROR (ERR_WAITSYNCTASK)
         TPWrite("Error Number: " + ValToStr(ERRNO) + " | Error executing motion");
         abort_trajectory;
     ENDIF
-ENDPROC
-
-LOCAL PROC init_trajectory() 
-! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
-! FIRST MODIFIED: 2016-06-14
-! PURPOSE: Get joint and gripper trajectory
-! NOTES: A gripper is attached to this arm (right arm)
-
-    clear_path; ! cancel any active motions
-
-    ! Get Trajectory For Arm
-    WaitTestAndSet ROS_trajectory_lock_right; ! acquire data-lock
-    trajectory_size   := ROS_trajectory_size_right; ! get the trajectory size
-    jointTrajectory   := ROS_trajectory_right; ! copy joint trajectory to local variable
-    gripperTrajectory := ROS_trajectory_gripper_r; ! copy joint trajectory to local variable
-
-    ROS_new_trajectory_right  := FALSE; ! set flag to indicate that the new trajectory has already been retrived
-    ROS_trajectory_lock_right := FALSE; ! release data-lock
-
 ENDPROC
 
 LOCAL PROC calibrate_hand()
@@ -188,21 +147,7 @@ LOCAL PROC calibrate_hand()
 
 ENDPROC
 
-LOCAL FUNC bool is_near(robjoint target, num tol)
-    VAR jointtarget curr_jnt;
-    
-    curr_jnt := CJointT();
-    
-    RETURN ( ABS(curr_jnt.robax.rax_1 - target.rax_1) < tol )
-       AND ( ABS(curr_jnt.robax.rax_2 - target.rax_2) < tol )
-       AND ( ABS(curr_jnt.robax.rax_3 - target.rax_3) < tol )
-       AND ( ABS(curr_jnt.robax.rax_4 - target.rax_4) < tol )
-       AND ( ABS(curr_jnt.robax.rax_5 - target.rax_5) < tol )
-       AND ( ABS(curr_jnt.robax.rax_6 - target.rax_6) < tol );
-ENDFUNC
-
 LOCAL PROC abort_trajectory()
-    trajectory_size := 0;  ! "clear" local trajectory
     clear_path;
     ExitCycle;  ! restart program
 ENDPROC

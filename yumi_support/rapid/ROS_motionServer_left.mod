@@ -44,17 +44,8 @@ LOCAL VAR socketdev client_socket;
 LOCAL VAR ROS_joint_trajectory_pt jointTrajectory{MAX_TRAJ_LENGTH};
 LOCAL VAR num trajectory_size;
 
-! Flag Variables
-LOCAL VAR bool hand_calibrated := FALSE;
-LOCAL VAR bool program_started := FALSE;
-
 ! Task Name
 LOCAL VAR string task_name := "MS_Left";
-
-! Syncronize Motion Variables
-PERS tasks task_list{4} := [["T_ROB_R"],["ROS_MotionServer_Right"],["T_ROB_L"],["ROS_MotionServer_Left"]];
-VAR syncident ready;
-VAR syncident handCalibrated;
 
 PROC main()
 ! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
@@ -66,25 +57,11 @@ PROC main()
     ! Initialize Variables
     VAR ROS_msg_joint_traj_pt jointMessage;
 
-    ! Syncronize Tasks
-    IF (program_started = FALSE) THEN
-        TPWrite task_name + ": Program ready to start.";
-        WaitSyncTask ready, task_list \TimeOut:=20;
-        program_started := TRUE;
-    ENDIF
-    
-    IF (hand_calibrated = FALSE) THEN
-        WaitSyncTask handCalibrated, task_list \TimeOut:=20; ! wait for hand to calibrate
-        TPWrite task_name + ": Hand calibrated received.";
-        hand_calibrated := TRUE;
-    ENDIF
-
     ! Wait For Connections With ROS Motion Service
     WaitTime 0.5; ! stagger server connection attempts
     TPWrite task_name + ": Waiting for connection.";
     ROS_init_socket server_socket, server_port;
     ROS_wait_for_client server_socket, client_socket, task_name;
-
 
     ! Recieve Joint Trajectory Point
     WHILE ( true ) DO
@@ -165,24 +142,28 @@ LOCAL PROC add_traj_pt(ROS_joint_trajectory_pt joints)
         Incr trajectory_size; ! increment trajectory size
         jointTrajectory{trajectory_size} := joints; ! add this point to the joint trajectory
     ENDIF
+
 ENDPROC
 
 LOCAL PROC activate_trajectory()
 ! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
 ! FIRST MODIFIED: 2016-06-14
 ! PURPOSE: Set flags to indicate that a trajectory has been received and fully built
-! NOTES: A gripper is attached to this arm (right arm)
+! NOTES: A gripper is attached to this arm (left arm)
 ! FUTURE WORK: Use the velociy values
 
     ! Aquire Data Lock
     WaitTestAndSet ROS_trajectory_lock_left; ! acquire data-lock
-    TPWrite "Sending " + ValToStr(trajectory_size) + " points to left MOTION task";
 
     ! Store Joint Trajectory and Joint Trajectory Variables Into System Variables
     ROS_trajectory_left := jointTrajectory;
     ROS_trajectory_size_left := trajectory_size;
+
+    ! Release Locks and Notify User of Sent Trajectory
     ROS_new_trajectory_left := TRUE;
     ROS_trajectory_lock_left := FALSE; ! release data-lock
+    TPWrite "Sending " + ValToStr(trajectory_size) + " points to left MOTION task";
+
 ENDPROC
     
 ENDMODULE

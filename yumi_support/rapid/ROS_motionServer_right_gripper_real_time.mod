@@ -1,4 +1,4 @@
-MODULE ROS_stateServer_left_gripper
+MODULE ROS_motionServer_r_gripper_rt
 
 ! Software License Agreement (BSD License)
 !
@@ -31,8 +31,7 @@ MODULE ROS_stateServer_left_gripper
 ! ----------------------------------------------
 ! ----------------- CONSTANTS ------------------
 ! ----------------------------------------------
-LOCAL CONST num server_port := 11002;
-LOCAL CONST num update_rate := 0.05;  ! broadcast rate (sec)
+LOCAL CONST num server_port := 12000;
 
 ! ----------------------------------------------
 ! ----------------- VARIABLES ------------------
@@ -41,63 +40,97 @@ LOCAL CONST num update_rate := 0.05;  ! broadcast rate (sec)
 LOCAL VAR socketdev server_socket;
 LOCAL VAR socketdev client_socket;
 
+! Flag Variables
+LOCAL VAR bool first_trajectory := TRUE;
+
 ! Task Name
-LOCAL VAR string task_name := "SS_Left";
+LOCAL VAR string task_name := "MS_Right";
 
 PROC main()
 ! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
 ! FIRST MODIFIED: 2016-06-14
-! PURPOSE: Connecting with state server from ROS and sending joint values
-! NOTES: A gripper is attached to this arm (left arm)
+! PURPOSE: Connecting with motion server from ROS and storing joint values
+! NOTES: A gripper is attached to this arm (right arm)
 ! FUTURE WORK: Use the velociy values
 
-    ! Wait For Connections With ROS State Service
-    WaitTime 0.25; ! stagger server communication attempts
+    ! Initialize Variables
+    VAR ROS_msg_traj_pt message;
+
+    ! Wait For Connections With ROS Motion Service
+    WaitTime 0.25; ! stagger server connection attempts
     TPWrite task_name + ": Waiting for connection.";
     ROS_init_socket server_socket, server_port;
     ROS_wait_for_client server_socket, client_socket, task_name;
-    
-    ! Send Joint and Gripper Positions
-    WHILE (TRUE) DO
-        send_joints;
-        WaitTime update_rate;
+
+    ! Recieve Joint Trajectory Point and Gripper Position
+    WHILE ( true ) DO
+        ROS_receive_msg_gripper_traj_pt client_socket, message;
+        trajectory_pt_callback message;
     ENDWHILE
 
 ERROR (ERR_SOCK_TIMEOUT, ERR_SOCK_CLOSED, ERR_WAITSYNCTASK)
     IF (ERRNO=ERR_SOCK_TIMEOUT) OR (ERRNO=ERR_SOCK_CLOSED) THEN
         SkipWarn;  ! TBD: include this error data in the message logged below?
-        ErrWrite \W, "ROS " + task_name + " disconnect", "Connection lost. Waiting for new connection.";
+        ErrWrite \W, "ROS " + task_name + " disconnect", "Connection lost. Resetting socket.";
         ExitCycle;  ! restart program
     ELSE
         TRYNEXT;
     ENDIF
 UNDO
+    IF (SocketGetStatus(client_socket) <> SOCKET_CLOSED) SocketClose client_socket;
+    IF (SocketGetStatus(server_socket) <> SOCKET_CLOSED) SocketClose server_socket;
 ENDPROC
 
-LOCAL PROC send_joints()
+LOCAL PROC trajectory_pt_callback(ROS_msg_traj_pt message)
 ! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
 ! FIRST MODIFIED: 2016-06-14
-! PURPOSE: Sends joints and gripper positions to ROS
-! NOTES: A gripper is attached to this arm (left arm)
+! PURPOSE: Creating trajectory from data received from ROS
+! NOTES: A gripper is attached to this arm (right arm)
 ! FUTURE WORK: Use the velociy values
 
-    VAR ROS_msg_joint_data jointMessage;
-    VAR ROS_msg_gripper_data gripperMessage;
-    
-    ! Create Messages
-    jointMessage.header := [ROS_MSG_TYPE_JOINT, ROS_COM_TYPE_TOPIC, ROS_REPLY_TYPE_INVALID];
-    jointMessage.sequence_id := 0;
-    jointMessage.joints := CJointT();
+    ! Initialize Variables
+    VAR ROS_joint_trajectory_pt joints;
+    VAR ROS_gripper_trajectory_pt gripper;
+    VAR ROS_msg reply_msg;
 
-    gripperMessage.position := Hand_GetActualPos();
+    ! Store Joint and Gripper Values Locally
+    joints := [message.joints, message.duration];
+    gripper.gripper_pos := message.gripperTarget;
     
-    ! send message to client
-    ROS_send_msg_gripper_data client_socket, jointMessage, gripperMessage;
+    ! Store Trajectoy to Global Variable
+    IF (NOT (message.sequence_id = ROS_TRAJECTORY_STOP)) THEN 
+
+        IF (first_trajectory = TRUE) THEN
+            ! Store Joint Trajectory and Joint Trajectory Variables Into System Variables
+            ROS_trajectory_right{1}     := joints;
+            ROS_trajectory_gripper_r{1} := gripper;
+
+            first_trajectory := FALSE;
+        ELSE
+            ! Shift Second Trajectory to First
+            ROS_trajectory_right{1}     := ROS_trajectory_right{2};
+            ROS_trajectory_gripper_r{1} := ROS_trajectory_gripper_r{2};
+        ENDIF
+
+        ! Store Joint Trajectory and Joint Trajectory Variables Into System Variables
+        ROS_trajectory_right{2}     := joints;
+        ROS_trajectory_gripper_r{2} := gripper;
+        
+        ! Release Data Lock
+        ROS_new_trajectory_right  := TRUE;
+
+    ENDIF
+
+    ! Send Reply, If Requested
+    IF (message.header.comm_type = ROS_COM_TYPE_SRV_REQ) THEN
+        reply_msg.header := [ROS_MSG_TYPE_JOINT_TRAJ_PT, ROS_COM_TYPE_SRV_REPLY, ROS_REPLY_TYPE_SUCCESS];
+        ROS_send_msg client_socket, reply_msg;
+    ENDIF
 
 ERROR
     RAISE;  ! raise errors to calling code
 ENDPROC
-
+    
 ENDMODULE
 
 

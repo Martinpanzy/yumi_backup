@@ -41,10 +41,6 @@ LOCAL CONST num update_rate := 0.05;  ! broadcast rate (sec)
 LOCAL VAR socketdev server_socket;
 LOCAL VAR socketdev client_socket;
 
-! Flag Variables
-LOCAL VAR bool hand_calibrated := FALSE;
-LOCAL VAR bool program_started := FALSE;
-
 ! Task Name
 LOCAL VAR string task_name := "SS_Left";
 
@@ -54,12 +50,6 @@ PROC main()
 ! PURPOSE: Connecting with state server from ROS and sending joint values
 ! NOTES: A gripper is not attached to this arm (left arm)
 ! FUTURE WORK: Use the velociy values
-
-    ! Syncronize Tasks
-    IF (program_started = FALSE) THEN
-        TPWrite task_name + ": Program ready to start.";
-        program_started := TRUE;
-    ENDIF
 
     ! Wait For Connections With ROS State Service
     WaitTime 0.25; ! stagger server connection attempts
@@ -78,9 +68,6 @@ ERROR (ERR_SOCK_TIMEOUT, ERR_SOCK_CLOSED, ERR_WAITSYNCTASK)
         SkipWarn;  ! TBD: include this error data in the message logged below?
         ErrWrite \W, "ROS " + task_name +" disconnect", "Connection lost. Waiting for new connection.";
         ExitCycle;  ! restart program
-    ELSEIF (ERRNO=ERR_WAITSYNCTASK) THEN
-        ErrWrite \W, "WaitSync timeout", "Waited too long for hand calibration";
-        TPWrite "Wait sync error";
     ELSE
         TRYNEXT;
     ENDIF
