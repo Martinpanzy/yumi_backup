@@ -55,13 +55,11 @@
   <!-- Set defaults -->
 
   <!-- Define Macros for Workspace Import -->
-  <xacro:workspace stand_parent="yumi_body" table_parent="workspace">
-    <origin xyz="0.334 -0.01 -0.113" rpy="0 0 0"/>
-  </xacro:workspace>
+  <xacro:workspace stand_parent="yumi_body" table_parent="workspace"></xacro:workspace>
 
   <!-- Define Macros for YuMi Import -->
   <xacro:yumi name="yumi" hardware_interface="${hardware_interface}" parent="table_main">
-	  <origin xyz="0 0 0.113" rpy="0 0 0"/> <!-- Bring bottom of YuMi to (x,y) plane -->
+	  <origin xyz="-0.333 0 0.113" rpy="0 0 0"/> <!-- Bring bottom of YuMi to (x,y) plane -->
   </xacro:yumi>
 
   <!-- Define Macros for Right Servo Gripper Import -->

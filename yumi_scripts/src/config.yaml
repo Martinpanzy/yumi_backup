@@ -8,8 +8,8 @@ yumi_interface:
   end_effector_left: gripper_l_tcp
   end_effector_right: gripper_r_tcp
 yumi_leap:
-  demo_mode: true # whether using the leap motion interface only with strictly simulated YuMi
-  show_data: true # whether to show the pose, orientation, deltas, and gripper position at each iteration
+  demo_mode: false # whether using the leap motion interface only with strictly simulated YuMi
+  show_data: false # whether to show the pose, orientation, deltas, and gripper position at each iteration
   show_arrow: true # whether to show arrow in RViz
   lock_pitch_roll: true # whether pitch and roll should be locked
   gripper_open_position: 0.024 # open gripper position (m)
@@ -20,6 +20,6 @@ yumi_leap:
   max_zone_position: 50.0 # 50 mm
   max_zone_orientation: 0.785398 # (PI/4.0) or 45 degrees
   scale_factor_position: 0.00006 # max 3 mm translation per iteration
-  scale_factor_orientation: 0.022222 # (1.0/45) or max 0.5 degree rotation per iteration
+  scale_factor_orientation: 0.022222 # (1.0/45) or max 1.0 degree rotation per iteration
   min_communication_delay: 0.02 # send trajectories at 50 hz
   max_trajectory_length: 2 # 2 trajectory points per message

@@ -3,6 +3,8 @@
 # DATE CREATED: 2016-05-24
 # PURPOSE: Setup workspace to be able to run YuMi files
 
+# Please read the wiki on setting up the workspace before running this file: github.com/ethz-asl/yumi/wiki/YuMi-Leap-Motion-Interface
+
 # How to set up the workspace:
 #  - Clone this repo into the home directory: cd && git clone https://www.github.com/ethz-asl/yumi
 #      (or move the file to the home directory: mv <path>/yumi ~/yumi)
@@ -83,6 +85,16 @@ if [[ $? > 0 ]]; then # if ROS Indigo MoveIt! did not install properly
 fi
 source /opt/ros/indigo/setup.bash # source ROS indigo
 
+#----- Install Leap Motion Packages -----
+sudo apt-get install ros-indigo-leap-motion -y # install leap motion package
+MACHINE_TYPE=`uname -m` # get whether the machine is 64 or 32 bit
+if [ ${MACHINE_TYPE} == 'x86_64' ]; then # if running a 64 bit machine
+	echo "export PYTHONPATH=$PYTHONPATH:$HOME/LeapSDK/lib:$HOME/LeapSDK/lib/x64" >> ~/.bashrc # configure python path with leap motion SDK
+else # if running a 32 bit machine
+	echo "export PYTHONPATH=$PYTHONPATH:$HOME/LeapSDK/lib:$HOME/LeapSDK/lib/x86" >> ~/.bashrc # configure python path with leap motion SDK
+fi
+source ~/.bashrc
+
 echo "Verified installs." # notify user that the installs have been verified
 
 
@@ -104,7 +116,6 @@ git clone https://github.com/ethz-asl/rotors_simulator ~/yumi_ws/src/rotors_simu
 git clone -b feature/init_yaw https://github.com/ethz-asl/rovio ~/yumi_ws/src/rovio # add in rovio for running the VI sensor scripts
 git clone https://github.com/ethz-asl/libvisensor_devel ~/yumi_ws/src/libvisensor_devel # add in the libraries for the VI sensor
 git clone https://github.com/ethz-asl/visensor_node_devel ~/yumi_ws/src/visensor_node_devel # add in the VI node package
-git clone https://github.com/ros-drivers/leap_motion ~/yumi_ws/src/leap_motion # add leap motion package
 git clone https://github.com/ethz-asl/catkin_simple ~/yumi_ws/src/catkin_simple # add catkin simple package
 git clone https://github.com/ethz-asl/yaml_cpp_catkin ~/yumi_ws/src/yaml_cpp_catkin # add YAML C++ package
 

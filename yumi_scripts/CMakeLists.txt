@@ -9,6 +9,7 @@ find_package(catkin REQUIRED COMPONENTS
 	rosbag
 	roscpp
 	std_msgs
+	tf
 	yaml_cpp_catkin
 )
 

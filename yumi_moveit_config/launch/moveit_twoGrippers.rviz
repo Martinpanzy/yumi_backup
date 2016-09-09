@@ -5,9 +5,13 @@ Panels:
     Property Tree Widget:
       Expanded:
         - /MotionPlanning1
+        - /TF1
         - /TF1/Frames1
+        - /TF1/Tree1
+        - /TF1/Tree1/workspace1
+        - /TF1/Tree1/workspace1/table_main1
       Splitter Ratio: 0.74256
-    Tree Height: 350
+    Tree Height: 599
   - Class: rviz/Help
     Name: Help
   - Class: rviz/Views
@@ -375,25 +379,113 @@ Visualization Manager:
         Show Robot Visual: true
       Value: true
     - Class: rviz/TF
-      Enabled: false
+      Enabled: true
       Frame Timeout: 15
       Frames:
         All Enabled: false
+        gripper_l_base:
+          Value: false
+        gripper_l_finger_l:
+          Value: false
+        gripper_l_finger_r:
+          Value: false
+        gripper_l_tcp:
+          Value: false
+        gripper_r_base:
+          Value: false
+        gripper_r_finger_l:
+          Value: false
+        gripper_r_finger_r:
+          Value: false
+        gripper_r_tcp:
+          Value: false
+        stand:
+          Value: false
+        table_main:
+          Value: false
+        table_two:
+          Value: false
+        workspace:
+          Value: false
+        yumi_body:
+          Value: false
+        yumi_link_1_l:
+          Value: false
+        yumi_link_1_r:
+          Value: false
+        yumi_link_2_l:
+          Value: false
+        yumi_link_2_r:
+          Value: false
+        yumi_link_3_l:
+          Value: false
+        yumi_link_3_r:
+          Value: false
+        yumi_link_4_l:
+          Value: false
+        yumi_link_4_r:
+          Value: false
+        yumi_link_5_l:
+          Value: false
+        yumi_link_5_r:
+          Value: false
+        yumi_link_6_l:
+          Value: false
+        yumi_link_6_r:
+          Value: false
+        yumi_link_7_l:
+          Value: false
+        yumi_link_7_r:
+          Value: false
       Marker Scale: 1
       Name: TF
       Show Arrows: true
       Show Axes: true
       Show Names: false
       Tree:
-        {}
+        workspace:
+          table_main:
+            yumi_body:
+              stand:
+                {}
+              yumi_link_1_l:
+                yumi_link_2_l:
+                  yumi_link_3_l:
+                    yumi_link_4_l:
+                      yumi_link_5_l:
+                        yumi_link_6_l:
+                          yumi_link_7_l:
+                            gripper_l_base:
+                              gripper_l_finger_l:
+                                {}
+                              gripper_l_finger_r:
+                                {}
+                              gripper_l_tcp:
+                                {}
+              yumi_link_1_r:
+                yumi_link_2_r:
+                  yumi_link_3_r:
+                    yumi_link_4_r:
+                      yumi_link_5_r:
+                        yumi_link_6_r:
+                          yumi_link_7_r:
+                            gripper_r_base:
+                              gripper_r_finger_l:
+                                {}
+                              gripper_r_finger_r:
+                                {}
+                              gripper_r_tcp:
+                                {}
+          table_two:
+            {}
       Update Interval: 0
-      Value: false
+      Value: true
     - Class: rviz/Marker
       Enabled: true
       Marker Topic: visualization_marker
       Name: Marker
       Namespaces:
-        /leapmotion/objects: true
+        {}
       Queue Size: 100
       Value: true
   Enabled: true
@@ -411,7 +503,7 @@ Visualization Manager:
   Views:
     Current:
       Class: rviz/XYOrbit
-      Distance: 1.2756
+      Distance: 1.42867
       Enable Stereo Rendering:
         Stereo Eye Separation: 0.06
         Stereo Focal Distance: 1
@@ -423,24 +515,24 @@ Visualization Manager:
         Z: 5.12944e-07
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.269796
+      Pitch: 0.389796
       Target Frame: yumi_body
       Value: XYOrbit (rviz)
-      Yaw: 0.426755
+      Yaw: 5.39494
     Saved: ~
 Window Geometry:
   Displays:
     collapsed: false
-  Height: 599
+  Height: 848
   Help:
     collapsed: false
   Hide Left Dock: false
   Hide Right Dock: false
   Motion Planning:
     collapsed: false
-  QMainWindow State: 000000ff00000000fd0000000100000000000002b100000211fc0200000004fb0000000800480065006c00700000000342000000bb0000007600fffffffb0000000a0056006900650077007300000003b0000000b0000000b000fffffffb0000000c00430061006d00650072006100000002ff000001610000000000000000fc0000002800000211000001ea0100001dfa000000000100000002fb000000100044006900730070006c0061007900730100000000ffffffff0000016a00fffffffb0000001e004d006f00740069006f006e00200050006c0061006e006e0069006e00670100000000000002b1000002a200ffffff000003160000021100000001000000020000000100000002fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
+  QMainWindow State: 000000ff00000000fd0000000100000000000002b10000030afc0200000004fb0000000800480065006c00700000000342000000bb0000007600fffffffb0000000a0056006900650077007300000003b0000000b0000000b000fffffffb0000000c00430061006d00650072006100000002ff000001610000000000000000fc000000280000030a000001ea0100001dfa000000000100000002fb000000100044006900730070006c0061007900730100000000ffffffff0000016a00fffffffb0000001e004d006f00740069006f006e00200050006c0061006e006e0069006e00670100000000000002b1000002a200ffffff000000480000030a00000001000000020000000100000002fc0000000100000002000000010000000a0054006f006f006c00730100000000ffffffff0000000000000000
   Views:
     collapsed: false
-  Width: 1485
-  X: 105
-  Y: 91
+  Width: 767
+  X: 812
+  Y: 14

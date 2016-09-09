@@ -21,6 +21,7 @@
 #include <ros/ros.h>
 #include <sensor_msgs/JointState.h>
 #include <tf/transform_datatypes.h>
+#include <tf/transform_listener.h>
 #include <trajectory_msgs/JointTrajectory.h>
 #include <visualization_msgs/Marker.h>
 
@@ -72,6 +73,9 @@ leap_motion::leapros global_leap_msg;
 const double PI = 3.14159;
 const geometry_msgs::Point ABSOLUTE_CENTER_POINT = constructPoint(0.0, 130.0, 0.0); // in leap reference frame
 boost::shared_ptr<pluginlib::ClassLoader<kinematics::KinematicsBase>> kinematics_loader;
+geometry_msgs::Point TRANSFORM_WORKSPACE_YUMI;
+
+double Z_POSITION_ADJUSTMENT = 0.11;
 
 /* Configuration Parameters */
 double GRIPPER_OPEN_POSITION, GRIPPER_CLOSED_POSITION, CLOSED_GRIPPER_DISTANCE;
@@ -166,9 +170,22 @@ int main(int argc, char **argv) {
     geometry_msgs::Point start_location = pose_left.pose.position;
     geometry_msgs::Quaternion start_orientation = pose_left.pose.orientation;
 
-    start_location.z -= 0.11;
+    start_location.z -= Z_POSITION_ADJUSTMENT;
 
     if (SHOW_ARROW) {
+        tf::TransformListener listener;
+        tf::StampedTransform transform;
+
+        try {
+            listener.waitForTransform("yumi_body", "workspace", ros::Time(0), ros::Duration(10.0));
+            listener.lookupTransform("yumi_body", "workspace", ros::Time(0), transform);
+        } catch (tf::TransformException ex) {
+            ROS_ERROR("%s",ex.what());
+            ROS_ERROR("Program exiting due to error getting transform from the workspace to YuMi");
+            return 1;
+        }
+        TRANSFORM_WORKSPACE_YUMI = constructPoint(transform.getOrigin().x(), transform.getOrigin().y(), transform.getOrigin().z());
+
         marker = createMarker(marker_pub, pose_reference_frame, start_location);
     }
 
@@ -328,6 +345,11 @@ visualization_msgs::Marker createMarker(ros::Publisher& marker_pub, std::string 
 */
     // INITIALIZE VARIABLES
     visualization_msgs::Marker marker;
+
+    // UPDATE POINT WITH TRANSFORMATION TO WORKSPACE
+    point.x += TRANSFORM_WORKSPACE_YUMI.x;
+    point.y += TRANSFORM_WORKSPACE_YUMI.y;
+    point.z += TRANSFORM_WORKSPACE_YUMI.z + Z_POSITION_ADJUSTMENT;
 
     // ADD MARKER DATA
     marker.header.frame_id = reference_frame;
@@ -721,6 +743,11 @@ void updateMarkerPosition(ros::Publisher& marker_pub, visualization_msgs::Marker
     // INITIALIZE VARIABLES
     const double SCALE = 50.0;
     geometry_msgs::Point head_position;
+
+    // UPDATE TAIL POSITION WITH TRANSFORMATION TO WORKSPACE
+    // tail_position.x += TRANSFORM_WORKSPACE_YUMI.x;
+    // tail_position.y += TRANSFORM_WORKSPACE_YUMI.y;
+    // tail_position.z += TRANSFORM_WORKSPACE_YUMI.z;
 
     // CREATE END POSITION
     head_position.x = tail_position.x + (delta.x * SCALE);
