@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<!-- 
+<!--
   PROGRAMMER: Frederick Wachter
   DATE CREATED: 2016-05-30
   LAST MODIFIED: 2016-05-30
@@ -21,7 +21,7 @@
   <!-- Constants -->
   <xacro:property name="joint_damping" value="0.5" />
   <xacro:property name="max_effort" value="300"/>
- 
+
   <xacro:macro name="yumi_servo_gripper" params="parent name hardware_interface *origin">
 
     <!--                         -->
@@ -131,7 +131,7 @@
     <!--                              -->
     <!--   YuMi Gripper Extensions    -->
     <!--                              -->
-    <xacro:yumi_servo_gripper_gazebo name="${name}"/>
+    <xacro:yumi_servo_gripper_gazebo name="${name}" />
     <xacro:yumi_servo_gripper_transmission name="${name}" hardware_interface="${hardware_interface}"/>
 
   </xacro:macro>

@@ -1,3 +1,4 @@
+<?xml version="1.0"?>
 <launch>
   <!-- By default we do not overwrite the URDF. Change the following to true to change the default behavior -->
   <arg name="load_robot_description" default="false"/>
@@ -12,15 +13,15 @@
   <arg name="enable_cameras" default="false"/> <!-- argument to enable/disable cameras -->
   <arg name="enable_depth" default="false"/> <!-- argument to enable/disable depth on camera -->
   <arg name="enable_ground_truth" default="false"/> <!-- argument to enable/disable ground truth for cameras -->
-
+  <arg name="hardware_interface" default="PositionJointInterface"/>
   <!-- Load universal robot description format (URDF) -->
-  <param if="$(arg load_robot_description)" name="$(arg robot_description)" 
+  <param if="$(arg load_robot_description)" name="$(arg robot_description)"
     command="$(find xacro)/xacro.py '$(find yumi_description)/urdf/yumi.urdf.xacro'
-    enable_cameras:=$(arg enable_cameras) 
-    enable_depth:=$(arg enable_depth) 
-    enable_ground_truth:=$(arg enable_ground_truth)
-    two_grippers:=$(arg two_grippers)"
-  />
+             enable_cameras:=$(arg enable_cameras)
+             enable_depth:=$(arg enable_depth)
+             enable_ground_truth:=$(arg enable_ground_truth)
+             two_grippers:=$(arg two_grippers)
+             prefix:=$(arg hardware_interface)" />
 
   <!-- The semantic description that corresponds to the URDF -->
   <group unless="$(arg two_grippers)"> <!-- if using camera arm -->
@@ -29,6 +30,9 @@
   <group if="$(arg two_grippers)"> <!-- if using two grippers -->
     <param name="$(arg robot_description)_semantic" textfile="$(find yumi_moveit_config)/config/yumi_twoGrippers.srdf" />
   </group>
+  <!-- The semantic description that corresponds to the URDF -->
+  <!-- TODO(ff): Check which one we want to use, this one is from Orebro -->
+  <!--param name="$(arg robot_description)_semantic" textfile="$(find yumi_moveit_config)/config/yumi.srdf" /-->
 
   <!-- Load updated joint limits (override information from URDF) -->
   <group unless="$(arg two_grippers)" ns="$(arg robot_description)_planning"> <!-- if using camera arm -->
@@ -42,5 +46,4 @@
   <group ns="$(arg robot_description)_kinematics">
     <rosparam command="load" file="$(find yumi_moveit_config)/config/kinematics.yaml"/>
   </group>
-  
 </launch>
