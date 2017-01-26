@@ -1,4 +1,4 @@
-MODULE HandDriver_right(SYSMODULE)
+MODULE HandDriver_left(SYSMODULE)
 
 ! **************************************************** Start of description ****************************************************
 ! This file provides driver function and interface to operate the Hand via RAPID programming.
@@ -171,7 +171,7 @@ LOCAL CONST num MAX_WAIT_DURATION := 5;
 ! Hand system properties
 LOCAL VAR num hand_PhysicalMaxPosition:=250;
 LOCAL PERS string sForcedChirality := "BLANK";
-LOCAL PERS string hand_Chirality:="R";
+LOCAL PERS string hand_Chirality:="L";
 LOCAL VAR bool hand_IsChiralityUpdated := TRUE;
 LOCAL VAR bool  hand_IsChiralityCasted := FALSE;
 

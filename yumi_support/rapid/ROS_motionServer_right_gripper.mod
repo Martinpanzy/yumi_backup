@@ -45,17 +45,8 @@ LOCAL VAR ROS_joint_trajectory_pt jointTrajectory{MAX_TRAJ_LENGTH};
 LOCAL VAR ROS_gripper_trajectory_pt gripperTrajectory{MAX_TRAJ_LENGTH};
 LOCAL VAR num trajectory_size;
 
-! Flag Variables
-LOCAL VAR bool hand_calibrated := FALSE;
-LOCAL VAR bool program_started := FALSE;
-
 ! Task Name
 LOCAL VAR string task_name := "MS_Right";
-
-! Syncronize Motion Variables
-PERS tasks task_list{4} := [["T_ROB_R"],["ROS_MotionServer_Right"],["T_ROB_L"],["ROS_MotionServer_Left"]];
-VAR syncident ready;
-VAR syncident handCalibrated;
 
 PROC main()
 ! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
@@ -67,25 +58,11 @@ PROC main()
     ! Initialize Variables
     VAR ROS_msg_traj_pt message;
 
-    ! Syncronize Tasks
-    IF (program_started = FALSE) THEN
-        TPWrite task_name + ": Program ready to start.";
-        WaitSyncTask ready, task_list \TimeOut:=20;
-        program_started := TRUE;
-    ENDIF
-    
-    IF (hand_calibrated = FALSE) THEN
-        WaitSyncTask handCalibrated, task_list \TimeOut:=20; ! wait for hand to calibrate
-        TPWrite task_name + ": Hand calibrated received.";
-        hand_calibrated := TRUE;
-    ENDIF
-
     ! Wait For Connections With ROS Motion Service
     WaitTime 0.25; ! stagger server connection attempts
     TPWrite task_name + ": Waiting for connection.";
     ROS_init_socket server_socket, server_port;
     ROS_wait_for_client server_socket, client_socket, task_name;
-
 
     ! Recieve Joint Trajectory Point and Gripper Position
     WHILE ( true ) DO
@@ -98,9 +75,6 @@ ERROR (ERR_SOCK_TIMEOUT, ERR_SOCK_CLOSED, ERR_WAITSYNCTASK)
         SkipWarn;  ! TBD: include this error data in the message logged below?
         ErrWrite \W, "ROS " + task_name + " disconnect", "Connection lost. Resetting socket.";
         ExitCycle;  ! restart program
-    ELSEIF (ERRNO=ERR_WAITSYNCTASK) THEN
-        ErrWrite \W, "WaitSync timeout", "Waited too long for hand calibration";
-        TPWrite "Wait sync error";
     ELSE
         TRYNEXT;
     ENDIF
@@ -169,6 +143,7 @@ LOCAL PROC add_traj_pt(ROS_joint_trajectory_pt joints, ROS_gripper_trajectory_pt
         jointTrajectory{trajectory_size}   := joints; ! add this point to the joint trajectory
         gripperTrajectory{trajectory_size} := gripper; ! add this point to the gripper trajectory
     ENDIF
+    
 ENDPROC
 
 LOCAL PROC activate_trajectory()
@@ -179,19 +154,17 @@ LOCAL PROC activate_trajectory()
 
     ! Aquire Data Lock
     WaitTestAndSet ROS_trajectory_lock_right; ! acquire data-lock
-    TPWrite "Sending " + ValToStr(trajectory_size) + " points to right MOTION task";
 
     ! Store Joint Trajectory and Joint Trajectory Variables Into System Variables
-    ROS_trajectory_right      := jointTrajectory;
     ROS_trajectory_size_right := trajectory_size;
+    ROS_trajectory_right      := jointTrajectory;
+    ROS_trajectory_gripper_r  := gripperTrajectory;
+
+    ! Release Locks and Notify User of Sent Trajectory
     ROS_new_trajectory_right  := TRUE;
     ROS_trajectory_lock_right := FALSE; ! release data-lock
+    TPWrite "Sending " + ValToStr(trajectory_size) + " points to right MOTION task";
 
-    ! Store Gripper Trajectory and Gripper Trajectory Variables Into System Variables
-    ROS_trajectory_gripper_right      := gripperTrajectory;
-    ROS_trajectory_size_gripper_right := trajectory_size;
-    ROS_new_trajectory_gripper_right  := TRUE;
-    ROS_trajectory_lock_gripper_right := FALSE; ! release data-lock
 ENDPROC
     
 ENDMODULE

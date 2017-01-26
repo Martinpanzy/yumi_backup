@@ -39,7 +39,6 @@ LOCAL CONST zonedata DEFAULT_CORNER_DIST := z10;
 ! Trajectory Variables
 LOCAL VAR ROS_joint_trajectory_pt jointTrajectory{MAX_TRAJ_LENGTH};
 LOCAL VAR num trajectory_size := 0;
-LOCAL VAR intnum intr_new_trajectory;
 
 ! Flag Variables
 LOCAL VAR bool hand_calibrated := FALSE;
@@ -49,7 +48,7 @@ LOCAL VAR bool program_started := FALSE;
 LOCAL VAR string task_name := "M_Left";
 
 ! Syncronize Motion Variables
-PERS tasks task_list{4} := [["T_ROB_R"],["ROS_MotionServer_Right"],["T_ROB_L"],["ROS_MotionServer_Left"]];
+PERS tasks task_list{2} := [["T_ROB_R"],["T_ROB_L"]];
 VAR syncident ready;
 VAR syncident handCalibrated;
 
@@ -57,35 +56,32 @@ PROC main()
 ! MODIFIER: Frederick Wachter - wachterfreddy@gmail.com
 ! FIRST MODIFIED: 2016-06-14
 ! PURPOSE: Move the robot arm and gripper to specified trajectory
-! NOTES: A gripper is attached to this arm (right arm)
+! NOTES: A gripper is attached to this arm (left arm)
 ! FUTURE WORK: Use the velociy values
 
     ! Initialize Variables
     VAR num current_index;
     VAR jointtarget target;
-    VAR speeddata move_speed := v100; ! default speed
     VAR zonedata stop_mode;
     VAR bool skip_move;
 
-    clear_trajectory; ! ensure the trajectory is cleared from any previous trajectories received
-
     ! Syncronize Tasks
     IF (program_started = FALSE) THEN
-        TPWrite task_name + ": Program ready to start.";
         WaitSyncTask ready, task_list \TimeOut:=20;
         program_started := TRUE;
+    ELSE
+        TPWrite task_name + ": Program restarted.";
     ENDIF
     
-    IF (hand_calibrated = FALSE) THEN
-        WaitSyncTask handCalibrated, task_list \TimeOut:=20; ! wait for hand to calibrate
-        TPWrite task_name + ": Hand calibrated received.";
-        hand_calibrated := TRUE;
+    IF (flag_handCalibrated = FALSE) THEN
+        calibrate_hand; ! Calibrate the hand
+        WaitSyncTask handCalibrated, task_list \TimeOut:=20; ! Hand has been calibrated
     ENDIF
-    
-    ! Setup Interrupt to Watch For New Trajectory
-    IDelete intr_new_trajectory; ! clear interrupt handler, in case restarted with ExitCycle
-    CONNECT intr_new_trajectory WITH new_trajectory_handler;
-    IPers ROS_new_trajectory_left, intr_new_trajectory;
+
+    ! Make Sure YuMi Wont Start Running Previous Stored Trajectory
+    ROS_new_trajectory_left := FALSE;
+    trajectory_size := 0;
+    ClearPath;
 
     ! Get Trajectory and Move Arm
     WHILE true DO
@@ -112,7 +108,7 @@ PROC main()
 
                 ! Execute move command
                 IF (NOT skip_move) THEN
-                    MoveAbsJ target, norm_speed, \T:=jointTrajectory{current_index}.duration, stop_mode, tool0; ! move arm
+                    MoveAbsJ target, NORM_SPEED, \T:=jointTrajectory{current_index}.duration, stop_mode, tool0; ! move arm
                 ENDIF
             ENDFOR
 
@@ -147,6 +143,7 @@ LOCAL PROC init_trajectory()
     trajectory_size := ROS_trajectory_size_left; ! get the trajectory size
     ROS_new_trajectory_left  := FALSE; ! set flag to indicate that the new trajectory has already been retrived
     ROS_trajectory_lock_left := FALSE; ! release data-lock
+    
 ENDPROC
 
 LOCAL FUNC bool is_near(robjoint target, num tol)
@@ -168,15 +165,6 @@ LOCAL PROC abort_trajectory()
     ExitCycle;  ! restart program
 ENDPROC
 
-LOCAL PROC clear_trajectory()
-! PROGRAMMER: Frederick Wachter - wachterfreddy@gmail.com
-! DATE CREATED: 2016-08-08
-! PURPOSE: Clear any existing trajectory
-
-    trajectory_size := 0;
-    
-ENDPROC
-
 LOCAL PROC clear_path()
     IF ( NOT (IsStopMoveAct(\FromMoveTask) OR IsStopMoveAct(\FromNonMoveTask)) ) THEN
         StopMove; ! stop any active motions
@@ -184,12 +172,6 @@ LOCAL PROC clear_path()
     ClearPath; ! clear queued motion commands
     StartMove; ! re-enable motions
 ENDPROC
-
-LOCAL TRAP new_trajectory_handler
-    IF (NOT ROS_new_trajectory_left) RETURN;
-    
-    abort_trajectory;
-ENDTRAP
 
 ENDMODULE
 
