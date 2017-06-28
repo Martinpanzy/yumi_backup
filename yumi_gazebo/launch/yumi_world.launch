@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<launch> 
+<!-- Basic launch file to start up gazebo with empty world and place yumi model in it -->
+
+<arg name="hardware_interface" default="PositionJointInterface"/>  <!-- default="VelocityJointInterface" or "PositionJointInterface" -->
+
+<include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="true"/>
+    <arg name="gui" value="true"/>
+    <arg name="headless" value="false"/>
+    <arg name="debug" value="false"/>
+</include>
+
+<!-- the urdf/sdf parameter -->
+<param name="robot_description" command="$(find xacro)/xacro.py $(find yumi_description)/urdf/yumi_nogrippers.urdf.xacro prefix:=$(arg hardware_interface)"/>
+
+<node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -model yumi"  respawn="false" output="screen" />
+
+</launch>
+

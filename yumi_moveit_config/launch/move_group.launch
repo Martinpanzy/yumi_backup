@@ -3,6 +3,9 @@
 
   <include file="$(find yumi_moveit_config)/launch/planning_context.launch" />
 
+  <arg name="target_device" default="gazebo" />
+  <arg name="simulation" default="false" />
+
   <!-- GDB Debug Option -->
   <arg name="debug" default="false" />
   <arg name="pipeline" default="ompl" />
@@ -32,6 +35,7 @@
     <arg name="moveit_manage_controllers" value="true" />
     <arg name="moveit_controller_manager" value="yumi" unless="$(arg fake_execution)"/>
     <arg name="moveit_controller_manager" value="fake" if="$(arg fake_execution)"/>
+    <!--arg name="target_device" value="$(arg target_device)" /-->
   </include>
 
   <!-- Sensors Functionality -->
