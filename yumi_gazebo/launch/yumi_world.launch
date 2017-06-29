@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
-<launch> 
+<launch>
 <!-- Basic launch file to start up gazebo with empty world and place yumi model in it -->
 
 <arg name="hardware_interface" default="PositionJointInterface"/>  <!-- default="VelocityJointInterface" or "PositionJointInterface" -->
@@ -12,10 +12,9 @@
     <arg name="debug" value="false"/>
 </include>
 
-<!-- the urdf/sdf parameter -->
-<param name="robot_description" command="$(find xacro)/xacro.py $(find yumi_description)/urdf/yumi_nogrippers.urdf.xacro prefix:=$(arg hardware_interface)"/>
+<!-- the urdf/sdf parameter --> <!-- Launch Yumi with grippers -->
+<param name="robot_description" command="$(find xacro)/xacro.py $(find yumi_description)/urdf/yumi.urdf.xacro prefix:=$(arg hardware_interface)"/>
 
 <node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -model yumi"  respawn="false" output="screen" />
 
 </launch>
-

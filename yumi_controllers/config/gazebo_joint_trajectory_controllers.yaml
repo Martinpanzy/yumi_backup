@@ -1,3 +1,4 @@
+# Left and Right arm controllers for Gazebo side.
 yumi:
 # Joint Trajectory Position Controller ----------------------------------------
   left_arm:
@@ -10,6 +11,7 @@ yumi:
       - yumi_joint_4_l
       - yumi_joint_5_l
       - yumi_joint_6_l
+
     gains:
        yumi_joint_1_l: {p: 1.5,  d: 0, i: 0.002, i_clamp: 0.1}
        yumi_joint_2_l: {p: 1.5,  d: 0, i: 0.002, i_clamp: 0.1}
@@ -29,6 +31,7 @@ yumi:
       - yumi_joint_4_r
       - yumi_joint_5_r
       - yumi_joint_6_r
+
     gains:
       yumi_joint_1_r: {p: 1.5,  d: 0, i: 0.002, i_clamp: 0.1}
       yumi_joint_2_r: {p: 1.5,  d: 0, i: 0.002, i_clamp: 0.1}
@@ -37,3 +40,17 @@ yumi:
       yumi_joint_4_r: {p: 1.5,  d: 0, i: 0.002, i_clamp: 0.1}
       yumi_joint_5_r: {p: 1.5,  d: 0, i: 0.002, i_clamp: 0.1}
       yumi_joint_6_r: {p: 1.5,  d: 0, i: 0.002, i_clamp: 0.1}
+
+  gripper_controller_r:
+    type: "position_controllers/JointTrajectoryController"
+    joints:
+      - gripper_r_joint
+    gains:
+      gripper_r_joint: {p: 1.5,  d: 0, i: 0.002, i_clamp: 0.1} # double check these gain values
+
+  gripper_controller_l:
+    type: "position_controllers/JointTrajectoryController"
+    joints:
+      - gripper_l_joint
+    gains:
+      gripper_l_joint: {p: 1.5,  d: 0, i: 0.002, i_clamp: 0.1} # double check these gain values

@@ -1,3 +1,4 @@
+# Controller for Left and Right arms for moveit side
 controller_manager_ns: controller_manager
 controller_list:
   - name: yumi/left_arm
@@ -12,6 +13,7 @@ controller_list:
       - yumi_joint_4_l
       - yumi_joint_5_l
       - yumi_joint_6_l
+
   - name: yumi/right_arm
     action_ns: follow_joint_trajectory
     type: FollowJointTrajectory
@@ -24,3 +26,17 @@ controller_list:
       - yumi_joint_4_r
       - yumi_joint_5_r
       - yumi_joint_6_r
+
+  - name: yumi/gripper_controller_r
+    action_ns: follow_joint_trajectory
+    type: FollowJointTrajectory
+    default: true
+    joints:
+      - gripper_r_joint
+
+  - name: yumi/gripper_controller_l
+    action_ns: follow_joint_trajectory
+    type: FollowJointTrajectory
+    default: true
+    joints:
+      - gripper_l_joint

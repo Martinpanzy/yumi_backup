@@ -8,8 +8,8 @@
   	<param name="use_controller_manager" value="$(arg use_controller_manager)" />
 
   	<!-- Load joint controller configurations from YAML file to parameter server -->
-    <rosparam file="$(find yumi_controllers)/config/gazebo_follow_joint_trajectory.yaml"/>
-
+    <rosparam command ="load" file="$(find yumi_controllers)/config/gazebo_follow_joint_trajectory.yaml" />
+    
     <!-- load controller_list -->
     <!--rosparam file="$(find yumi_moveit_config)/config/controllers.yaml"/-->
 </launch>

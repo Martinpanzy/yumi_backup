@@ -6,17 +6,14 @@
    <transmission name="${name}_tran">
       <type>transmission_interface/SimpleTransmission</type>
       <joint name="${name}_joint">
-	<hardwareInterface>${hardware_interface}</hardwareInterface>
+	       <hardwareInterface>${hardware_interface}</hardwareInterface>
       </joint>
       <actuator name="${name}_motor">
-	<hardwareInterface>${hardware_interface}</hardwareInterface>
-	<mechanicalReduction>1</mechanicalReduction>
+	       <hardwareInterface>${hardware_interface}</hardwareInterface>
+	       <mechanicalReduction>1</mechanicalReduction>
       </actuator>
     </transmission>
 
   </xacro:macro>
 
 </robot>
-
-
-

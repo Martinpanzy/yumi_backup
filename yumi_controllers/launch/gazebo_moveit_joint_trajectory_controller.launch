@@ -2,6 +2,6 @@
 	<rosparam file="$(find yumi_controllers)/config/gazebo_joint_trajectory_controllers.yaml" command="load"/>
 
   <node name="yumi_controller_spawner" pkg="controller_manager" type="spawner" respawn="false"
-	output="screen" ns="/yumi" args="left_arm    right_arm"/> <!--joint_trajectory_vel_controller-->
+	output="screen" ns="/yumi" args="left_arm    right_arm    gripper_controller_r    gripper_controller_l"/>
 
 </launch>
