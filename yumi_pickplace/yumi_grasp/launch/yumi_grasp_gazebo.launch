@@ -1,0 +1,55 @@
+<?xml version="1.0"?>
+<launch>
+<!-- Similar to jaco_gazebo.launch  -->
+<!-- This file launches the gazebo stuff before launch grasping files -->
+<arg name="hardware_interface" default="PositionJointInterface"/>  <!-- default="VelocityJointInterface" or "PositionJointInterface" -->
+
+# Load the grasp fix plugin for gazebo?
+<arg name="load_grasp_fix" default="false"/> # this is not yet implemented for Yumi`
+
+<!-- Provides a ROS service which can be used to request object information. -->
+# set to true if the gazebo_state_plugin/gazebo_object_info world plugin should be loaded
+<arg name="load_gazebo_objects_plugin" default="true"/>
+
+<!-- Only need if you want gazebo to publish a 2D grid occupancy map of the world -->
+# set to true if the gazebo_state_plugin/gazebo_map_publisher world plugin should be loaded
+<arg name="load_gazebo_map_plugin" default="false"/>
+
+# load the world plugin loader (in package gazebo_world_plugin_loader) which launches several
+# world plugins according to the specification in the ROS parameters. Note that you will
+# have to load those parameters on the ROS parameter server BEFORE gazebo gets launched.
+<arg name="load_world_plugins" default="true"/>
+
+<!-- Launch Gazebo -->
+<include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="paused" value="false"/>
+    <arg name="use_sim_time" value="true"/>
+    <arg name="gui" value="true"/>
+    <arg name="headless" value="false"/>
+    <arg name="debug" value="false"/>
+    <!-- To start world gazebo plugins -->
+    <arg if="$(arg load_world_plugins)" name="extra_gazebo_args" value="-s libgazebo_world_plugin_loader.so"/>
+</include>
+
+<!-- Launch Yumi with grippers --> <!-- the urdf/sdf parameter --> <!-- RViz launched inside this node -->
+<param name="robot_description" command="$(find xacro)/xacro.py $(find yumi_description)/urdf/yumi.urdf.xacro prefix:=$(arg hardware_interface)"/>
+
+<!-- Spawn robot -->
+<node name="spawn_urdf" pkg="gazebo_ros" type="spawn_model" args="-param robot_description -urdf -model yumi"  respawn="false" output="screen" />
+
+<!-- ros_control seven dof arm launch file -->
+<include file="$(find yumi_controllers)/launch/gazebo_moveit_joint_state_controller.launch" />
+
+<!-- ros_control trajectory control & gripper control dof arm launch file -->
+<include file="$(find yumi_controllers)/launch/gazebo_moveit_joint_trajectory_controller.launch" />
+
+<!-- We do not have a robot connected, so publish fake joint states -->
+<node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
+  <param name="/use_gui" value="false"/>
+  <rosparam param="/source_list">[/yumi/joint_states]</rosparam>
+</node>
+
+<!-- moveit launch file -->
+<include file="$(find yumi_moveit_config)/launch/gazebo_moveit_planning_exec_minimal.launch" />
+
+</launch>

@@ -1,5 +1,5 @@
 <launch>
-
+  <!-- Main launch file to start Gazebo, Rviz aith moveIt for manupulation via Rviz -->
   <!-- Launch Gazebo  -->
   <include file="$(find yumi_gazebo)/launch/yumi_world.launch" />
 
