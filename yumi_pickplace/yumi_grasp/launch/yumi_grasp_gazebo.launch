@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <launch>
-<!-- Similar to jaco_gazebo.launch  -->
+<!-- Similar to jaco_gazebo.launch -->
 <!-- This file launches the gazebo stuff before launch grasping files -->
 <arg name="hardware_interface" default="PositionJointInterface"/>  <!-- default="VelocityJointInterface" or "PositionJointInterface" -->
 
