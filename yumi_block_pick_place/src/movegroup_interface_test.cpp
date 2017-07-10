@@ -235,10 +235,8 @@ int main(int argc, char **argv)
   target_pose3.position.y -= 0.1;
   waypoints.push_back(target_pose3);  // left
 
-  target_pose3.position.z = 0.714620;
-  target_pose3.position.y = 0.005869;
-  target_pose3.position.x = 0.568464;
-  //waypoints.push_back(target_pose3);  // down and right
+  target_pose3.position.z = 0.1;
+  waypoints.push_back(target_pose3);  // down and right
 
   // Cartesian motions are frequently needed to be slower for actions such as approach and retreat
   // grasp motions. Here we demonstrate how to reduce the speed of the robot arm via a scaling factor

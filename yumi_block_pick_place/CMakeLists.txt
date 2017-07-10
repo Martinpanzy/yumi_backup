@@ -10,7 +10,7 @@ add_compile_options(-std=c++11)
 find_package(catkin REQUIRED COMPONENTS
   roscpp
   std_msgs
-  moveit_ros_planning_interface 
+  moveit_ros_planning_interface
   moveit_visual_tools
   moveit_simple_grasps
 )
@@ -119,8 +119,11 @@ catkin_package(
 ## Your package locations should be listed before other locations
 include_directories(include ${catkin_INCLUDE_DIRS})
 
-add_executable(block_pick_place src/block_pick_place.cpp)
-target_link_libraries(block_pick_place ${catkin_LIBRARIES})
+add_executable(movegroup_interface_test src/movegroup_interface_test.cpp)
+target_link_libraries(movegroup_interface_test ${catkin_LIBRARIES})
+
+add_executable(planning_scene_test src/planning_scene_test.cpp)
+target_link_libraries(planning_scene_test ${catkin_LIBRARIES})
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
