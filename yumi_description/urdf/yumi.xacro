@@ -13,7 +13,7 @@
   <xacro:property name="safety_controller_k_vel" value="2" /> -->
   <xacro:property name="joint_damping" value="0.5" />
   <xacro:property name="max_effort" value="300"/>
- 
+
   <xacro:macro name="yumi" params="parent name hardware_interface *origin">
 
     <!--joint between {parent} and body-->
@@ -54,7 +54,7 @@
     <joint name="${name}_joint_1_r" type="revolute">
       <parent link="${name}_body"/>
       <child link="${name}_link_1_r"/>
-      <origin xyz="0.05355 -0.0725 0.41492" rpy="-0.9795   -0.5682   -2.3155"/>
+      <origin xyz="0.05355 -0.0725 0.41492" rpy="1 0 0"/> <!---0.9795   -0.5682   -2.3155-->
       <axis xyz="0 0 1"/>
       <limit lower="${-168.5 * PI / 180}" upper="${168.5 * PI / 180}"
              effort="${max_effort}" velocity="${180 * PI / 180}" />
@@ -171,7 +171,7 @@
     <joint name="${name}_joint_3_r" type="revolute">
       <parent link="${name}_link_3_r"/>
       <child link="${name}_link_4_r"/>
-      <origin xyz="-0.04188 0.0 0.07873" rpy="${PI / 2} ${- PI / 2} 0.0"/>
+      <origin xyz="-0.04188 0.0 0.07873" rpy="${PI / 2} ${ PI / 2} 0"/> <!-- ${PI / 2} ${- PI / 2} 0.0 -->
       <axis xyz="0 0 1"/>
       <limit lower="${-123.5 * PI / 180}" upper="${80 * PI / 180}"
              effort="${max_effort}" velocity="${180 * PI / 180}" />
