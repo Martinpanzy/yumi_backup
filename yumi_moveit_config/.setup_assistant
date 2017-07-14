@@ -1,8 +1,10 @@
 moveit_setup_assistant_config:
   URDF:
     package: yumi_description
-    relative_path: urdf/yumi.urdf
+    relative_path: urdf/yumi.urdf.xacro
   SRDF:
     relative_path: config/yumi.srdf
   CONFIG:
-    generated_timestamp: 1458234540
+    author_name: Aneri Muni
+    author_email: aneri2794@gmail.com
+    generated_timestamp: 1499781454

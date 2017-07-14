@@ -1,5 +1,6 @@
 /*
   Testing planning scene api with Yumi
+  Inserts a cube, aatches/detaches to yumi.
 */
 
 #include <ros/ros.h>
@@ -138,7 +139,7 @@ int main(int argc, char **argv)
   planning_scene.world.collision_objects.clear();
   planning_scene.world.collision_objects.push_back(remove_object);
   planning_scene.robot_state.attached_collision_objects.push_back(attached_object);
-  planning_scene.robot_state.is_diff = true; //additionally required 
+  planning_scene.robot_state.is_diff = true; //additionally required
   planning_scene_diff_publisher.publish(planning_scene);
 
   sleep_time.sleep();

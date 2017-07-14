@@ -13,6 +13,7 @@ find_package(catkin REQUIRED COMPONENTS
   moveit_ros_planning_interface
   moveit_visual_tools
   moveit_simple_grasps
+  rviz_visual_tools
 )
 
 ## System dependencies are found with CMake's conventions
@@ -124,6 +125,9 @@ target_link_libraries(movegroup_interface_test ${catkin_LIBRARIES})
 
 add_executable(planning_scene_test src/planning_scene_test.cpp)
 target_link_libraries(planning_scene_test ${catkin_LIBRARIES})
+
+add_executable(block_pick_place src/block_pick_place.cpp)
+target_link_libraries(block_pick_place ${catkin_LIBRARIES})
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}

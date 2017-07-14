@@ -1,0 +1,22 @@
+<launch>
+
+  <!-- Debug -->
+  <arg name="debug" default="false" />
+  <arg unless="$(arg debug)" name="launch_prefix" value="" />
+  <arg     if="$(arg debug)" name="launch_prefix" value="gdb --ex run --args" />
+
+  <!-- Verbose mode -->
+  <arg name="verbose" default="false" />
+  <arg unless="$(arg verbose)" name="command_args" value="" />
+  <arg     if="$(arg verbose)" name="command_args" value="--verbose" />
+
+  <!-- Start the block grasping -->
+  <node name="block_pick_place" launch-prefix="$(arg launch_prefix)" pkg="yumi_block_pick_place"
+	type="block_pick_place" output="screen" args="$(arg command_args)">
+    <param name="ee_group_name" value="left_gripper"/>
+    <param name="planning_group_name" value="left_gripper"/>
+    <rosparam command="load" file="$(find yumi_moveit_config)/config/kinematics.yaml"/>
+    <rosparam command="load" file="$(find yumi_block_pick_place)/config/yumi_grasp_data.yaml"/>
+  </node>
+
+</launch>
