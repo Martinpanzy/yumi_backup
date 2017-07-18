@@ -1,0 +1,14 @@
+<launch>
+  <arg name="robot" default="yumi"/>
+
+  <arg name="group"        default="left_arm"/>
+  <arg name="end_effector" default="left_gripper"/>
+
+  <node pkg="yumi_block_pick_place" type="yumi_grasps_server" name="yumi_grasps_server">
+    <param name="group" value="$(arg group)"/>
+    <param name="end_effector" value="$(arg end_effector)"/>
+    <rosparam command="load" file="$(find yumi_block_pick_place)/config/yumi_grasp_data.yaml"/>
+
+  </node>
+
+</launch>

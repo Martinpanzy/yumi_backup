@@ -24,7 +24,7 @@
   </include>
 
   <!-- If needed, broadcast static tf for robot root -->
-  
+
 
   <!-- We do not have a robot connected, so publish fake joint states -->
   <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher">
@@ -48,6 +48,10 @@
     <arg name="config" value="true"/>
     <arg name="debug" value="$(arg debug)"/>
   </include>
+
+  <!--include file="$(find moveit_grasps)/launch/rviz.launch">
+    <arg name="debug" value="$(arg debug)"/>
+  </include-->
 
   <!-- If database loading was enabled, start mongodb as well -->
   <include file="$(find yumi_moveit_config)/launch/default_warehouse_db.launch" if="$(arg db)">

@@ -129,6 +129,9 @@ target_link_libraries(planning_scene_test ${catkin_LIBRARIES})
 add_executable(block_pick_place src/block_pick_place.cpp)
 target_link_libraries(block_pick_place ${catkin_LIBRARIES})
 
+add_executable(yumi_grasps_server src/yumi_grasps_server.cpp)
+target_link_libraries(yumi_grasps_server ${catkin_LIBRARIES})
+
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
 #   src/${PROJECT_NAME}/yumi_block_pick_place.cpp

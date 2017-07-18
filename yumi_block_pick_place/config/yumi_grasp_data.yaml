@@ -2,7 +2,7 @@ base_link: 'yumi_body'
 
 # =====================================================
 left_gripper:
-    end_effector_name: 'left_gripper'  #ee group name
+    end_effector_name: 'left_eef'  #ee group name
 
     #actuated joints in end effector
     joints : ['gripper_l_joint'] #gripper_l_joint_m
@@ -18,13 +18,16 @@ left_gripper:
     #desired pose from end effector to grasp - [x,y,z]
     grasp_pose_to_eef : [-0.15, 0, 0]
 
+    #grasp_pose_to_eef_transform : [0,0,0,0,1.5708,0]
+
     #desired pose from end effector to grasp - [r, p, y]
     grasp_pose_to_eef_rotation : [0, 1.5708, 0] # 1.5707 = PI/2
 
     end_effector_parent_link: 'yumi_link_7_l'
+
 # =====================================================
 right_gripper:
-    end_effector_name: 'right_gripper'  #ee group name
+    end_effector_name: 'right_eef'  #ee group name
 
     #actuated joints in end effector
     joints : ['gripper_r_joint']

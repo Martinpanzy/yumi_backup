@@ -26,6 +26,8 @@
 #include <moveit_simple_grasps/grasp_data.h>
 #include <moveit_visual_tools/moveit_visual_tools.h> // simple tool for showing graspsp
 
+#include <moveit_simple_grasps/custom_environment2.h>
+
 namespace moveit_simple_grasps
 {
 
@@ -61,20 +63,10 @@ public:
 
   boost::shared_ptr<tf::TransformListener> tf_;
   planning_scene_monitor::PlanningSceneMonitorPtr planning_scene_monitor_;
-  //
-
-  //static const std::string PLANNING_GROUP = "right_arm";
-
-  // The :move_group_interface:`MoveGroup` class can be easily
-  // setup using just the name of the planning group you would like to control and plan for.
-  //moveit::planning_interface::MoveGroupInterface move_group(planning_group_name_);
-
-  // We will use the :planning_scene_interface:`PlanningSceneInterface`
-  // class to add and remove collision objects in our "virtual world" scene
-  //moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
 
   // Raw pointers are frequently used to refer to the planning group for improved performance.
   const robot_state::JointModelGroup *joint_model_group;
+  const robot_state::JointModelGroup *eef_joint_model_group;
 
   // settings
   bool auto_reset_;
@@ -93,6 +85,8 @@ public:
     nh_.param("ee_group_name", ee_group_name_, std::string("unknown"));
     nh_.param("planning_group_name", planning_group_name_, std::string("unknown"));
 
+    planning_group_name_ = "left_arm";
+
     ROS_INFO_STREAM_NAMED("moveit_blocks","End Effector: " << ee_group_name_);
     ROS_INFO_STREAM_NAMED("moveit_blocks","Planning Group: " << planning_group_name_);
 
@@ -108,19 +102,32 @@ public:
     // Load grasp generator
     if (!grasp_data_.loadRobotGraspData(nh_, ee_group_name_))
       ros::shutdown();
+    grasp_data_.print();
 
     ROS_INFO_STREAM_NAMED("moveit_blocks","YASSSSSSSSSSSSSS");
 
     joint_model_group = (move_group_->getRobotModel())->getJointModelGroup(planning_group_name_); //->getCurrentState()
+    eef_joint_model_group = (move_group_->getRobotModel())->getJointModelGroup(ee_group_name_);
+    //Apparently end_effector_name and attached_end_effector need to be set separately!
 
     const std::vector<std::string>& ee_link_names = joint_model_group->getLinkModelNames();
+    /** \brief First: name of the group that is parent to this end-effector group;
+    Second: the link this in the parent group that this group attaches to */
     const std::string& ee_parent_link_name = joint_model_group->getEndEffectorParentGroup().second;
+    const std::string& ee_parent_group_name = joint_model_group->getEndEffectorParentGroup().first;
+    const std::vector<std::string>& ee_attached_name = joint_model_group->getAttachedEndEffectorNames();
 
-    ROS_INFO_STREAM_NAMED("moveit_blocks","parent group, %s"<< ee_parent_link_name);
+/*
+    ROS_INFO_STREAM_NAMED("moveit_blocks","group name, %s"<< joint_model_group->getName());
+    ROS_INFO_STREAM_NAMED("moveit_blocks","parent link, %s"<< ee_parent_link_name);
+    ROS_INFO_STREAM_NAMED("moveit_blocks","parent group, %s"<< ee_parent_group_name);
+    ROS_INFO_STREAM_NAMED("moveit_blocks","ee vec size, %s"<< ee_attached_name.size());
+
+    for (std::vector<std::string>::const_iterator i = ee_attached_name.begin(); i != ee_attached_name.end(); ++i)
+        ROS_INFO_STREAM_NAMED("moveit_blocks","attached ee, %s"<< *i);
 
     for (std::vector<std::string>::const_iterator i = ee_link_names.begin(); i != ee_link_names.end(); ++i)
-        ROS_INFO_STREAM_NAMED("moveit_blocks","links, %s" << *i);
-
+*/
     // Define Planning Scene
     //planning_scene_monitor_.reset(new planning_scene_monitor)
 
@@ -128,7 +135,7 @@ public:
     visual_tools_.reset(new moveit_visual_tools::MoveItVisualTools( grasp_data_.base_link_, "rviz_markers", planning_scene_monitor_));
     visual_tools_->setFloorToBaseHeight(-0.9);
     ROS_INFO_STREAM_NAMED("moveit_blocks","before EE marker");
-    visual_tools_->loadEEMarker(joint_model_group); //, planning_group_name_);**
+    visual_tools_->loadEEMarker(eef_joint_model_group); //, planning_group_name_);**
 
     ROS_INFO_STREAM_NAMED("moveit_blocks","after EE marker");
 
@@ -332,7 +339,7 @@ public:
     double animate_speed = 0.1;
     // Visualize them
     //visual_tools_->publishAnimatedGrasps(possible_grasps, joint_model_group, animate_speed*0.1);
-    visual_tools_->publishGrasps( possible_grasps, joint_model_group, animate_speed );
+    visual_tools_->publishGrasps( possible_grasps, eef_joint_model_group, animate_speed );
 
     ROS_INFO_STREAM_NAMED("pick_place","After visual tools publishing");
 
@@ -355,8 +362,6 @@ public:
       }
     }
 */
-    //ROS_INFO_STREAM_NAMED("","Grasp 0\n" << possible_grasps[0]);
-
     return move_group_->pick(block_name, possible_grasps);
   }
 
