@@ -59,7 +59,8 @@ int main(int argc, char **argv)
   // The package MoveItVisualTools provides many capabilties for visualizing objects, robots,
   // and trajectories in Rviz as well as debugging tools such as step-by-step introspection of a script
   namespace rvt = rviz_visual_tools;
-  moveit_visual_tools::MoveItVisualTools visual_tools("odom_combined");
+  rviz_visual_tools::RvizVisualTools visual_tools("yumi_body", "/rviz_visual_tools");
+//  moveit_visual_tools::MoveItVisualTools visual_tools("odom_combined");
   visual_tools.deleteAllMarkers();
 
   // Remote control is an introspection tool that allows users to step through a high level script

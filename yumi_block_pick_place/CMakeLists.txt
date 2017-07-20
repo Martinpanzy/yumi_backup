@@ -132,6 +132,9 @@ target_link_libraries(block_pick_place ${catkin_LIBRARIES})
 add_executable(yumi_grasps_server src/yumi_grasps_server.cpp)
 target_link_libraries(yumi_grasps_server ${catkin_LIBRARIES})
 
+add_executable(pick_place_constraints src/pick_place_constraints.cpp)
+target_link_libraries(pick_place_constraints ${catkin_LIBRARIES})
+
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
 #   src/${PROJECT_NAME}/yumi_block_pick_place.cpp

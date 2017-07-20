@@ -13,20 +13,14 @@
 
 #include <moveit_visual_tools/moveit_visual_tools.h>
 
-// Grasp generation and visualization
-#include <moveit_simple_grasps/simple_grasps.h>
-#include <moveit_simple_grasps/grasp_data.h>
-
 int main(int argc, char **argv)
 {
-  ros::init(argc, argv, "yumi_basic_grasp");
+  ros::init(argc, argv, "move_group_interface_tutorial");
+  ros::NodeHandle node_handle;
   ros::AsyncSpinner spinner(1);
   spinner.start();
 
-  // MoveIt! operates on sets of joints called "planning groups" and stores them in an object called
-  // the `JointModelGroup`. Throughout MoveIt! the terms "planning group" and "joint model group"
-  // are used interchangably.
-  static const std::string PLANNING_GROUP = "left_arm";
+  static const std::string PLANNING_GROUP = "right_arm";
 
   // The :move_group_interface:`MoveGroup` class can be easily
   // setup using just the name of the planning group you would like to control and plan for.
@@ -40,34 +34,22 @@ int main(int argc, char **argv)
   const robot_state::JointModelGroup *joint_model_group =
     move_group.getCurrentState()->getJointModelGroup(PLANNING_GROUP);
 
-  // Grasp generator
-  moveit_simple_grasps::SimpleGraspsPtr simple_grasps_;
-
-  // class for publishing stuff to rviz
-  moveit_visual_tools::MoveItVisualToolsPtr visual_tools_;
-
-  // robot-specific data for generating grasps
-  moveit_simple_grasps::GraspData grasp_data_;
-
   // Visualization
   // ^^^^^^^^^^^^^
   // The package MoveItVisualTools provides many capabilties for visualizing objects, robots,
   // and trajectories in Rviz as well as debugging tools such as step-by-step introspection of a script
-/*  namespace rvt = rviz_visual_tools;
-  moveit_visual_tools::MoveItVisualTools visual_tools("yumi_body");
+  namespace rvt = rviz_visual_tools;
+  rviz_visual_tools::RvizVisualTools visual_tools("yumi_body", "/rviz_visual_tools");
+//  moveit_visual_tools::MoveItVisualTools visual_tools("odom_combined");
   visual_tools.deleteAllMarkers();
-*/
 
-  visual_tools_.reset(new moveit_visual_tools::MoveItVisualTools("yumi_body"));
-
-/*
   // Rviz provides many types of markers, in this demo we will use text, cylinders, and spheres
   Eigen::Affine3d text_pose = Eigen::Affine3d::Identity();
   text_pose.translation().z() = 1.75; // above head of PR2
   visual_tools.publishText(text_pose, "MoveGroupInterface Demo", rvt::WHITE, rvt::XLARGE);
-*/
+
   // Batch publishing is used to reduce the number of messages being sent to Rviz for large visualizations
-  visual_tools_.trigger();
+  visual_tools.trigger();
 
   // Getting Basic Information
   // ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -76,41 +58,34 @@ int main(int argc, char **argv)
   // We can also print the name of the end-effector link for this group.
   ROS_INFO_NAMED("tutorial", "End effector link: %s", move_group.getEndEffectorLink().c_str());
 
-  // Load grasp data specific to our robot
-  ros::NodeHandle nh("~");
-  if (!grasp_data_.loadRobotGraspData(nh, "left_gripper"))
-    ros::shutdown();
+  // Now, we call the planner to compute the plan and visualize it.
+  // Note that we are just planning, not asking move_group
+  // to actually move the robot.
+  moveit::planning_interface::MoveGroupInterface::Plan my_plan;
+  bool success = move_group.plan(my_plan);
 
-  // Load grasp generator
-  simple_grasps_.reset( new moveit_simple_grasps::SimpleGrasps(visual_tools_) );
+  // Moving to a pose goal
+  // ^^^^^^^^^^^^^^^^^^^^^
+  //
+  // Moving to a pose goal is similar to the step above
+  // except we now use the move() function. Note that
+  // the pose goal we had set earlier is still active
+  // and so the robot will try to move to that goal. We will
+  // not use that function in this tutorial since it is
+  // a blocking function and requires a controller to be active
+  // and report success on execution of a trajectory.
 
+  /* Uncomment below line when working with a real robot */
+  /* move_group.move() */
+
+  // Cartesian Paths
+  // ^^^^^^^^^^^^^^^
+  // You can plan a cartesian path directly by specifying a list of waypoints
+  // for the end-effector to go through. Note that we are starting
+  // from the new start state above.  The initial pose (start state) does not
+  // need to be added to the waypoint list but adding it can help with visualizations
   geometry_msgs::PoseStamped curr_pose = move_group.getCurrentPose();
 
-  geometry_msgs::Pose object_pose;
-  object_pose.position.x = 0.4;
-  object_pose.position.y = -0.2;
-  object_pose.position.z = 0.0;
-
-  // Orientation
-  double angle = 0; //M_PI / 1.5;
-  Eigen::Quaterniond quat(Eigen::AngleAxis<double>(double(angle), Eigen::Vector3d::UnitZ()));
-  object_pose.orientation.x = quat.x();
-  object_pose.orientation.y = quat.y();
-  object_pose.orientation.z = quat.z();
-  object_pose.orientation.w = quat.w();
-
-  // Visualize object pose as a block
-  visual_tools_->publishBlock(object_pose, rviz_visual_tools::BLUE, 0.04);
-
-  // Actually generate grasps
-  std::vector<moveit_msgs::Grasp> possible_grasps;
-  simple_grasps_->generateBlockGrasps( object_pose, grasp_data_, possible_grasps);
-
-  ROS_INFO_NAMED("tutorial", "Reference frame: ", possible_grasps);
-
-  // Visualize
-  //visual_tools_->publishAnimatedGrasps(possible_grasps, grasp_data_.ee_parent_link_);
-/*
   geometry_msgs::Pose start_pose2;
   start_pose2.orientation = curr_pose.pose.orientation;
   start_pose2.position = curr_pose.pose.position;
@@ -120,13 +95,13 @@ int main(int argc, char **argv)
 
   geometry_msgs::Pose target_pose3 = start_pose2;
 
-  target_pose3.position.z += 0.2;
-  waypoints.push_back(target_pose3);  // up
+  //target_pose3.position.z += 0.2;
+  //waypoints.push_back(target_pose3);  // up
 
   target_pose3.position.y -= 0.1;
   waypoints.push_back(target_pose3);  // left
 
-  target_pose3.position.z = 0.1;
+  target_pose3.orientation.w = -1.0;
   waypoints.push_back(target_pose3);  // down and right
 
   // Cartesian motions are frequently needed to be slower for actions such as approach and retreat
@@ -152,7 +127,75 @@ int main(int argc, char **argv)
   for (std::size_t i = 0; i < waypoints.size(); ++i)
     visual_tools.publishAxisLabeled(waypoints[i], "pt" + std::to_string(i), rvt::SMALL);
   visual_tools.trigger();
+  ros::Duration(10.0).sleep();
+
+  // Planning with Path Constraints
+  // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  //
+  // Path constraints can easily be specified for a link on the robot.
+  // Let's specify a path constraint and a pose goal for our group.
+  // First define the path constraint.
+  moveit_msgs::OrientationConstraint ocm;
+  ocm.link_name = "gripper_r_base"; //r_wrist_roll_link
+  ocm.header.frame_id = "yumi_body"; //base_link
+  ocm.orientation.w = 1.0;
+  ocm.absolute_x_axis_tolerance = 0.1;
+  ocm.absolute_y_axis_tolerance = 0.1;
+  ocm.absolute_z_axis_tolerance = 0.1;
+  ocm.weight = 1.0;
+
+  // Now, set it as the path constraint for the group.
+  moveit_msgs::Constraints test_constraints;
+  test_constraints.orientation_constraints.push_back(ocm);
+  move_group.setPathConstraints(test_constraints);
+
+  // We will reuse the old goal that we had and plan to it.
+  // Note that this will only work if the current state already
+  // satisfies the path constraints. So, we need to set the start
+  // state to a new pose.
+  //robot_state::RobotState start_state(*move_group.getCurrentState());
+  //geometry_msgs::Pose start_pose3;
+  //start_pose2.orientation.w = 1.0;
+  //start_pose2.position.x = 0.55;
+  //start_pose2.position.y = -0.05;
+  //start_pose2.position.z = 0.8;
+  //start_state.setFromIK(joint_model_group, start_pose3);
+  //move_group.setStartState(start_state);
+
+  geometry_msgs::PoseStamped now_pose = move_group.getCurrentPose();
+
+  geometry_msgs::Pose new_start;
+  new_start.orientation = now_pose.pose.orientation;
+  new_start.position = now_pose.pose.position;
+  //move_group.setStartState(new_start);
+  // Now we will plan to the earlier pose target from the new
+  // start state that we have just created.
+  geometry_msgs::Pose constraint_pose = start_pose2;
+  constraint_pose.orientation.w = -1.0;
+  move_group.setPoseTarget(constraint_pose);
+
+  // Planning with constraints can be slow because every sample must call an inverse kinematics solver.
+  // Lets increase the planning time from the default 5 seconds to be sure the planner has enough time to succeed.
+  move_group.setPlanningTime(10.0);
+
+  success = move_group.plan(my_plan);
+  ROS_INFO_NAMED("tutorial", "Visualizing plan 3 (constraints) %s", success ? "" : "FAILED");
+
+  //moveit_visual_tools::MoveItVisualToolsPtr visual_tools_;
+  //visual_tools_.reset(new moveit_visual_tools::MoveItVisualTools(robot_model.getModelFrame(),"/moveit_visual_markers"));
+
+  // Visualize the plan in Rviz
+  visual_tools.deleteAllMarkers();
+  visual_tools.publishAxisLabeled(target_pose3, "start");
+  visual_tools.publishAxisLabeled(constraint_pose, "goal");
+  visual_tools.publishText(text_pose, "Constrained Goal", rvt::WHITE, rvt::XLARGE);
+  //visual_tools_->publishTrajectoryLine(my_plan.trajectory_, joint_model_group);
+  visual_tools.trigger();
   visual_tools.prompt("next step");
+
+  // When done with the path constraint be sure to clear it.
+  move_group.clearPathConstraints();
+
 /*
   // Adding/Removing Objects and Attaching/Detaching Objects
   // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
