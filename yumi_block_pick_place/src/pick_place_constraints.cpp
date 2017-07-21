@@ -95,11 +95,14 @@ int main(int argc, char **argv)
 
   geometry_msgs::Pose target_pose3 = start_pose2;
 
-  //target_pose3.position.z += 0.2;
-  //waypoints.push_back(target_pose3);  // up
+  target_pose3.position.z += 0.2;
+  waypoints.push_back(target_pose3);  // up
 
   target_pose3.position.y -= 0.1;
   waypoints.push_back(target_pose3);  // left
+
+  target_pose3.position.z += 0.1;
+  waypoints.push_back(target_pose3);  // up
 
   target_pose3.orientation.w = -1.0;
   waypoints.push_back(target_pose3);  // down and right
@@ -129,7 +132,7 @@ int main(int argc, char **argv)
   visual_tools.trigger();
   ros::Duration(10.0).sleep();
 
-  // Planning with Path Constraints
+/*  // Planning with Path Constraints
   // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
   //
   // Path constraints can easily be specified for a link on the robot.

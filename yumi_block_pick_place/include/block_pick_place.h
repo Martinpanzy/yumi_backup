@@ -116,15 +116,15 @@ public:
     const std::string& ee_parent_link_name = joint_model_group->getEndEffectorParentGroup().second;
     const std::string& ee_parent_group_name = joint_model_group->getEndEffectorParentGroup().first;
     const std::vector<std::string>& ee_attached_name = joint_model_group->getAttachedEndEffectorNames();
-
+/*
     // ---------------------------------------------------------------------------------------------
     // Load planning scene to share
     planning_scene_monitor_.reset(new planning_scene_monitor::PlanningSceneMonitor("robot_description"));
     if (planning_scene_monitor_->getPlanningScene())
     {
       planning_scene_monitor_->startPublishingPlanningScene(planning_scene_monitor::PlanningSceneMonitor::UPDATE_SCENE,
-                                                            "grasping_planning_scene");
-      planning_scene_monitor_->getPlanningScene()->setName("grasping_planning_scene");
+                                                            "planning_scene");
+      planning_scene_monitor_->getPlanningScene()->setName("planning_scene");
     }
     else
     {
@@ -132,8 +132,10 @@ public:
       return;
     }
 
-     const robot_model::RobotModelConstPtr robot_model = planning_scene_monitor_->getRobotModel();
-     visual_tools_.reset(new moveit_visual_tools::MoveItVisualTools(robot_model->getModelFrame(),"/moveit_visual_markers"));
+     const robot_model::RobotModelConstPtr robot_model = planning_scene_monitor_->getRobotModel(); */
+     //visual_tools_.reset(new moveit_visual_tools::MoveItVisualTools(robot_model->getModelFrame(),"/rviz_visual_tools"));
+     visual_tools_.reset(new moveit_visual_tools::MoveItVisualTools(grasp_data_.base_link_, "/rviz_visual_tools"));
+
 /*
      visual_tools_.reset(new moveit_visual_tools::MoveItVisualTools(robot_model->getModelFrame(), "/rviz_visual_tools",
       planning_scene_monitor_));
