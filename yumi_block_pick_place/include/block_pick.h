@@ -80,7 +80,7 @@ public:
     nh_.param("ee_group_name", ee_group_name_, std::string("unknown"));
     nh_.param("planning_group_name", planning_group_name_, std::string("unknown"));
 
-    planning_group_name_ = "left_arm";
+    //planning_group_name_ = "left_arm";
 
     ROS_INFO_STREAM_NAMED("moveit_blocks","End Effector: " << ee_group_name_);
     ROS_INFO_STREAM_NAMED("moveit_blocks","Planning Group: " << planning_group_name_);
@@ -137,14 +137,14 @@ public:
     //if( arm_.compare("right") == 0 )
     //  block_y *= -1;
     blocks.push_back( createStartBlock(block_x, block_y, "Block1") );
-    //blocks.push_back( createStartBlock(block_x+0.1,   block_y, "Block2") );
+    blocks.push_back( createStartBlock(block_x, block_y-0.1, "Block2") );
     //blocks.push_back( createStartBlock(block_x+0.2,   block_y, "Block3") );
 
     // The goal for each block is simply translating them on the x axis
     for (std::size_t i = 0; i < blocks.size(); ++i)
     {
       blocks[i].goal_pose = blocks[i].start_pose;
-      blocks[i].goal_pose.position.x += 0.2;
+      blocks[i].goal_pose.position.x += 0.1;
     }
 
     // --------------------------------------------------------------------------------------------------------
