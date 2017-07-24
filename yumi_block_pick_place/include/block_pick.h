@@ -166,6 +166,8 @@ public:
           // Pick -------------------------------------------------------------------------------------
           while(ros::ok())
           {
+            ros::spinOnce();
+
             ROS_INFO_STREAM_NAMED("pick_place","Picking '" << blocks[block_id].name << "'");
             ROS_INFO_STREAM_NAMED("pick_place","Picking '" << blocks[block_id].start_pose.position.x);
             ROS_INFO_STREAM_NAMED("pick_place","Picking '" << blocks[block_id].start_pose.position.y);
@@ -192,7 +194,43 @@ public:
               break;
             }
           }
-        // while for place
+          // Place -------------------------------------------------------------------------------------
+          while(ros::ok())
+          {
+            ros::spinOnce();
+
+            ROS_INFO_STREAM_NAMED("pick_place","Placing '" << blocks[block_id].name << "'");
+
+            // Publish goal block location
+            visual_tools_->publishCuboid(blocks[block_id].goal_pose, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, rviz_visual_tools::BLUE);
+
+            if( !place(blocks[block_id].goal_pose, blocks[block_id].name) )
+            {
+              ROS_ERROR_STREAM_NAMED("pick_place","Place failed.");
+
+              // Determine if the attached collision body as already been removed, in which case
+              // we can ignore the failure and just resume picking
+              /*
+                if( !move_group_->hasAttachedObject(blocks[block_id].name) )
+                {
+                ROS_WARN_STREAM_NAMED("pick_place","Collision object already detached, so auto resuming pick place.");
+
+                // Ask user if we should try again
+                if( !promptUser() )
+                break; // resume picking
+                }
+              */
+
+              // Ask user if we should try again
+              if( !promptUser() )
+                exit(0);
+            }
+            else
+            {
+              ROS_INFO_STREAM_NAMED("pick_place","Done with place ----------------------------");
+              break;
+            }
+          }
         } // loop through 3 blocks
 
         ROS_INFO_STREAM_NAMED("pick_place","Finished picking and out " << blocks.size()
