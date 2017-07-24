@@ -1,7 +1,7 @@
 #include <ros/ros.h>
 // MoveIt blocks
-#include <block_pick_place.h>
-
+// #include <block_pick_place.h>
+#include <block_pick.h>
 
 int main(int argc, char **argv)
 {
