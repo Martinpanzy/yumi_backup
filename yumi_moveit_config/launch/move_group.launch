@@ -13,6 +13,9 @@
   <arg unless="$(arg info)" name="command_args" value="" />
   <arg     if="$(arg info)" name="command_args" value="--debug" />
 
+  <!-- This parameter allows gazebo simulation -->
+  <arg name="simulation" default="false" />
+
   <!-- move_group settings -->
   <arg name="allow_trajectory_execution" default="true"/>
   <arg name="fake_execution" default="false"/>

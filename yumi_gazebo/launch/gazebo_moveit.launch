@@ -1,9 +1,9 @@
 <launch>
-  <!-- Main launch file to start Gazebo, Rviz aith moveIt for manupulation via Rviz -->
+  <!-- Main launch file to start Gazebo, Rviz aith moveIt for manupulation demo via Rviz -->
   <!-- Launch Gazebo  -->
   <include file="$(find yumi_gazebo)/launch/yumi_world.launch" />
 
-  <!-- ros_control seven dof arm launch file -->
+  <!-- ros_control yumi launch file -->
   <include file="$(find yumi_controllers)/launch/gazebo_moveit_joint_state_controller.launch" />
 
   <!-- ros_control trajectory control & gripper control dof arm launch file -->

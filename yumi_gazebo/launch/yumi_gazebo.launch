@@ -1,0 +1,12 @@
+<launch>
+  <!-- Main launch file to start Gazebo with moveIt for visualizating pick_place -->
+  <!-- Launch Gazebo  -->
+  <include file="$(find yumi_gazebo)/launch/yumi_world.launch" />
+
+  <!-- ros_control yumi launch file -->
+  <include file="$(find yumi_controllers)/launch/gazebo_moveit_joint_state_controller.launch" />
+
+  <!-- ros_control trajectory control & gripper control yumi launch file -->
+  <include file="$(find yumi_controllers)/launch/gazebo_moveit_joint_trajectory_controller.launch" />  
+
+</launch>

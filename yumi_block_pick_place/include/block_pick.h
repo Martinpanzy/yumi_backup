@@ -134,10 +134,10 @@ public:
     double block_y = 0.1;
     double block_x = 0.45; //0.35
     // Flip the side of the table the blocks are on depending on which arm we are using
-    //if( arm_.compare("right") == 0 )
-    //  block_y *= -1;
+    if( planning_group_name_.compare("right_arm") == 0 )
+      block_y *= -1;
     blocks.push_back( createStartBlock(block_x, block_y, "Block1") );
-    blocks.push_back( createStartBlock(block_x, block_y-0.1, "Block2") );
+    // blocks.push_back( createStartBlock(block_x, block_y-0.1, "Block2") );
     //blocks.push_back( createStartBlock(block_x+0.2,   block_y, "Block3") );
 
     // The goal for each block is simply translating them on the x axis
@@ -167,12 +167,6 @@ public:
           while(ros::ok())
           {
             ros::spinOnce();
-
-            ROS_INFO_STREAM_NAMED("pick_place","Picking '" << blocks[block_id].name << "'");
-            ROS_INFO_STREAM_NAMED("pick_place","Picking '" << blocks[block_id].start_pose.position.x);
-            ROS_INFO_STREAM_NAMED("pick_place","Picking '" << blocks[block_id].start_pose.position.y);
-            ROS_INFO_STREAM_NAMED("pick_place","Picking '" << blocks[block_id].start_pose.position.z);
-            ROS_INFO_STREAM_NAMED("pick_place","Picking '" << blocks[block_id].start_pose.orientation.w);
 
             // Visualize the block we are about to pick
             visual_tools_->publishCuboid(blocks[block_id].start_pose, BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE, rviz_visual_tools::BLUE);

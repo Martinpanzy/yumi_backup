@@ -1,0 +1,14 @@
+<launch>
+  <!-- Run the main MoveIt executable without trajectory execution (we do not have controllers configured by default) -->
+  <include file="$(find yumi_moveit_config)/launch/move_group.launch">
+    <!--arg name="target_device" value="gazebo" /-->
+    <arg name="publish_monitored_planning_scene" value="true" />
+    <!-- This parameter allows gazebo simulation -->
+    <arg name="simulation" value="true"/>
+  </include>
+
+  <include file="$(find yumi_moveit_config)/launch/moveit_rviz.launch">
+    <arg name="config" value="true"/>
+  </include>
+
+</launch>
