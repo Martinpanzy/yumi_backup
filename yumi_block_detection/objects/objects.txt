@@ -1,0 +1,9 @@
+cylinder1.pcd
+#cylinder2.pcd
+#cylinder3.pcd
+#cylinder4.pcd
+#cuboid1.pcd
+#cuboid2.pcd
+#cuboid3.pcd
+#cuboid4.pcd
+#cuboid5.pcd
