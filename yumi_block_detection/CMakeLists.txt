@@ -155,6 +155,9 @@ target_link_libraries (correspondence_grouping  ${catkin_LIBRARIES})
 cs_add_executable (template_allignment src/template_allignment.cpp)
 target_link_libraries (template_allignment  ${catkin_LIBRARIES})
 
+cs_add_executable (conditional_euclidian_clustering src/conditional_euclidian_clustering.cpp)
+target_link_libraries (conditional_euclidian_clustering  ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+
 cs_add_executable(block_recognition src/block_recognition.cpp)
 target_link_libraries(block_recognition ${catkin_LIBRARIES})
 
