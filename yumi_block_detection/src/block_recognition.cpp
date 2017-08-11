@@ -466,6 +466,8 @@
     ros::init (argc, argv, "block_recognition");
     ros::Subscriber sub;
 
+    bool first = true;
+
     // PCL visualizer
     boost::shared_ptr<pcl::visualization::PCLVisualizer> viewer(new pcl::visualization::PCLVisualizer ("3D Viewer"));
     viewer->setBackgroundColor (0, 0, 0);
@@ -481,9 +483,9 @@
       {
         PointCloud::Ptr filCloud = detector.removeGroundPlane();
         detector.curr_cloud = filCloud;
-        PointCloud::Ptr segCloud = detector.segmentColorClusters();
+        //PointCloud::Ptr segCloud = detector.segmentColorClusters();
 
-
+/*
         // Send individual cluster to see what shape it is
         pcl::PointCloud<PointType>::Ptr segment (new pcl::PointCloud<PointType> ());
         std::vector< pcl::PointIndices >::iterator i_segment;
@@ -504,20 +506,25 @@
           }
           ROS_INFO_STREAM_NAMED("block_recognition", "Before calling blockCorrespondence");
           // Once segmented, try identifying what object each cluster represents
-          if (detector.icpCluster(segment))
-            break;
-/*
-          if (detector.blockCorrespondence(segment))
+          if (detector.icpCluster(segment)) //(detector.blockCorrespondence(segment))
             break;
 */
-        }
-
+          if (first)
+          {
+            // Save to pcd file
+            pcl::PCDWriter writer;
+            std::stringstream ss;
+            ss << "color_scene5.pcd"; // 3 worked only for 1, 4th found skewed, 5th stacked doesnt work at all
+            writer.write<pcl::PointXYZRGB> (ss.str (), *filCloud, false); //*
+            first = false;
+          }
+      //}
         viewer->removeAllPointClouds();
-        pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> color(segCloud);
-        viewer->addPointCloud<pcl::PointXYZRGB> (segCloud, color, "sample cloud");
+        pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> color(detector.curr_cloud);
+        viewer->addPointCloud<pcl::PointXYZRGB> (detector.curr_cloud, color, "sample cloud");
 
-        //pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> rgb (filCloud, 255, 0, 0);
-        //viewer->addPointCloud<pcl::PointXYZRGB> (filCloud, rgb, "filtered cloud");
+        //pcl::visualization::PointCloudColorHandlerCustom<pcl::PointXYZRGB> rgb (segCloud, 255, 0, 0);
+        //viewer->addPointCloud<pcl::PointXYZRGB> (segCloud, rgb, "filtered cloud");
 
         viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 1, "sample cloud");
         viewer->spinOnce(100);
