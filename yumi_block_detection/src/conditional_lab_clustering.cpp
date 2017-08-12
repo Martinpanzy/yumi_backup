@@ -19,7 +19,7 @@ enforceLabSimilarity (const PointTypeColor& point_a, const PointTypeColor& point
   //std::cout << "Distance: " << dist;
   if (dist < 0.5)
   {
-    if ((abs (point_a.g - point_b.g) < 11.0f) && (abs (point_a.b - point_b.b) < 11.0f)) // compare a and b values (l=0) //7.5
+    if ((abs (point_a.g - point_b.g) < 8.5f) && (abs (point_a.b - point_b.b) < 8.5f)) // compare a and b values (l=0) //7.5
       return (true);
   }
   return (false);
@@ -105,7 +105,7 @@ main (int argc, char** argv)
 
   // Load the input point cloud
   std::cerr << "Loading...\n", tt.tic ();
-  pcl::io::loadPCDFile ("color_scene2.pcd", *cloud_color_in);
+  pcl::io::loadPCDFile ("color_scene3.pcd", *cloud_color_in);
   std::cerr << ">> Done: " << tt.toc () << " ms, " << cloud_color_in->points.size () << " points\n";
 
   // Downsample the cloud using a Voxel Grid class
@@ -159,15 +159,21 @@ main (int argc, char** argv)
 
   pcl::PointCloud<PointTypeColor>::Ptr cloud_final (new pcl::PointCloud<PointTypeColor>);
 
-  // Using the intensity channel for lazy visualization of the output
+  // Visualization of the output
 
   for (int i = 0; i < small_clusters->size (); ++i)
     for (int j = 0; j < (*small_clusters)[i].indices.size (); ++j)
-      cloud_color_out->points[(*small_clusters)[i].indices[j]].r = 255;
+    {
+      cloud_color_out->points[(*small_clusters)[i].indices[j]].r = 0;
+      cloud_color_out->points[(*small_clusters)[i].indices[j]].g = 0;
+      cloud_color_out->points[(*small_clusters)[i].indices[j]].b = 0;
+    }
   for (int i = 0; i < large_clusters->size (); ++i)
     for (int j = 0; j < (*large_clusters)[i].indices.size (); ++j)
     {
-      cloud_color_out->points[(*large_clusters)[i].indices[j]].g = 255;
+      cloud_color_out->points[(*large_clusters)[i].indices[j]].r = 0;
+      cloud_color_out->points[(*large_clusters)[i].indices[j]].g = 0;
+      cloud_color_out->points[(*large_clusters)[i].indices[j]].b = 0;
       //cloud_act->push_back(cloud_out->points[(*large_clusters)[i].indices[j]]);
     }
 

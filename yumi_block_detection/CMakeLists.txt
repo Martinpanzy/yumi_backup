@@ -149,6 +149,9 @@ catkin_simple(ALL_DEPS_REQUIRED)
 cs_add_executable(block_detection src/block_detection.cpp)
 target_link_libraries(block_detection ${catkin_LIBRARIES})
 
+cs_add_executable(block_recognition src/block_recognition.cpp)
+target_link_libraries(block_recognition ${catkin_LIBRARIES})
+
 cs_add_executable (correspondence_grouping src/correspondence_grouping.cpp)
 target_link_libraries (correspondence_grouping  ${catkin_LIBRARIES})
 
@@ -161,8 +164,8 @@ target_link_libraries (conditional_euclidian_clustering  ${catkin_LIBRARIES} ${P
 cs_add_executable (conditional_lab_clustering src/conditional_lab_clustering.cpp)
 target_link_libraries (conditional_lab_clustering  ${catkin_LIBRARIES})
 
-cs_add_executable(block_recognition src/block_recognition.cpp)
-target_link_libraries(block_recognition ${catkin_LIBRARIES})
+cs_add_executable(yumi_stacking_demo src/yumi_stacking_demo.cpp)
+target_link_libraries(yumi_stacking_demo ${catkin_LIBRARIES})
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the

@@ -2,7 +2,7 @@
 
   void BlockRecognition::cloud_cb(const boost::shared_ptr<const sensor_msgs::PointCloud2>& input)
   {
-      // Conversion from ros msg to pointCloud
+      // Conversion from rosmsg to pointCloud
       pcl::PCLPointCloud2 pcl_pc2;
       pcl_conversions::toPCL(*input,pcl_pc2);
       pcl::fromPCLPointCloud2(pcl_pc2,*(this->curr_cloud));
@@ -514,7 +514,7 @@
             // Save to pcd file
             pcl::PCDWriter writer;
             std::stringstream ss;
-            ss << "color_scene5.pcd"; // 3 worked only for 1, 4th found skewed, 5th stacked doesnt work at all
+            ss << "color_scene_table1.pcd"; // 3 worked only for 1, 4th found skewed, 5th stacked doesnt work at all
             writer.write<pcl::PointXYZRGB> (ss.str (), *filCloud, false); //*
             first = false;
           }
