@@ -229,7 +229,7 @@ main (int argc, char **argv)
     return (-1);
   }
 
-  // ** Load the object templates specified in the object_templates.txt file
+  // Load the object templates specified in the object_templates.txt file
   std::vector<FeatureCloud> object_templates;
   std::ifstream input_stream (argv[1]);
   object_templates.resize (0);

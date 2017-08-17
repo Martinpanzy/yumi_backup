@@ -1,0 +1,5 @@
+# Name of the file that describes the pattern to be formed
+string filename
+---
+# Centroid locations for each object in pattern
+objects objectLocation

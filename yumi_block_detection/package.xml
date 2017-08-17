@@ -47,6 +47,7 @@
   <depend>pcl_catkin</depend>
   <depend>pcl_ros</depend>
   <depend>rospy</depend>
+  <depend>message_runtime</depend>
 
   <!-- The export tag contains other, unspecified, tags -->
 </package>

@@ -1,0 +1,1 @@
+objectCentroid[] objectArray

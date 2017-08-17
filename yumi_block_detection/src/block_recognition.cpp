@@ -485,40 +485,16 @@
         detector.curr_cloud = filCloud;
         //PointCloud::Ptr segCloud = detector.segmentColorClusters();
 
-/*
-        // Send individual cluster to see what shape it is
-        pcl::PointCloud<PointType>::Ptr segment (new pcl::PointCloud<PointType> ());
-        std::vector< pcl::PointIndices >::iterator i_segment;
-        ROS_INFO_STREAM_NAMED("block_recognition", "*********** NEW FRAME ***********");
-        for (i_segment = detector.clusters.begin (); i_segment != detector.clusters.end (); i_segment++)
+        if (first)
         {
-          std::vector<int>::iterator i_point;
-          for (i_point = i_segment->indices.begin (); i_point != i_segment->indices.end (); i_point++)
-          {
-            int index;
-            index = *i_point;
-            pcl::PointXYZRGB point = pcl::PointXYZRGB(segCloud->points[index].r,
-            segCloud->points[index].g, segCloud->points[index].b);
-            point.x = segCloud->points[index].x;
-            point.y = segCloud->points[index].y;
-            point.z = segCloud->points[index].z;
-            segment->push_back (point);
-          }
-          ROS_INFO_STREAM_NAMED("block_recognition", "Before calling blockCorrespondence");
-          // Once segmented, try identifying what object each cluster represents
-          if (detector.icpCluster(segment)) //(detector.blockCorrespondence(segment))
-            break;
-*/
-          if (first)
-          {
-            // Save to pcd file
-            pcl::PCDWriter writer;
-            std::stringstream ss;
-            ss << "color_scene_table1.pcd"; // 3 worked only for 1, 4th found skewed, 5th stacked doesnt work at all
-            writer.write<pcl::PointXYZRGB> (ss.str (), *filCloud, false); //*
-            first = false;
-          }
-      //}
+          // Save to pcd file
+          pcl::PCDWriter writer;
+          std::stringstream ss;
+          ss << "color_scene_table1.pcd"; // 3 worked only for 1, 4th found skewed, 5th stacked doesnt work at all
+          writer.write<pcl::PointXYZRGB> (ss.str (), *filCloud, false); //*
+          first = false;
+        }
+
         viewer->removeAllPointClouds();
         pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> color(detector.curr_cloud);
         viewer->addPointCloud<pcl::PointXYZRGB> (detector.curr_cloud, color, "sample cloud");

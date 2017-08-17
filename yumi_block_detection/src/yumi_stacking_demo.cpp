@@ -19,6 +19,15 @@
 typedef pcl::PointXYZRGB PointTypeColor;
 typedef pcl::PointXYZINormal PointTypeFull;
 
+// https://stackoverflow.com/questions/19099063/what-are-the-ranges-of-coordinates-in-the-cielab-color-space
+// A in [-86.185, 98,254]
+// B in [-107.863, 94.482]
+// Max  and Min color threshold values
+float RED [2];
+float YELLOW [2];
+float BLUE [2];
+float GREEN [2];
+
 class FeatureCloud
 {
   public:
@@ -311,7 +320,7 @@ Eigen::Vector3f RGB2Lab (const Eigen::Vector3i& colorRGB)
   return colorLab;
 }
 
-double objectAlignment(pcl::PointCloud<PointTypeColor>::Ptr scene, std::vector<FeatureCloud> object_templates)
+double objectAlignment (pcl::PointCloud<PointTypeColor>::Ptr scene, std::vector<FeatureCloud> object_templates)
 {
   pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_xyz (new pcl::PointCloud<pcl::PointXYZ>);
   for (size_t i = 0; i < scene->points.size(); i++)
@@ -356,12 +365,44 @@ double objectAlignment(pcl::PointCloud<PointTypeColor>::Ptr scene, std::vector<F
   return (best_alignment.fitness_score);
 }
 
+bool matchColor (char color, double a, double b)
+{
+  bool match = false;
+  switch(color) {
+    case 'R' :
+      {
+        if (a > 0.0)
+          match = true;
+        break;
+      }
+    case 'G' :
+      {
+        if (a < 0.0)
+          match = true;
+        break;
+      }
+    case 'B' :
+      {
+        if (b < 0.0)
+          match = true;
+        break;
+      }
+    case 'Y' :
+      {
+        if (b > 0.0)
+          match = true;
+        break;
+      }
+  }
+  return(match);
+}
 
 // Datatype to describe each element in pattern
 struct Shape
 {
   std::string name;
   pcl::PointXYZ centroid;
+  char color;
 };
 
 int main (int argc, char** argv)
@@ -369,11 +410,13 @@ int main (int argc, char** argv)
   /*
     Note: The lowest block in patttern should be in at 0th index
     of the array and topmost block at the last element position.
+    TODO: Move this to config file
   */
   Shape pattern [1];
   // Define pattern to be formed.
-  pattern[0].name = "cylinder";
+  pattern[0].name = "cuboid";
   pattern[0].centroid = pcl::PointXYZ::PointXYZ (0.1, 0.1, 0.1);
+  pattern[0].color = 'B'; //Blue
 
   // Data containers used
   pcl::PointCloud<PointTypeColor>::Ptr cloud_color_in (new pcl::PointCloud<PointTypeColor>),
@@ -412,6 +455,12 @@ int main (int argc, char** argv)
     cloud_color_out->points[i].g = lab[1];
     cloud_color_out->points[i].b = lab[2];
   }
+
+  /*
+    Segregate according to color values and and send
+    only the points corresponding to input color.
+    Color ranges: red, green, yellow, blue
+  */
 
   /* Clustering with "Normal similarity" criteria.
 
@@ -474,7 +523,7 @@ int main (int argc, char** argv)
       Get pointcloud for each cluster and find which cluster
       corresponds to the block that's specified in the pattern.
     */
-    double min_score, score = 0.0;
+    double min_score, score = 0.0, avg_color_a = 0.0, avg_color_b = 0.0;
     pcl::PointCloud<PointTypeColor>::Ptr cluster_cloud (new pcl::PointCloud<PointTypeColor>);
     pcl::PointCloud<PointTypeColor>::Ptr match_cloud (new pcl::PointCloud<PointTypeColor>);
     for (int i = 0; i < clusters->size (); ++i)
@@ -482,14 +531,34 @@ int main (int argc, char** argv)
       for (int j = 0; j < (*clusters)[i].indices.size (); ++j)
       {
         cluster_cloud->push_back(cloud_color_out->points[(*clusters)[i].indices[j]]);
+        avg_color_a += (cloud_color_out->points[(*clusters)[i].indices[j]].g);
+        avg_color_b += (cloud_color_out->points[(*clusters)[i].indices[j]].b);
       }
+      // Perform template matching only if average color of
+      // current cluster corresponds to the required color.
+      avg_color_a /= (*clusters)[i].indices.size ();
+      avg_color_b /= (*clusters)[i].indices.size ();
+
+      // Uncomment to use color for template matching
+      /*
+      std::cerr << "avg values A: " << avg_color_a << "B: " << avg_color_b << "\n";
+
+      if (matchColor(pattern[k].color, avg_color_a, avg_color_b))
+      {
+        std::cerr << "before allign \n";
+        score = objectAlignment(cluster_cloud, object_templates);
+      }
+      else
+        score = 100.0;
+      */
+
       std::cerr << "before allign \n";
       score = objectAlignment(cluster_cloud, object_templates);
       if (i == 0)
       {
         min_score = score;
         pcl::copyPointCloud (*cluster_cloud, *match_cloud);
-      }        
+      }
       if (score < min_score)
       {
         min_score = score;
@@ -497,14 +566,21 @@ int main (int argc, char** argv)
         pcl::copyPointCloud (*cluster_cloud, *match_cloud);
       }
       cluster_cloud->clear();
+      avg_color_a = 0.0, avg_color_b = 0.0;
     }
+    // Centroid of matched cluster
+    Eigen::Matrix< float, 4, 1 >	centroid;
+    pcl::compute3DCentroid (*match_cloud, centroid);
+    pcl::PointXYZ point (centroid(0, 0), centroid(1, 0), centroid(2, 0));
+    std::cerr << "Centroid : " << centroid(0, 0) << " " << centroid(1, 0) << " " << centroid(2, 0);
+    goal[k] = point;
+
     pcl::visualization::PCLVisualizer *viewer (new pcl::visualization::PCLVisualizer ("3D Viewer"));
     pcl::visualization::PointCloudColorHandlerRGBField<pcl::PointXYZRGB> rgb(match_cloud);
     viewer->addPointCloud<PointTypeColor>(match_cloud, rgb, "sample cloud");
     viewer->setPointCloudRenderingProperties (pcl::visualization::PCL_VISUALIZER_POINT_SIZE, 3, "sample cloud");
     viewer->setBackgroundColor (0, 0, 0);
-    viewer->spin();
-    // goal[k] = centroid(cluster_cloud)
+    viewer->spinOnce(60000);
   }
   return (0);
 }

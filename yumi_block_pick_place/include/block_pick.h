@@ -289,7 +289,7 @@ public:
     double animate_speed = 0.1;
     // Visualize them
     //visual_tools_->publishAnimatedGrasps(possible_grasps, joint_model_group, animate_speed*0.1);
-    visual_tools_->publishGrasps( possible_grasps, eef_joint_model_group, animate_speed );
+    //visual_tools_->publishGrasps( possible_grasps, eef_joint_model_group, animate_speed );
 
     ROS_INFO_STREAM_NAMED("pick_place","After visual tools publishing");
 

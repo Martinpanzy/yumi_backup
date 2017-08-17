@@ -55,4 +55,4 @@ private:
   ros::Publisher pub;
 
 
-};//End of class SubscribeAndPublish
+};//End of class

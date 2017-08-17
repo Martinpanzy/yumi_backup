@@ -16,6 +16,7 @@ catkin_simple(ALL_DEPS_REQUIRED)
   #pcl_ros
   #pcl_catkin
   #sensor_msgs
+  #message_generation
 #)
 
 
@@ -61,11 +62,17 @@ catkin_simple(ALL_DEPS_REQUIRED)
 ##   * add every package in MSG_DEP_SET to generate_messages(DEPENDENCIES ...)
 
 ## Generate messages in the 'msg' folder
-# add_message_files(
+#add_message_files(
 #   FILES
-#   Message1.msg
-#   Message2.msg
-# )
+#   objectCentroid.msg
+#   objects.msg
+#)
+
+## Generate added messages and services with any dependencies listed here
+#generate_messages(
+#  DEPENDENCIES
+#  std_msgs
+#)
 
 ## Generate services in the 'srv' folder
 # add_service_files(
@@ -79,12 +86,6 @@ catkin_simple(ALL_DEPS_REQUIRED)
 #   FILES
 #   Action1.action
 #   Action2.action
-# )
-
-## Generate added messages and services with any dependencies listed here
-# generate_messages(
-#   DEPENDENCIES
-#   std_msgs
 # )
 
 ################################################
@@ -166,6 +167,9 @@ target_link_libraries (conditional_lab_clustering  ${catkin_LIBRARIES})
 
 cs_add_executable(yumi_stacking_demo src/yumi_stacking_demo.cpp)
 target_link_libraries(yumi_stacking_demo ${catkin_LIBRARIES})
+
+cs_add_executable(yumi_stacking src/yumi_stacking.cpp)
+target_link_libraries(yumi_stacking ${catkin_LIBRARIES})
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
