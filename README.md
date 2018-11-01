@@ -17,3 +17,6 @@ Build the industrial_core package from source. To do that, clone OrebroUniversit
 #### Step 3
 If your industrial_core is in a different workspace, source the workspace containing industrial_core.
 Finally, `catkin_make` the workspace containing the clone of this package.
+
+### YuMi Calibration
+Program Editor - T_ROB_L/R - Debug - PP to Main - Call Routine - CalHall goto - Calibration 1/2
